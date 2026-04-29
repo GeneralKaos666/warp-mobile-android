@@ -1,0 +1,44 @@
+# Ralph Progress Log — M1 Milestone
+
+## Iteration 1 (2026-04-29)
+
+### Setup
+- prd.json refined with 10 M1-specific stories, M1-S01 through M1-S10
+- All stories have task-specific acceptance criteria (no generic boilerplate)
+- Reviewer config: critic=codex (matches M0 SOP user explicitly chose)
+
+### Inflight tasks (dispatched before ralph started)
+- Task #20 → M1-S01 (Plan Amendment 3): worker-env in_progress
+- Task #21 → M1-S02 (android-activity 1-line): worker-env in_progress
+- Task #22 → M1-S03 (cargo skeleton): worker-spike in_progress
+
+### Codebase patterns learned (from M0)
+- Workers can fabricate completion: ALWAYS cross-check git log + git diff before accepting "done" claims
+- worker-env tendency: silent commits with different commit titles than what was assigned
+- worker-spike tendency: claims verification numbers without committing
+- Codex review pattern: prompt-via-file `/tmp/codex-*.md` then `omc ask codex --prompt "$(< file)"` to avoid zsh `()` parse errors
+- Background Codex reviews via `run_in_background: true`, then read the artifact at `.omc/artifacts/ask/codex-*.md`
+- Hook noise: PreToolUse "Command failed" hooks fire even on success; ignore unless command output actually shows failure
+- Edit tool full-width vs half-width Chinese punctuation can break old_string match — read file first then copy exact bytes
+
+### M1 sequencing notes
+- M1-S01/02/03 are foundational (plan + dep fix + cargo skeleton); can run in parallel
+- M1-S04 (PTY backend) depends on S03 cargo crate existing
+- M1-S05 (Service + Manifest) depends on S03 .so building
+- M1-S06/07/08 depend on S04 + S05
+- M1-S09 (stress test) depends on S05 + S06 + S07 + S08
+- M1-S10 (close-out) gates everything
+
+### Repo conventions
+- main branch only; all M0 commits push direct to main
+- warp-src/ is gitignored submodule, has its own warp-mobile/m0-facade branch
+- .omc/ is mostly tracked except state/, artifacts/, notepad.md, project-memory.json
+- Codex review artifacts at .omc/artifacts/ask/codex-*.md
+- Spike test apps live under spikes/<name>/
+- M0/M1 milestone artifacts at .omc/m0-artifacts/ and .omc/m1-artifacts/
+
+### Connected devices for M1 testing (per CLAUDE.md auto-memory)
+- S24 Ultra Adreno 750 Android 15 SDK 36 (PRIMARY)
+- S21+ Adreno 660 Android 15 SDK 35 (secondary, retained from M0 matrix)
+- S8 Mali-G71 Android 9 SDK 28 — NOW BELOW MIN MATRIX per Amendment 3, will be retired from M1 testing
+- TODO: acquire Pixel 4a (Adreno 619 API 30) or Galaxy A52 (Adreno 618 API 31) for low-end coverage

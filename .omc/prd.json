@@ -1,0 +1,161 @@
+{
+  "task": "M1 milestone — Android PTY/service prototype, no UI (per .omc/plans/ralplan-warp-on-mobile.md §6 M1)",
+  "scope": {
+    "in": [
+      "Plan Amendment 3 raising minSdk to 31",
+      "android-activity Cargo feature flag fix in warp-src submodule",
+      "Top-level Rust crate crates/android-host/ for L0 Android Host Service + JNI bridge",
+      "PTY backend in pure Rust (openpty + setsid + TIOCSCTTY) without Termux dependency",
+      "Android Service skeleton (FGS) + AndroidManifest with foregroundServiceType, runtime permission flow",
+      "JNI bridge expanded: PTY spawn, write, read, resize, kill methods callable from Java",
+      "Activity destroy/recreate -> PTY reattach within 1s",
+      "PTY resize via TIOCSWINSZ reflected in shell stty size",
+      "FGS notification persistent + adb shell am kill cleans up cleanly",
+      "30-min idle stress test on S24 Ultra flagship",
+      "All evidence committed under .omc/m1-artifacts/ with matching commit hashes"
+    ],
+    "out": [
+      "WarpUI Android Vulkan backend (M2)",
+      "Termux package bootstrap (M4)",
+      "Block-based UI (M3)",
+      "AI integration (M6)",
+      "low-end device matrix beyond S24 Ultra (deferred until Pixel 4a / Galaxy A52 acquired; documented as TODO not blocker)"
+    ]
+  },
+  "stories": [
+    {
+      "id": "M1-S01",
+      "title": "Plan Amendment 3 — raise minSdk 26 -> 31",
+      "passes": false,
+      "ownerHint": "worker-env",
+      "acceptanceCriteria": [
+        "ralplan-warp-on-mobile.md has new Amendment 3 block above existing Amendment 2 (or as latest top-level amendment)",
+        "Amendment 3 cites M0 Task #8 evidence (S8/Mali-G71/A9 100-cycle p95=326ms FAIL, Adreno 6xx+ all <30ms PASS)",
+        "Plan §6 M2 acceptance criterion line 354 (Galaxy S8 30fps fallback) is removed or rewritten to drop S8 dependency",
+        "Plan §7 Risk register entries that named S8 as primary baseline are updated to API 31+ matrix",
+        "git log shows commit on main with message starting 'plan: Amendment 3'"
+      ]
+    },
+    {
+      "id": "M1-S02",
+      "title": "android-activity Cargo feature fix in warp-src/crates/warpui",
+      "passes": false,
+      "ownerHint": "worker-env",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/Cargo.toml has [target.'cfg(target_os = \"android\")'.dependencies] block adding android-activity = { version = \"0.6\", features = [\"native-activity\"] }",
+        "cd warp-src && cargo ndk -t arm64-v8a check -p warpui no longer reports E0282 type-inference error from android-activity macro (font-kit/winit errors still expected, those are M2 scope)",
+        "Change committed on warp-src branch warp-mobile/m0-facade and pushed (warp-src is gitignored at top level so the fix lives only in submodule)"
+      ]
+    },
+    {
+      "id": "M1-S03",
+      "title": "crates/android-host/ Rust skeleton with JNI ping",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "crates/android-host/Cargo.toml exists with name=\"warp-mobile-android-host\", crate-type=[\"cdylib\"], deps include jni 0.21+, ndk 0.9+, ndk-sys 0.6+, log 0.4+, android_logger 0.13+",
+        "crates/android-host/src/lib.rs exports Java_dev_warp_mobile_NativeBridge_ping returning a JString",
+        "init_logger() function gated by #[cfg(target_os = \"android\")] so non-Android cargo check doesn't error",
+        "cargo ndk -t arm64-v8a build -p warp-mobile-android-host produces a libwarp_mobile_android_host.so under target/aarch64-linux-android/debug/",
+        ".so size and sha256 recorded in commit message",
+        "Workspace Cargo.toml lists crates/android-host as a member"
+      ]
+    },
+    {
+      "id": "M1-S04",
+      "title": "PTY backend in pure Rust (openpty + setsid + TIOCSCTTY)",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "crates/android-host/src/pty.rs exists with public functions: spawn_pty(cmd: &str, env: &[(&str,&str)]) -> Result<PtySession>, write(buf: &[u8]) -> Result<usize>, read(buf: &mut [u8]) -> Result<usize>, resize(rows: u16, cols: u16) -> Result<()>, kill() -> Result<()>",
+        "spawn_pty internally calls libc::openpty, fork, setsid in child, TIOCSCTTY on slave fd, dup2 to stdin/stdout/stderr, execvp",
+        "Rust unit test on host (linux/mac aarch64 if possible) spawn_pty(\"echo hello\") returns the bytes \"hello\\n\" via read(); test gated under #[cfg(unix)]",
+        "No dependency on Termux executables or files; pure libc + nix",
+        "PTY module exports JNI binding so Java can call Java_dev_warp_mobile_NativeBridge_ptySpawn / ptyRead / ptyWrite / ptyResize / ptyKill"
+      ]
+    },
+    {
+      "id": "M1-S05",
+      "title": "Android Service + AndroidManifest + FGS skeleton",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "android/app/ project (or similar) created with build.gradle, AndroidManifest.xml, single Activity + WarpTerminalService extending Service",
+        "AndroidManifest declares uses-permission android.permission.FOREGROUND_SERVICE plus android.permission.FOREGROUND_SERVICE_SPECIAL_USE (API 34+)",
+        "Service has android:foregroundServiceType=\"specialUse\" with the corresponding meta-data property declared",
+        "Service.onStartCommand calls startForeground with a NotificationChannel + persistent Notification",
+        "minSdkVersion 31, targetSdk 36, compileSdk 36 in build.gradle",
+        "Service loads libwarp_mobile_android_host.so via System.loadLibrary",
+        "adb install + launch on S24 Ultra shows the persistent notification visible",
+        "adb shell dumpsys activity services dev.warp.mobile lists the Service in foreground state"
+      ]
+    },
+    {
+      "id": "M1-S06",
+      "title": "Activity recreate -> PTY reattach within 1s",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "Service holds the PTY session (Service-process-bound) so it survives Activity destroy/recreate",
+        "Activity binds to Service via ServiceConnection on each onCreate, gets a reference to the existing PtySession",
+        "Acceptance test on S24 Ultra: spawn `sleep 60 && echo done`, rotate device 5 times, then wait. Activity prints `done` within 1s of the actual fire (verify via adb shell logcat WarpTerminal:I time-tagging)",
+        "Test driver script under tools/scripts/test-pty-reattach.sh + artifact under .omc/m1-artifacts/ documenting run"
+      ]
+    },
+    {
+      "id": "M1-S07",
+      "title": "PTY resize via TIOCSWINSZ -> stty size in shell",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "Java side reads view dims and calls NativeBridge.ptyResize(cols, rows) on layout change",
+        "Rust resize() calls libc::ioctl(fd, TIOCSWINSZ, &winsize{rows, cols, 0, 0})",
+        "Acceptance test on S24 Ultra: spawn `stty size > /tmp/sz; cat /tmp/sz` after resize(80, 24); the file content equals \"24 80\\n\"",
+        "Artifact under .omc/m1-artifacts/ with adb logcat evidence"
+      ]
+    },
+    {
+      "id": "M1-S08",
+      "title": "FGS persistence + clean kill",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "Notification visible continuously during PTY session",
+        "adb shell am kill dev.warp.mobile triggers Service.onDestroy which calls pty.kill() and removes notification",
+        "After kill: ps -A | grep dev.warp shows no orphan processes (especially no zombie PTY children)",
+        "Artifact under .omc/m1-artifacts/ logs the before/after process listings"
+      ]
+    },
+    {
+      "id": "M1-S09",
+      "title": "30-min idle stress test on S24 Ultra flagship",
+      "passes": false,
+      "ownerHint": "worker-spike",
+      "acceptanceCriteria": [
+        "Spawn `bash` PTY session, leave idle 30 minutes on S24 Ultra",
+        "No crashes (no app death, no Service termination)",
+        "No PhantomProcessKiller events in logcat",
+        "Notification still present at t=30min",
+        "PTY still responsive: write `pwd\\n` returns the cwd in <500ms",
+        "Artifact .omc/m1-artifacts/M1-stress-test.md documenting run with raw logcat snippets at t=0/10/20/30 min"
+      ]
+    },
+    {
+      "id": "M1-S10",
+      "title": "M1 close-out integration document",
+      "passes": false,
+      "ownerHint": "worker-env",
+      "acceptanceCriteria": [
+        ".omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories with PASS evidence + commit hashes",
+        "Each acceptance criterion in this prd.json has a one-line citation in the ledger",
+        "M1 verdict: GO / CONDITIONAL GO / NO-GO with rationale",
+        "Carry-overs for M2 listed (e.g. low-end device matrix when Pixel 4a/A52 acquired)",
+        "Codex review dispatched and PASS verdict received before story is marked passes:true"
+      ]
+    }
+  ],
+  "verifierConfig": {
+    "critic": "codex",
+    "rationale": "User SOP from M0: every worker deliverable goes through Codex review. Same applies to M1."
+  }
+}
