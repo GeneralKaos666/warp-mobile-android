@@ -17,16 +17,18 @@
 | 5 | Vulkan-Surface-recreate spike code（編譯驗證） | **PASS** | `libvulkan_surface_recreate.so` 716 KB、`cargo ndk arm64-v8a release` clean build（`spikes/vulkan-surface-recreate/`） |
 | 6 | warp_terminal_mobile_facade scaffold | **PASS-structural** | 5 檔案 commit `5400c66`、cfg-dialect 慣例文件完備；Android cargo check 因 android-activity 失敗屬已知上游問題（`M0-facade-scaffold.md`） |
 | 7 | Decision A1-vs-A4 archeology | **PASS** | A4（headless base）3–4 週 vs A1（linux/winit）6–8 週；A4 建議確定（附於 `M0-platform-trait-delta.md`） |
-| 8 | [USER] Vulkan spike 三裝置 frame-recovery 量測 | **PASS** | S24 Ultra p95≈9ms、S21+ p95≈21ms、S8 p95≈52ms；全部 < 200ms 門檻（`M0-task15-swapchain-verify.md`） |
+| 8 | [USER] Vulkan spike 三裝置 100-cycle rotation 量測 | **PASS-with-caveat** | S24 Ultra p95=18ms、S21+ p95=28ms PASS；S8 p95=326ms FAIL（Mali-G71/A9）。E1 門檻 2/3 fail 未達，1/3 fail → E1 NOT triggered（`M0-vulkan-spike-report.md`） |
 | 9 | [USER] Tension 3 user gate decision | **PASS** | A1+B1+C1+E1 由 team-lead 代決（"全自動" 授權）（`M0-tension3-decision.md`） |
 | 10 | M0 go/no-go 整合 | **本文件** | — |
 | 11 | Vulkan spike APK build + adb 量測腳本 | **PASS** | APK 3.7 MB、`lib/arm64-v8a/` .so 驗證、三裝置 install 成功（`M0-task11-install-verify.md`） |
 | 12 | symlink-jniLibs execve() test harness | **PASS** | 初版 harness；Task 14 redo 取代（詳見下） |
 | 13 | Fix Surface native handle（ANativeWindow_fromSurface） | **PASS** | 移除 reflection；改用 NDK public API `ANativeWindow_fromSurface`（API 26+）（`M0-task13-surface-fix-verify.md`） |
 | 14 | symlink-jniLibs redo per Codex REVISE | **PASS** | 4-config 全 passed=true（SDK 36/35/28、debug+release）；negative_control EACCES 確認；`targetSdk=36`（`M0-symlink-jnilibs.md`） |
-| 15 | Vulkan spike B-F items（swapchain/validation/lifecycle/shell） | **PASS** | 真實 swapchain + render pass；validation layer 零警告；三裝置 first_frame_presented_ts 正常（`M0-task15-swapchain-verify.md`） |
-| 16 | Vulkan spike Codex round-2 follow-up fixes | **PASS** | strict-assert cycle count、init-failure cleanup paths、configChanges scope comment（commit `1048a1e`） |
-| 17 | symlink errno capture cleanup（Codex round-2 PARTIAL/FAIL） | **PASS** | sentinel `NEGATIVE_ERRNO_BEGIN...END`、`OsConstants.errnoName()`、`negative_errno_name` JSON 欄位；4-config 再驗證 EACCES/succeeded（commit `0ab80d4`） |
+| 15 | Vulkan spike B-F（steady-state swapchain recreate） | **PASS** | 真實 swapchain + render pass；validation layer 零警告；三裝置 first_frame_presented_ts 穩態 7–52ms（`M0-task15-swapchain-verify.md`） |
+| 16 | Vulkan spike Codex round-2 follow-up | **PASS** | dual-strategy parser、AndroidManifest scope comment、3-device rotation report（commit `1048a1e`） |
+| 17 | symlink errno capture cleanup | **PASS** | sentinel `NEGATIVE_ERRNO_BEGIN...END`、`OsConstants.errnoName()`、`negative_errno_name` JSON；4-config 再驗證（commit `f89f0ea`） |
+| 18 | Vulkan spike round-3 strict-assert + scope LIMIT | **PASS** | strict assert ±2 tolerance（CYCLES*2=200）、Manifest scope LIMIT 文件（commit `ff439ad`） |
+| 19 | symlink JSON escape via jq -n | **PASS** | `jq -n --arg/--argjson` 重組 JSON，避免 IOException 路徑雙引號破壞 JSON（commit `3ceb777`） |
 
 ---
 
@@ -34,21 +36,31 @@
 
 ### L1 — WarpUI Android Vulkan 後端
 
-**判決：GO（含注意事項）**
+**判決：API 31+ / Adreno 6xx+ CONDITIONAL GO**
 
-三裝置穩態 swapchain recreate p95：S24 Ultra ≈ 9ms、S21+ ≈ 21ms、S8 ≈ 52ms，全部遠低於 200ms 目標門檻（`M0-task15-swapchain-verify.md`）。驗證層零錯誤、零警告，`first_frame_presented_ts` 在所有裝置正確發出。
+L1 evidence 由兩條獨立量測組成：
 
-**注意事項（min API 31 提案）**：S8（Mali-G71、Android 9/SDK 28）p95 為 52ms，屬可接受但為三裝置最慢。Mali-G71 屬 OpenGL ES 3.2 世代 GPU，Vulkan 1.0 支援完整但驅動成熟度低於 Adreno 6xx/7xx。若 M2 穩態目標更嚴格（< 20ms），建議向 team-lead 提交「min API 31 plan amendment」——Adreno 619+（API 30）以上裝置均達 21ms 以下。此為 M1 carry-over 議題，不封鎖 M0。
+1. **Steady-state swapchain recreate**（Task #15, `M0-task15-swapchain-verify.md`）：S24 Ultra p95=9ms、S21+ p95=21ms、S8 p95=52ms，三裝置全部 < 200ms。
+2. **100-cycle rotation stress**（Task #8, `M0-vulkan-spike-report.md`）：S24 Ultra p95=18ms PASS、S21+ p95=28ms PASS、**S8 p95=326ms FAIL**（Mali-G71、Android 9/SDK 28）。
 
-S8 冷啟動恢復（HOME → resume）≈ 2505ms，含完整 Vulkan driver init；此屬實作特性非缺陷，正式量產版應從 Application.onCreate 預熱 Vulkan instance。
+L1 verdict 並非「三裝置全部 PASS」。S8 在 100-cycle rotation 失守（p95=326ms 超過 200ms gate），但 E1 trigger 門檻為 2+ devices fail，實際 1/3 fail，**E1 NOT triggered**，全埠繼續。S8 屬於支援矩陣外的早期裝置（Adreno 6xx+ 全部 PASS）。
+
+**支援矩陣（M0 結論）**：
+- 主要支援：API 31+（Android 12+）、Adreno 660+ / Mali-G77+。Vulkan 後端 production-ready。
+- 不支援：API 28（Android 9）/ Mali-G71 等 2017 前 GPU。100-cycle rotation 顯示 driver 成熟度不足。
+- M1 第一週必須提交正式 plan amendment 將 `minSdk` 從目前 26 提升至 31。
+
+S8 冷啟動恢復（HOME → resume）≈ 2505ms 含完整 Vulkan driver init；production 版本應從 Application.onCreate 預熱 instance（M2 carry-over）。
 
 ### L2 — warp_terminal facade（D1.5-hybrid per Plan Amendment 2）
 
 **判決：GO**
 
-`warp_terminal_mobile_facade`（commit `5400c66`）scaffold 結構完備，cfg-dialect 慣例文件齊全（`M0-facade-scaffold.md`）。Plan Amendment 2 確立 D2-lite：facade 在 M2 起排除 warpui dep 圖，改依賴 warp_terminal 的乾淨子集（`warp_completer`、`warp_core`、`vte` 等）；warpui 內部以 `cfg(target_os = "android")` gates 修改，而非 D1 的全面 cfg-gate。
+`warp_terminal_mobile_facade`（commit `5400c66`）scaffold 結構完備，cfg-dialect 慣例文件齊全（`M0-facade-scaffold.md`）。
 
-Task 3 deps report 量化顯示：warp_terminal 自身無 Android 不相容 dep；問題完全來自 warpui transitive chain（font-kit 2,834 行、android-activity 500 行）。D2-lite 邊界明確，M2a 4 週估算具信心基礎。
+**D1.5-hybrid 路線（Plan Amendment 2，覆蓋原 D2-lite）**：保留 `warp_terminal → warpui` Cargo dep edge（避免 D2-lite 試圖移除此 edge 的 Cargo 圖矛盾），改在 `warpui` 內部加 `cfg(target_os = "android")` gates 與 Android-specific platform backend，而非 D1 的全面 cfg-gate。
+
+Task 3 deps report 量化顯示：warp_terminal 自身無 Android 不相容 dep；問題完全來自 warpui transitive chain（font-kit 2,834 行、android-activity 500 行）。D1.5-hybrid 邊界明確，M2a 4 週估算具信心基礎。Plan §6 M2 區段以及 §3 D2-lite 殘留文字需在 M1 第一週統一更新為 D1.5-hybrid（M1 carry-over）。
 
 ### L3 — Android Host Service
 
@@ -76,11 +88,11 @@ Pre-mortem Scenario B（W^X 封鎖 symlink）未觸發。
 
 E1 觸發條件：「Task #8 後，3 裝置中 2+ 裝置 frame-recovery p95 ≥ 200ms 或 validation layer 非乾淨。」
 
-實際結果：S24 Ultra p95 ≈ 9ms（PASS）、S21+ p95 ≈ 21ms（PASS）、S8 p95 ≈ 52ms（PASS）。3/3 裝置通過，觸發門檻為 2/3 失敗 = **1/3 失敗 < 2/3 門檻**，E1 **不觸發**。
+實際結果（Task #8, 100-cycle rotation, `M0-vulkan-spike-report.md`）：S24 Ultra p95=18ms（PASS）、S21+ p95=28ms（PASS）、**S8 p95=326ms（FAIL）**。2/3 裝置通過、1/3 失敗。E1 門檻為 2/3 失敗才觸發 → **1/3 失敗 < 2/3 門檻 → E1 NOT triggered**。
 
-S8 Mali-G71 p95 52ms 屬硬體/驅動代際因素，非設計缺陷。不計為失敗。
+S8 失敗原因為 Mali-G71（2016 GPU）+ Android 9 driver 成熟度不足；不在 Adreno 6xx+ 主要支援矩陣內。Companion-mode retreat path **不啟動**。
 
-Companion-mode retreat path **不啟動**。
+Validation layer 全裝置零警告（Task #15）。
 
 ---
 
@@ -99,17 +111,17 @@ Companion-mode retreat path **不啟動**。
 
 ---
 
-## 5. M1 Carry-Over 項目
+## 5. M1 Carry-Over 項目（確定 4 項，Codex round-3 verdicts 已落地）
 
-1. **Codex round-3 re-review 待結果**：Tasks #16（Vulkan spike）與 #17（symlink errno）各自有 `codex-rereview-task16.md` 和 `codex-rereview-task17.md` 評審任務在進行中。最終 CODEX_PASS/REVISE 判決應在 M0 close-out 前落地；若任一為 REVISE，新任務進入 M1 backlog。
+1. **min API 31 plan amendment（必做，M1 第一週）**：M0 100-cycle rotation 顯示 S8/Mali-G71/Android 9 失守 (p95=326ms)，Adreno 6xx+ 通過。正式提案將 `minSdk` 從 26 提升至 31（Android 12）。
 
-2. **min API 31 plan amendment 提案**：S8（API 28、Mali-G71）p95 52ms 屬可接受，但若 M2 目標更嚴格，需正式提案將 `minSdk` 從 26 提升至 31（Android 12）。M1 第一週提案。
+2. **D1.5-hybrid M2 實作（M2 主軸）**：保留 `warp_terminal → warpui` Cargo edge（避免 D2-lite Cargo 圖矛盾），在 `warpui` 內部加 `cfg(target_os = "android")` gates 與 `warpui::platform::android` backend（從 `headless` derive，補實 4 area：`render_scene`、`request_frame_capture`、`FontDB` 15 methods、`TextLayoutSystem` 2 methods）。當前 scaffold `5400c66` 為佔位符。同時更新 plan §3 與 §6 殘留 D2-lite 文字以統一 D1.5-hybrid。
 
-3. **D1.5-hybrid M2 實作**：facade 真正排除 warpui dep（移除 `warp_terminal` direct dep，改依賴乾淨子集）。當前 scaffold commit `5400c66` 為佔位符；M2 起需正式 cfg-gate。
+3. **android-activity E0282 一行修復（M1 第一天，30 分鐘）**：workspace `Cargo.toml` 新增 `features = ["android-native-activity"]`。
 
-4. **android-activity E0282 一行修復**：workspace `Cargo.toml` 新增 `features = ["android-native-activity"]`。30 分鐘 spike，建議 M1 第一天確認。
+4. **Vulkan spike Rust init-failure cleanup leaks（M2 RAII rewrite，accepted as PARTIAL）**：Codex Task #16 round-2 標記 4 段早期 return 漏清 device/swapchain/framebuffers/sync primitive (`spikes/vulkan-surface-recreate/src/lib.rs:222/252/277/605/617/629`)。Spike 為 throwaway code，M2 `warpui::platform::android` backend 以 RAII (Drop trait) 重寫即解，不在 spike 修。
 
-5. **Tasks #18、#19 待處理**：#18（Vulkan strict-assert + stale comment）、#19（symlink JSON escape via jq -n）為輕量清理任務，可在 M1 初期作為 warm-up 完成。
+Tasks #16/#17 round-3 Codex verdicts 均已收斂：Task #16 → Task #18 修 strict-assert（`ff439ad` PASS），Task #17 → Task #19 修 JSON escape（`3ceb777` PASS）。
 
 ---
 
@@ -121,19 +133,20 @@ Companion-mode retreat path **不啟動**。
 
 M0 四個技術層的關鍵風險問題全部得到明確答覆：
 
-- **L1 Vulkan 層**：三裝置穩態 p95 均低於 200ms，validation layer 零錯誤，swapchain recreate lifecycle 正常，E1 retreat trigger 未觸發。Vulkan 後端可行性確認。
+- **L1 Vulkan 層**：穩態 swapchain recreate 三裝置 p95 ≤ 52ms（Task #15）；100-cycle rotation 2/3 PASS、S8/Mali-G71/A9 唯一失守 p95=326ms（Task #8）。E1 trigger 門檻 2/3 fail 未達（1/3 fail < 2/3）→ E1 NOT triggered。L1 verdict 為「API 31+ / Adreno 6xx+ CONDITIONAL GO」，Vulkan 後端可行性在主要支援矩陣內確認。
 
-- **L4 Termux runtime**：symlink-jniLibs W^X workaround 在 SDK 28–36 debug + release 全部驗證通過，negative control 確認 EACCES，此為 Termux binary 執行的唯一可行路徑，已無設計風險。
+- **L4 Termux runtime**：symlink-jniLibs W^X workaround 在 SDK 28–36 debug + release 全部驗證通過，negative control 在 SDK 29+ 確認 EACCES、SDK 28 預期 succeeded（pre-API29 無 W^X enforcement，retreat path 行為正確），已無設計風險。
 
-- **L2 facade 架構**：D2-lite 邊界由 Task 3 deps report 量化確立，D1（cfg-gate warpui）因 3,334 行超過 Pre-mortem C 500 行門檻而被數據否決；D2-lite 路徑清晰，M2a 4 週估算有據。
+- **L2 facade 架構**：D1.5-hybrid 邊界由 Task 3 deps report + Codex Plan REVISE 量化確立；D1（cfg-gate warpui）因 3,334 行超過 Pre-mortem C 500 行門檻而被數據否決；D1.5-hybrid 路徑清晰，M2a 4 週估算有據。Plan §3、§6 殘留 D2-lite 文字需 M1 第一週統一更新。
 
 - **Tension 3**：A1+B1+C1+E1 四項決策均有論証記錄，不阻塞 M1。
 
-條件性在於：Codex round-3 對 Tasks #16/17 的最終 CODEX_PASS 待確認，以及 min API 31 提案需在 M1 第一週決議。這兩項屬管理性 carry-over，不影響技術方向。
+**條件性在於**：(1) min API 31 plan amendment 需 M1 第一週正式提案；(2) Plan D1.5-hybrid 文字統一需 M1 第一週完成；(3) android-activity 一行修復屬技術 trivial。三項皆為管理性 carry-over，不影響 M0 技術方向。Tasks #16/#17 round-3 Codex verdicts 已收斂於 #18/#19 對應 commit。
 
-**M1 可在上述 carry-over 確認後立即啟動。**
+**M1 可立即啟動。**
 
 ---
 
 *撰寫人：worker-env@warp-mobile-m0 代 team-lead*
-*基於：Tasks 1–17 全部 artifacts，branch warp-mobile/m0-symlink-redo @ 0ab80d4*
+*基於：Tasks 1–19 全部 artifacts，main @ 058a089*
+*Codex M0 final REVISE → fixes applied per (S8 100-cycle 校正、D1.5-hybrid 統一、M1 carry-overs 改為實際 4 項、Tasks #18/#19 移出 pending)；待 Codex re-review*
