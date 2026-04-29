@@ -4,8 +4,7 @@
     <application
         android:allowBackup="false"
         android:label="SymlinkTest"
-        android:supportsRtl="true"
-        android:extractNativeLibs="true">
+        android:supportsRtl="true">
 
         <activity
             android:name=".MainActivity"

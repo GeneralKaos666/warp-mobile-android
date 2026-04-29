@@ -108,3 +108,4 @@ TODO.local.md
 .env.*.local
 secrets/
 *.secret
+.omc/project-memory.json

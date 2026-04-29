@@ -2,13 +2,18 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 <device-serial>" >&2
+    echo "Usage: $0 <device-serial> [debug|release]" >&2
     exit 1
 fi
 DEVICE_SERIAL="$1"
+VARIANT="${2:-debug}"
 SCRIPT_DIR="${0:a:h}"
 PROJECT_DIR="${SCRIPT_DIR}/../spikes/symlink-jnilibs"
-APK_PATH="${PROJECT_DIR}/app/build/outputs/apk/debug/app-debug.apk"
+if [[ "$VARIANT" == "release" ]]; then
+    APK_PATH="${PROJECT_DIR}/app/build/outputs/apk/release/app-release.apk"
+else
+    APK_PATH="${PROJECT_DIR}/app/build/outputs/apk/debug/app-debug.apk"
+fi
 PKG="dev.warp.symlinktest"
 ACTIVITY="${PKG}/.MainActivity"
 LOG_TAG="SymlinkExec"
@@ -18,26 +23,19 @@ adb_cmd() {
     "${ADB_PATH}" -s "${DEVICE_SERIAL}" "$@"
 }
 
-# Get Android SDK version
 ANDROID_SDK=$(adb_cmd shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || echo "0")
+echo "[symlink-test] device=${DEVICE_SERIAL} sdk=${ANDROID_SDK} variant=${VARIANT}" >&2
 
-echo "[symlink-test] device=${DEVICE_SERIAL} sdk=${ANDROID_SDK}" >&2
-
-# Install APK
 echo "[symlink-test] installing APK..." >&2
 adb_cmd install -r "${APK_PATH}" >/dev/null 2>&1 || adb_cmd install "${APK_PATH}" >/dev/null 2>&1
 
-# Clear logcat
 adb_cmd logcat -c 2>/dev/null || true
-
-# Launch activity
 adb_cmd shell am start -n "${ACTIVITY}" >/dev/null 2>&1
 
-# Read logcat for up to 8 seconds, looking for RESULT line
 echo "[symlink-test] waiting for result..." >&2
 RESULT_LINE=""
 COUNT=0
-while [[ $COUNT -lt 8 ]]; do
+while [[ $COUNT -lt 10 ]]; do
     RAW=$(adb_cmd logcat -d -s "${LOG_TAG}:I" 2>/dev/null || true)
     RESULT_LINE=$(echo "$RAW" | grep "RESULT:" | tail -1 || true)
     if [[ -n "$RESULT_LINE" ]]; then
@@ -50,25 +48,32 @@ done
 if [[ -z "$RESULT_LINE" ]]; then
     echo "[symlink-test] no RESULT line found, dumping logcat:" >&2
     adb_cmd logcat -d -s "${LOG_TAG}:I" >&2 || true
-    echo '{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"exit_code":-99,"stdout_token":"","errno":"no_result_line","passed":false}'
+    echo '{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":false,"symlink_passed":false,"errno":"no_result_line","passed":false}'
     exit 1
 fi
 
 echo "[symlink-test] raw result: ${RESULT_LINE}" >&2
 
-# Parse fields
+NEG_FAILED=$(echo "$RESULT_LINE" | grep -oE 'negative_control_failed=(true|false)' | cut -d= -f2 || echo "false")
+SYMLINK_PASSED=$(echo "$RESULT_LINE" | grep -oE 'symlink_passed=(true|false)' | cut -d= -f2 || echo "false")
 EXIT_CODE=$(echo "$RESULT_LINE" | grep -oE 'result_exit=[-0-9]+' | cut -d= -f2 || echo "-1")
 STDOUT_TOKEN=$(echo "$RESULT_LINE" | grep -oE 'stdout_token=[^ ]+' | cut -d= -f2 || echo "")
-ERRNO_RAW=$(echo "$RESULT_LINE" | grep -oE 'errno=[^ ]+' | cut -d= -f2 || echo "null")
-PASSED=$(echo "$RESULT_LINE" | grep -oE 'passed=(true|false)' | cut -d= -f2 || echo "false")
+NEG_ERRNO=$(echo "$RESULT_LINE" | grep -oE 'negative_errno=[^ ]+' | cut -d= -f2 || echo "none")
+SYMLINK_ERRNO=$(echo "$RESULT_LINE" | grep -oE 'symlink_errno=[^ ]+' | cut -d= -f2 || echo "none")
 
-if [[ "$ERRNO_RAW" == "null" ]]; then
-    ERRNO_JSON="null"
+# SDK >= 29: W^X enforced; negative control must fail AND symlink must pass.
+# SDK < 29: restriction not present; only check symlink.
+if [[ "$ANDROID_SDK" -ge 29 ]]; then
+    if [[ "$NEG_FAILED" == "true" && "$SYMLINK_PASSED" == "true" ]]; then
+        PASSED="true"
+    else
+        PASSED="false"
+    fi
 else
-    ERRNO_JSON="\"${ERRNO_RAW}\""
+    PASSED="$SYMLINK_PASSED"
 fi
 
-JSON='{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"exit_code":'"${EXIT_CODE}"',"stdout_token":"'"${STDOUT_TOKEN}"'","errno":'"${ERRNO_JSON}"',"passed":'"${PASSED}"'}'
+JSON='{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":'"${NEG_FAILED}"',"negative_errno":"'"${NEG_ERRNO}"'","symlink_passed":'"${SYMLINK_PASSED}"',"symlink_errno":"'"${SYMLINK_ERRNO}"'","exit_code":'"${EXIT_CODE}"',"stdout_token":"'"${STDOUT_TOKEN}"'","passed":'"${PASSED}"'}'
 echo "$JSON"
 
 if [[ "$PASSED" == "true" ]]; then

@@ -5,51 +5,31 @@
 - Path: `spikes/vulkan-surface-recreate/android/app/build/outputs/apk/debug/app-debug.apk`
 - Size: 3.3 MB
 - Built with: `gradle assembleDebug` (AGP 8.7.3, Gradle 9.2.1)
-- Embeds: `libvulkan_surface_recreate.so` (arm64-v8a, 716K)
+- Embeds: `libvulkan_surface_recreate.so` (arm64-v8a, 706K after Task #13 rebuild)
 
 ## Install Results
 
-| Device | Serial | Install | Launch | surfaceCreated_ts logged |
-|--------|--------|---------|--------|--------------------------|
-| S24 Ultra | R5CX10VFFBA | SUCCESS | SUCCESS | YES (ts=36678796) |
-| S21+ | RFCNC0WNT9H | SUCCESS | SUCCESS | YES (ts=505825) |
-| S8 | ce0317133a9ad0190c | SUCCESS | SUCCESS | YES (ts=159920830) |
+| Device | Serial | Install | Launch | VkSurfaceKHR |
+|--------|--------|---------|--------|--------------|
+| S24 Ultra | R5CX10VFFBA | SUCCESS | SUCCESS | created successfully (ANativeWindow=0xb40000716d1f5610) |
+| S21+ | RFCNC0WNT9H | SUCCESS | SUCCESS | created successfully (ANativeWindow=0xb400006fc00e98e0) |
+| S8 | ce0317133a9ad0190c | SUCCESS | SUCCESS | created successfully (ANativeWindow=0x7c4a3b7010) |
 
 All three devices: APK installs without error, Activity launches without crash,
-Rust JNI library loads (`System.loadLibrary("vulkan_surface_recreate")` succeeds),
-`surfaceCreated_ts` appears in logcat tag `VulkanSpike`.
+Rust JNI library loads, `VkSurfaceKHR created successfully` appears in logcat tag `VulkanSpike`.
 
-## Known Issue: getNativeHandle Reflection Failure
+## Surface Handle
 
-All three devices emit:
-```
-W VulkanSpike: getNativeHandle failed: java.lang.NoSuchMethodException: android.view.Surface.getNativeHandle []
-```
-
-`android.view.Surface.getNativeHandle()` is not accessible via reflection on these
-API levels (Android 12+). The native window pointer passed to Rust is therefore `0`.
-
-**Impact on Task #8 measurement:** The `surfaceDestroyed_ts` / `firstNonStaleFrame_ts`
-logcat lines are emitted from Kotlin (using `SystemClock.uptimeMillis()`), not from the
-Rust JNI side — so frame-recovery timing measurement is unaffected by this issue.
-The Vulkan surface creation itself will fail silently (null window), but the timing
-scaffolding works.
-
-**Fix before full 100-cycle measurement:** Replace `getNativeHandle` reflection with
-NDK `ANativeWindow_fromSurface` via a proper JNI call, or use a `SurfaceView` and
-pass the surface to a Rust JNI function that accepts `jobject` and calls
-`ANativeWindow_fromSurface` internally.
+Surface handle uses `ANativeWindow_fromSurface` (NDK public API, available since API 26);
+previous `Surface.getNativeHandle()` reflection issue resolved in commit `4aa1fac`.
+No reflection code remains in the codebase.
 
 ## Script Location
 
 - `spikes/vulkan-surface-recreate/scripts/run-vulkan-spike.sh <device-serial>`
-- Drives 100 rotation cycles, parses `surfaceDestroyed_ts` / `firstNonStaleFrame_ts`
+- Drives 100 rotation cycles, parses `surfaceDestroyed_ts` / `first_frame_presented_ts`
   pairs from logcat, outputs CSV + p50/p95/p99 summary
 
-## Update (Task #13)
+## References
 
-**VkSurfaceKHR creation 'silent failure' caveat resolved.** Task #13 replaced
-the failing `getNativeHandle()` reflection with `ANativeWindow_fromSurface()` (NDK
-public API, API 26+). All three devices now log `VkSurfaceKHR created successfully`
-with non-null ANativeWindow pointers. Task #8 is now unblocked.
-See `.omc/m0-artifacts/M0-task13-surface-fix-verify.md` for full verification log.
+- Task #13 fix verification: `.omc/m0-artifacts/M0-task13-vulkan-fix-verify.md`

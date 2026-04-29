@@ -1,10 +1,14 @@
 package dev.warp.symlinktest
 
 import android.os.Bundle
+import android.system.ErrnoException
 import android.system.Os
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
@@ -14,10 +18,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        Thread {
-            runTest()
-        }.start()
+        Thread { runTest() }.start()
     }
 
     private fun runTest() {
@@ -26,55 +27,118 @@ class MainActivity : AppCompatActivity() {
             val soPath = "$nativeLibDir/libhello_exec.so"
             val binDir = File(filesDir, "usr/bin")
             binDir.mkdirs()
-            val symlinkPath = File(binDir, "hello_exec")
-
-            // Remove old symlink if exists
-            if (symlinkPath.exists() || isSymlink(symlinkPath)) {
-                symlinkPath.delete()
-            }
 
             Log.i(TAG, "nativeLibDir=$nativeLibDir so_exists=${File(soPath).exists()}")
 
-            // Create symlink via android.system.Os
+            // --- Negative control: copy binary to filesDir and exec directly ---
+            // API 29+ W^X policy blocks execve() on writable app-data files.
+            // Expect FAILURE (IOException wrapping EACCES) on SDK >= 29.
+            val copyPath = File(binDir, "hello_exec_copy")
+            var negativeControlFailed = false
+            var negativeErrno = "none"
             try {
+                copyPath.delete()
+                FileInputStream(soPath).use { inp ->
+                    FileOutputStream(copyPath).use { out -> inp.copyTo(out) }
+                }
+                copyPath.setExecutable(true, false)
+                val proc = Runtime.getRuntime().exec(copyPath.absolutePath)
+                val ncStdout = Thread { proc.inputStream.bufferedReader().readText() }
+                val ncStderr = Thread { proc.errorStream.bufferedReader().readText() }
+                ncStdout.start(); ncStderr.start()
+                val exitCode = proc.waitFor()
+                ncStdout.join(); ncStderr.join()
+                // Restriction not enforced — exec succeeded
+                Log.w(TAG, "negative_control_unexpectedly_passed exit=$exitCode")
+                negativeControlFailed = false
+                negativeErrno = "exec_succeeded_exit=$exitCode"
+            } catch (e: ErrnoException) {
+                // Direct ErrnoException path (e.g. from Os.execv)
+                negativeControlFailed = true
+                negativeErrno = "ErrnoException(${e.errno}):${e.message}"
+                Log.i(TAG, "negative_control_denied errno=${e.errno} msg=${e.message}")
+            } catch (e: IOException) {
+                // Runtime.exec wraps OS errors as IOException; this is the expected path on API 29+
+                negativeControlFailed = true
+                negativeErrno = "IOException:${e.message}"
+                Log.i(TAG, "negative_control_denied IOException msg=${e.message}")
+            } catch (e: Exception) {
+                negativeControlFailed = true
+                negativeErrno = "${e.javaClass.simpleName}:${e.message}"
+                Log.i(TAG, "negative_control_denied ${e.javaClass.simpleName} msg=${e.message}")
+            }
+
+            // --- Symlink test: exec via symlink pointing into nativeLibraryDir ---
+            val symlinkPath = File(binDir, "hello_exec")
+            if (symlinkPath.exists() || isSymlink(symlinkPath)) symlinkPath.delete()
+
+            var symlinkPassed = false
+            var symlinkErrno = "none"
+            var symlinkExit = -99
+            var symlinkToken = ""
+
+            try {
+                // Os.symlink throws ErrnoException on failure with proper errno
                 Os.symlink(soPath, symlinkPath.absolutePath)
                 Log.i(TAG, "symlink_created: ${symlinkPath.absolutePath} -> $soPath")
-            } catch (e: Exception) {
-                Log.e(TAG, "symlink_failed errno=${e.message}")
-                reportResult(-1, "", "symlink_failed:${e.message}")
+            } catch (e: ErrnoException) {
+                symlinkErrno = "symlink_ErrnoException(${e.errno}):${e.message}"
+                Log.e(TAG, symlinkErrno)
+                logFinalResult(negativeControlFailed, negativeErrno, false, symlinkErrno, -1, "")
                 return
             }
 
-            // Execute via symlink path
             try {
-                val process = Runtime.getRuntime().exec(symlinkPath.absolutePath)
-                val exitCode = process.waitFor()
-                val stdout = process.inputStream.bufferedReader().readText().trim()
-                val stderr = process.errorStream.bufferedReader().readText().trim()
-                Log.i(TAG, "result_exit=$exitCode stdout_token=$stdout stderr=$stderr")
-                reportResult(exitCode, stdout, null)
+                val proc = Runtime.getRuntime().exec(symlinkPath.absolutePath)
+                // Drain streams on separate threads before waitFor() to avoid deadlock
+                // when stdout/stderr pipe buffer fills (common in release builds).
+                var stdoutText = ""
+                var stderrText = ""
+                val stdoutThread = Thread { stdoutText = proc.inputStream.bufferedReader().readText().trim() }
+                val stderrThread = Thread { stderrText = proc.errorStream.bufferedReader().readText().trim() }
+                stdoutThread.start(); stderrThread.start()
+                symlinkExit = proc.waitFor()
+                stdoutThread.join(); stderrThread.join()
+                symlinkToken = stdoutText
+                val stderr = stderrText
+                Log.i(TAG, "symlink_exec result_exit=$symlinkExit stdout_token=$symlinkToken stderr=$stderr")
+                symlinkPassed = symlinkExit == 42 && symlinkToken == "SYMLINK_EXEC_TOKEN_OK"
+            } catch (e: ErrnoException) {
+                symlinkErrno = "exec_ErrnoException(${e.errno}):${e.message}"
+                Log.e(TAG, "symlink_exec_denied errno=${e.errno} msg=${e.message}")
+            } catch (e: IOException) {
+                symlinkErrno = "exec_IOException:${e.message}"
+                Log.e(TAG, "symlink_exec_failed IOException msg=${e.message}")
             } catch (e: Exception) {
-                Log.e(TAG, "exec_failed errno=${e.message}")
-                reportResult(-2, "", "exec_failed:${e.message}")
+                symlinkErrno = "exec_${e.javaClass.simpleName}:${e.message}"
+                Log.e(TAG, "symlink_exec_failed ${e.javaClass.simpleName} msg=${e.message}")
             }
+
+            logFinalResult(negativeControlFailed, negativeErrno, symlinkPassed, symlinkErrno, symlinkExit, symlinkToken)
 
         } catch (e: Exception) {
             Log.e(TAG, "unexpected_error: ${e.message}")
-            reportResult(-3, "", "unexpected:${e.message}")
+            Log.i(TAG, "RESULT: negative_control_failed=false negative_errno=unexpected symlink_passed=false symlink_errno=unexpected result_exit=-99 stdout_token=")
         }
     }
 
-    private fun reportResult(exitCode: Int, stdoutToken: String, errno: String?) {
-        val passed = exitCode == 42 && stdoutToken == "SYMLINK_EXEC_TOKEN_OK"
-        val errnoStr = errno ?: "null"
-        Log.i(TAG, "RESULT: result_exit=$exitCode stdout_token=$stdoutToken errno=$errnoStr passed=$passed")
+    private fun logFinalResult(
+        negativeControlFailed: Boolean,
+        negativeErrno: String,
+        symlinkPassed: Boolean,
+        symlinkErrno: String,
+        symlinkExit: Int,
+        symlinkToken: String
+    ) {
+        Log.i(
+            TAG,
+            "RESULT: negative_control_failed=$negativeControlFailed negative_errno=$negativeErrno" +
+            " symlink_passed=$symlinkPassed symlink_errno=$symlinkErrno" +
+            " result_exit=$symlinkExit stdout_token=$symlinkToken"
+        )
     }
 
     private fun isSymlink(file: File): Boolean {
-        return try {
-            file.canonicalPath != file.absolutePath
-        } catch (e: Exception) {
-            false
-        }
+        return try { file.canonicalPath != file.absolutePath } catch (e: Exception) { false }
     }
 }

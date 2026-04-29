@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'dev.warp.symlinktest'
-    compileSdk 34
+    compileSdk 36
 
     defaultConfig {
         applicationId "dev.warp.symlinktest"
         minSdk 26
-        targetSdk 34
+        targetSdk 36
         versionCode 1
         versionName "1.0"
     }
@@ -28,6 +28,20 @@ android {
         debug {
             debuggable true
         }
+        release {
+            debuggable false
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
     }
 
     sourceSets {
@@ -38,7 +52,10 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = false
+            // useLegacyPackaging=true extracts .so files at install time into nativeLibraryDir,
+            // which is required for the symlink workaround (execve on extracted path is allowlisted).
+            // extractNativeLibs is NOT set in AndroidManifest.xml; this Gradle flag controls it.
+            useLegacyPackaging = true
         }
     }
 }
