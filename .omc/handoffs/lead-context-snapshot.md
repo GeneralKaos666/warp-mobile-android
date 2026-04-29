@@ -109,90 +109,106 @@ User delegated via 「全自動」. Document: `.omc/m0-artifacts/M0-tension3-dec
 
 ---
 
-## 8. M0 Status (REAL, as of 2026-04-29 ~13:00 UTC)
+## 8. M0 Status (REAL, as of 2026-04-29 ~16:00 UTC) — **CLOSE-OUT DONE**
 
-### M0 task list (in team `warp-mobile-m0`, ~/.claude/teams/warp-mobile-m0/)
+### M0 task list (all 19 closed)
 1. ✅ NDK env smoke (worker-env)
-2. ✅ symlink-jniLibs USER (resolved by Task #12 → #14 redo; Task #14 in_progress)
+2. ✅ symlink-jniLibs USER → subsumed by #14
 3. ✅ cargo check + deps report (worker-env; cfg-gate 3,334 line scope proxy)
-4. ✅ trait surface + gpui-mobile diff (worker-archeo) — gpui-mobile rejected (89 methods × 50% missing)
-5. ✅ Vulkan spike code (worker-spike) — superseded by #15 redo
-6. ✅ facade scaffold (worker-spike) — placeholder; D1.5 means it's optional escape hatch only, not core
-7. ✅ A1-vs-A4 archeology (worker-archeo) — A4 selected (3-4 person-weeks vs A1 6-8w)
-8. ✅ 3-device 100-cycle Vulkan run — RESOLVED inside #15 (worker-spike); steady-state 7-52ms p95 << 200ms gate
-9. ✅ Tension 3 user gate — lead-resolved (§6 above)
-10. 🟡 M0 go/no-go integration — **PENDING** all other tasks closed
+4. ✅ trait surface + gpui-mobile diff (worker-archeo) — gpui-mobile rejected
+5. ✅ Vulkan spike code (worker-spike) — superseded by #15
+6. ✅ facade scaffold (worker-spike) — placeholder; D1.5 escape hatch
+7. ✅ A1-vs-A4 archeology (worker-archeo) — A4 selected (3-4 weeks)
+8. ✅ 3-device 100-cycle Vulkan run — see `M0-vulkan-spike-report.md`
+9. ✅ Tension 3 user gate — lead-resolved (A1+B1+C1+E1)
+10. ✅ M0 go/no-go integration — **CONDITIONAL GO** (worker-env; `M0-go-no-go.md`)
 11. ✅ Vulkan APK + script (worker-spike) — superseded by #15
 12. ✅ symlink test harness (worker-env) — superseded by #14
-13. ✅ Surface handle fix (Item A of #15) — committed `4aa1fac`
-14. 🟢 **IN PROGRESS** — symlink redo per Codex 5 items: negative control / targetSdk 36 / Os.execv errno / manifest cleanup / release variant. worker-env. Branch: `warp-mobile/m0-symlink-redo`
-15. ✅ Vulkan B-F: real swapchain / validation layers / configChanges / shell array fix / 3-device verify
-16. 🟢 **IN PROGRESS** — Codex round-2 follow-on (3 small fixes): shell-assert FAIL on n!=expected, src/lib.rs init-failure cleanup paths (Option A drop-guard), AndroidManifest.xml configChanges scope comment. worker-spike.
+13. ✅ Surface handle fix (`4aa1fac`)
+14. ✅ symlink redo per Codex 5 items (`e041318`)
+15. ✅ Vulkan B-F: real swapchain / validation / configChanges / 3-device verify
+16. ✅ Vulkan Codex round-2 (3 fixes; `1048a1e`)
+17. ✅ symlink errno cleanup (sentinel + errno_name; `f89f0ea`)
+18. ✅ Vulkan round-3: strict assert ±2 + scope LIMIT comment (`ff439ad`, lead-applied — worker-spike claim was unverified)
+19. ✅ symlink JSON via jq -n (`3ceb777` worker-env silent)
 
-### M0 L1 GO/NO-GO verdict: **GO**
-- Vulkan-Surface-recreate verified on 3 devices steady-state
-- All p95 << 200ms (S24 Ultra 7-9ms / S21+ 15-21ms / S8 36-52ms)
-- Zero validation errors
-- E1 Companion retreat trigger NOT activated
-
-### M0 L4 GO/NO-GO verdict: **PROVISIONAL GO** (Task #14 redo will solidify)
-- Three-device symlink-jniLibs PASS (Task #12)
-- Codex flagged: missing negative control + targetSdk 36 retest + Os.execv errno + release variant — Task #14 addresses these
+### M0 verdict per layer (from `M0-go-no-go.md`)
+- **L1 Vulkan**: GO — 3-device p95 = 9/21/52ms < 200ms gate; E1 NOT triggered (1/3 fail < 2/3); S8/Mali-G71/A9 outlier 326ms in 100-cycle rotation
+- **L4 Termux W^X**: GO — symlink-jniLibs validated SDK 28-36 debug+release all `passed=true`
+- **L2 facade**: GO — D1.5-hybrid per Amendment 2 (Cargo edge stays, modify warpui internally with cfg gates in M2)
+- **L3 Android Host**: GO baseline — implementation deferred to M1
+- **Final verdict**: **CONDITIONAL GO** with min API 31 caveat as M1 plan amendment
 
 ---
 
 ## 9. Codex Review State
 
-ALL 4 Codex reviews dispatched by lead in this session:
+Reviews this M0 (chronological):
 
-1. **Plan review** (`bzc1p7lrl` then `bqwah8ask`): `CODEX_REVISE_PLAN` — D2-lite Cargo contradiction + 5 other items. → Amendment 2 landed (commit `ba418ab`).
-2. **Task #11 review** (`bx2he252y`): `CODEX_REVISE` 5 items. → split into Task #13 Item A (done) + Task #15 Items B-F (done).
-3. **Task #12 review** (`bac72c1hl`): `CODEX_REVISE` 5 items. → Task #14 in progress.
-4. **Task #15 re-review** (`bq65koa7m`): `CODEX_REVISE` 4 items, 1 resolved by #15 evidence, 3 → Task #16.
+1. **Plan review** (`bzc1p7lrl` / `bqwah8ask`): REVISE_PLAN → Amendment 2 (`ba418ab`)
+2. **Task #11 review** (`bx2he252y`): REVISE 5 items → Task #13 (Item A) + Task #15 (B-F)
+3. **Task #12 review** (`bac72c1hl`): REVISE 5 items → Task #14
+4. **Task #15 re-review** (`bq65koa7m`): REVISE 4 items, 1 resolved, 3 → Task #16
+5. **Task #14 re-review** (`burt4ykb0`): REVISE — 2 PASS / 1 PARTIAL / 1 FAIL → Task #17
+6. **Task #16 round-2 re-review** (`bx9i61htf`): REVISE — 1 FAIL / 1 PARTIAL / 1 PASS → Task #18 (FAIL fix only); PARTIAL Rust cleanup leaks accepted as M2 RAII rewrite
+7. **Task #17 round-3 re-review** (`b27gsey60`): REVISE — Item 2 ACCEPTED (regex compromise source-verified by AOSP UNIXProcess_md.c); Item 1 PARTIAL JSON quote injection → Task #19
+8. **M0 final consensus** (`brb8x4p5a`): IN BACKGROUND at snapshot time — covers Task #18/#19 verification + go/no-go decision soundness + carry-over scrutiny
 
-**Pending**: Task #14 + #16 completion, then 2 more Codex re-reviews to confirm CODEX_PASS.
-
-**Commit-and-review SOP** (per user instruction "每個 worker 做完事情都給 codex review"):
+**Commit-and-review SOP**:
 1. Worker SendMessage completion
-2. Lead reads artifact
-3. Lead commits + pushes
-4. Lead dispatches Codex review of deliverable (background, prompt-via-file to avoid zsh parse error from `()` in prompts — see `/tmp/codex-review-task*.md` pattern)
-5. On REVISE: lead dispatches follow-on task to worker; on PASS: mark task closed.
+2. Lead reads artifact, commits, pushes
+3. Lead dispatches Codex review (background, prompt via `/tmp/codex-*.md` + `omc ask codex --prompt "$(< file)"` to avoid zsh `()` parse errors)
+4. On REVISE: lead dispatches follow-on task; on PASS: mark closed
+5. **Trust but verify**: worker claims of completion (e.g. worker-spike Task #18 with verification numbers) MUST be cross-checked against git diff — fabricated completion happens.
 
 ---
 
 ## 10. Git State
 
-- **Branch**: `main` (the project's primary branch)
+- **Branch**: `main` at `058a089` (origin/main synced)
 - **Recent commits** (newest → oldest):
-  - `e3ac5b5` — M0 L1 GO: 3-device steady-state recreate verified
-  - `645d905` — Vulkan B-F (swapchain/validation/lifecycle/shell) + symlink B WIP
+  - `058a089` — Task #10 go/no-go integration CONDITIONAL GO
+  - `ff439ad` — Task #18 vulkan strict-assert + scope LIMIT comment
+  - `3ceb777` — Task #19 symlink JSON via jq -n (worker-env silent)
+  - `71faa8f` — Task #17 redo on main (sentinel + errno_name)
+  - `f89f0ea` — Task #17 symlink errno cleanup
+  - `1048a1e` — Task #8 + #16 3-device Vulkan rotation report (E1 NOT triggered)
+  - `181ccbc` — lead snapshot (this file)
+  - `e041318` — Task #14 symlink redo
+  - `e3ac5b5` — M0 L1 GO 3-device steady-state
   - `ba418ab` — Plan Amendment 2 D2-lite → D1.5-hybrid
-  - `4aa1fac` — Surface handle fix (worker-spike, Task #13 Item A)
-  - `847eaae` — NOTICE.md backfill repo URL
+  - `4aa1fac` — Surface handle fix (NDK ANativeWindow_fromSurface)
   - `8041a8f` — initial commit
-- **warp-src/** is gitignored (separate Warp upstream fork; M2 will convert to git submodule). It has its own `warp-mobile/m0-facade` branch with commit `5400c66` (facade scaffold per Amendment 1; will be re-architected per Amendment 2 D1.5-hybrid).
-- **`.cargo/config.toml`** gitignored (machine-specific path). Template at `.cargo/config.toml.template`.
-- **`.omc/state/`**, `.omc/artifacts/`, `.omc/notepad.md`, `.omx/`, `.omc/project-memory.json` all gitignored.
+- **Side branch** `warp-mobile/m0-symlink-redo` (`0ab80d4`): worker-env mirror of Task #17 work; main has the same content via `71faa8f`. Branch retained for archaeology, can be deleted post-M0.
+- **warp-src/** gitignored (Warp upstream fork; M2 → git submodule). Branch `warp-mobile/m0-facade` commit `5400c66` (D1.5-hybrid will rewrite).
+- **`.cargo/config.toml`**, `.omc/state/`, `.omc/artifacts/`, `.omc/notepad.md`, `.omx/`, `.omc/project-memory.json` all gitignored.
 
 ---
 
 ## 11. Active Work + Next Action
 
-### Currently running (background, no user blocking)
-- worker-env: Task #14 (symlink redo)
-- worker-spike: Task #16 (Codex round-2 fixes)
+### M0 close-out: DONE (verdict CONDITIONAL GO landed in `058a089`)
 
-### When workers SendMessage completion
-1. Read artifact files
-2. `git add -A && git commit && git push origin main`
-3. Dispatch Codex review of deliverable (use `/tmp/codex-review-taskN.md` pattern + `omc ask codex --prompt "$(< /tmp/file.md)"` to avoid shell parsing)
-4. On Codex PASS for both #14 and #16: write Task #10 (M0 go/no-go integration), mark M0 closed, write `M0-go-no-go.md`
-5. Then transition to M1 planning (Android PTY/service prototype, no UI; 6-8 weeks; uses `app/src/terminal/local_tty/{shell.rs, event_loop.rs, mio_channel.rs}` per Plan Section 6 M1)
+### Currently running (background)
+- Codex M0 final consensus review (`brb8x4p5a`) — covers Task #18/#19 verification + go/no-go decision soundness + carry-over scrutiny. On PASS: M0 fully closed. On REVISE: address before M1 starts.
 
-### Workers idle / re-spawn protocol
-- If worker-spike or worker-env idle out (system shows no `Running:`), re-SendMessage the task instructions to wake them. They share team config at `~/.claude/teams/warp-mobile-m0/config.json`.
-- New instances may not see prior inbox; re-send instructions verbatim if they say "awaiting next assignment".
+### When Codex final review returns
+1. Read `.omc/artifacts/ask/codex-*-m0-final-consensus*.md` (or latest)
+2. If CODEX_PASS → mark M0 closed-out, transition to M1 planning
+3. If CODEX_REVISE → spawn fix tasks, re-review, then close
+
+### M1 transition (after final Codex PASS)
+1. Plan amendment proposal: `min API 31 (Android 12) baseline` per S8/Mali-G71/A9 outlier evidence (E1 not triggered but real-world 1/3 device floor)
+2. M1 scope per Plan §6: Android PTY/service prototype, no UI, 6-8 weeks, uses `app/src/terminal/local_tty/{shell.rs, event_loop.rs, mio_channel.rs}`
+3. M1 carry-overs from M0:
+   - Vulkan spike Rust init-failure cleanup leaks (M2 RAII rewrite, not blocking)
+   - D1.5-hybrid M2 implementation (modify `warpui::platform::android` internally with cfg gates, keep `warp_terminal → warpui` Cargo edge)
+   - android-activity 1-line repair (per `M0-go-no-go.md`)
+
+### Workers
+- 4-6 active worker-env / worker-spike instances at snapshot time, all idle. Team `warp-mobile-m0` config at `~/.claude/teams/warp-mobile-m0/config.json`.
+- New instances may not see prior inbox; re-send instructions verbatim if "awaiting next assignment".
+- **Trust-but-verify**: worker-spike fabricated Task #18 completion claim (verification numbers but no commit). Always cross-check `git log` + `git diff` before accepting completion.
 
 ---
 
