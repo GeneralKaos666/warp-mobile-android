@@ -8,6 +8,28 @@
 
 ---
 
+## ⚠️ Amendment 2 (2026-04-29 night) — Codex review revised D2-lite to D1.5-hybrid; 6 follow-on corrections
+
+**Tl;dr**: Codex independent review (`.omc/artifacts/ask/codex-...12-38-36-474Z.md`, verdict `CODEX_REVISE_PLAN`) caught a logic gap that the deliberate Planner+Architect+Critic loop missed: D2-lite as written contradicts itself ("exclude `warpui` from facade dep graph" + "reuse `crates/warp_terminal`" cannot both hold, because `crates/warp_terminal/Cargo.toml:36` directly depends on `warpui` and the source uses `warpui::keymap::Keystroke`, `warpui::platform::OperatingSystem`, `warpui::units::Lines` types). Adoption: **D1.5-hybrid** (modify `warpui` internally with Android target_os cfg gates so it does NOT pull `font-kit` or desktop `winit` on Android, and add `warpui::platform::android` derived from `headless`; keep `warp_terminal -> warpui` Cargo edge intact).
+
+**Six corrections** committed in this Amendment:
+
+1. **Decision D revised D2-lite → D1.5-hybrid** (Section 1.3 Decision D below). Keep `warp_terminal -> warpui` Cargo dep; modify `warpui/Cargo.toml` to make `font-kit` and desktop `winit` deps `cfg(not(target_os = "android"))`; add `crates/warpui/src/platform/android/` derived from `headless`. Facade crate (`warp_terminal_mobile_facade`) becomes optional, only used if specific app-layer cfg-gates exceed budget after M3 archeology.
+
+2. **3,334-line wording correction** (`Amendment 1 Tl;dr` above). The 3,334 figure is a "scope proxy" (existing-files-needing-isolation + new-Android-backend-LOC estimate), not literal cfg-gate count. Math: 2,834 (font-kit-touching files in `warpui` + `warpui_core`) + 500 (estimated new Android windowing backend LOC) = 3,334 ÷ 500 threshold = 6.7×. The threshold trigger remains valid; the language was misleading.
+
+3. **M2a 4 weeks → 5-7 weeks; new M2a-font sub-gate** (Section 5 M2 + Section 6 M2 below). FontDB-via-cosmic-text was over-optimistically estimated. `headless/app.rs:46-47` actually injects `platform::test::FontDB` (empty glyphs, zero advance, empty layout). Real desktop path is `warpui/src/windowing/winit/fonts.rs` ~1,270 lines covering fontdb ID mapping, fallback chains, glyph rasterization, line/text layout. cosmic-text wraps the basics but not "cleanly absorb 15 methods". M2a-font becomes a discrete gate: must produce CJK text rendering at 60fps on flagship before M2a-render proceeds.
+
+4. **M2a acceptance criteria hardened** (Section 5 M2). Real swapchain + render pass + validation-layers-clean + `VK_ERROR_OUT_OF_DATE_KHR`/`VK_SUBOPTIMAL_KHR` recovery paths + surface destroy/create with proper fence/thread shutdown sequencing. The current Vulkan spike's `VkSurface`-only validation is insufficient for "L1 risk verified at M0" claim.
+
+5. **Device matrix unification** (search-and-replace across plan). The original Pixel 4a/7a/9 Pro/Galaxy A14 references at lines 179-183, 305, 395, 402 must be replaced with the actual three-device matrix (S24 Ultra/S21+/S8). M2 close gate adds: at least one Pixel/AOSP/Tensor lane device must be sourced before M2 close, NOT deferred to v1-release backfill (Codex flagged single-OEM Samsung-only as a real risk).
+
+6. **License per-package SPDX manifest + GPLv2-only-static-link prohibition** (M4 + Cross-cutting). The `.omc/handoffs/team-plan.md:8` "AGPL + GPL Termux compatible" claim is too coarse. APK bundles include hundreds of Termux packages with heterogeneous licenses; M4 must produce a per-package SPDX manifest + source-offer URL + explicit prohibition: NO GPLv2-only binary statically linked into AGPL JNI module (only dynamic / external-process boundaries permitted for GPLv2-only).
+
+7. **Solo-dev rhythm budget** (Section 5 + Section 6). M0+M1+M2 = 18-25 weeks continuous high-risk Rust+Vulkan+Android work. Add: 1-week merge-maintenance buffer between M1↔M2, hard-stop reflection point after M2a (decide continue vs Companion retreat), 2-week burnout buffer after M3 before M4 begins. Total budget moves from 13-18 → 14-20 months for v1 constrained beta. Per Plan Principle 5 risk-first ordering: post-M2a stop is the highest-leverage retreat opportunity.
+
+---
+
 ## ⚠️ Amendment 1 (2026-04-29) — D1 invalidated by M0 evidence
 
 **Tl;dr**: M0 worker-env Task 3 measured cfg-gate scope at **3,334 lines** — **6.7× the Pre-mortem C 500-line threshold**. Decision D1 (cfg-gate everywhere) is **formally invalidated**. The plan now adopts **D2-lite** (`warp_terminal_mobile_facade` excludes `warpui` from its dep graph entirely; Layer 1 self-implements 4 areas against Vulkan + cosmic-text + ANativeWindow). See Section 1.3 Decision D (revised) and Section 6 M2 (split into M2a / M2b) below.
@@ -72,7 +94,9 @@
 
 #### Decision D: How to handle Warp's tangled core (warp_terminal depending on warpui, TerminalModel pulling AI/FeatureFlag/AppContext/SSH)?
 
-> **Amendment 1 (2026-04-29)**: D1 was the original chosen option but **invalidated by M0 evidence** (cfg-gate measured 3,334 lines vs Pre-mortem C 500-line threshold). **D2-lite is now the chosen option.**
+> **Amendment 1 (2026-04-29 evening)**: D1 invalidated by M0 evidence (scope-proxy 3,334 LoC > 500 threshold). **D2-lite was chosen.**
+>
+> **Amendment 2 (2026-04-29 night)**: Codex review revised D2-lite to **D1.5-hybrid** because D2-lite contradicted Cargo graph (`warp_terminal/Cargo.toml:36` directly imports `warpui`; source uses `warpui::keymap::Keystroke`, `warpui::platform::OperatingSystem`, `warpui::units::Lines` types). **D1.5-hybrid is the chosen option.**
 
 | Option | Pros | Cons |
 |---|---|---|
