@@ -40,10 +40,11 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
     let mut args_owned: Vec<String> = Vec::with_capacity(args_len as usize);
     for i in 0..args_len {
         if let Ok(elem) = env.get_object_array_element(&args_array, i) {
-            let jstr = unsafe { jni::objects::JString::from_raw(elem.into_raw()) };
-            if let Ok(s) = env.get_string(&jstr) {
-                args_owned.push(s.into());
-            }
+            let jstr: jni::objects::JString = elem.into();
+            let s: String = env.get_string(&jstr)
+                .map(|j| String::from(j))
+                .unwrap_or_default();
+            if !s.is_empty() { args_owned.push(s); }
         }
     }
     let args_refs: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
@@ -53,12 +54,12 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
     let mut env_owned: Vec<(String, String)> = Vec::with_capacity(env_len as usize);
     for i in 0..env_len {
         if let Ok(elem) = env.get_object_array_element(&env_flat, i) {
-            let jstr = unsafe { jni::objects::JString::from_raw(elem.into_raw()) };
-            if let Ok(s) = env.get_string(&jstr) {
-                let kv: String = s.into();
-                if let Some(eq) = kv.find('=') {
-                    env_owned.push((kv[..eq].to_string(), kv[eq + 1..].to_string()));
-                }
+            let jstr: jni::objects::JString = elem.into();
+            let kv: String = env.get_string(&jstr)
+                .map(|j| String::from(j))
+                .unwrap_or_default();
+            if let Some(eq) = kv.find('=') {
+                env_owned.push((kv[..eq].to_string(), kv[eq + 1..].to_string()));
             }
         }
     }

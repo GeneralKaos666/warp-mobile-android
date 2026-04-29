@@ -15,9 +15,10 @@ pub struct PtySession {
 /// Spawn a PTY-attached child process.
 ///
 /// # Arguments
-/// - `program`: absolute or PATH-resolved binary (e.g. "/bin/sh")
-/// - `args`: argv[0..n] passed to execvp (first element is conventional argv[0])
-/// - `env`: extra environment variable pairs set before fork
+/// - `program`: **absolute path** to the binary (e.g. "/bin/sh"). No PATH lookup is
+///   performed — the caller must resolve the path before fork for AS-safety.
+/// - `args`: argv[0..n] passed to execve (first element is conventional argv[0])
+/// - `env`: environment variable pairs passed as the full envp to execve
 pub fn spawn_pty(
     program: &str,
     args: &[&str],
@@ -95,17 +96,9 @@ pub fn spawn_pty(
                 }
                 libc::close(master);
 
-                // Apply extra env vars
-                if !envp_ptrs.is_empty() && !envp_ptrs[0].is_null() {
-                    let mut ep = envp_ptrs.as_ptr();
-                    while !(*ep).is_null() {
-                        libc::putenv(*ep as *mut libc::c_char);
-                        ep = ep.add(1);
-                    }
-                }
-
-                libc::execvp(prog_cstr.as_ptr(), argv_ptrs.as_ptr());
-                // execvp only returns on error — AS-safe exit
+                // envp built in parent — use execve (no PATH lookup, fully AS-safe)
+                libc::execve(prog_cstr.as_ptr(), argv_ptrs.as_ptr(), envp_ptrs.as_ptr());
+                // execve only returns on error — AS-safe exit
                 libc::_exit(127);
             }
         }
