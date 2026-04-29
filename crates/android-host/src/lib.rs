@@ -33,7 +33,7 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
         Ok(s) => s.into(),
         Err(_) => return 0,
     };
-    match pty::spawn_pty(&cmd_str, &[]) {
+    match pty::spawn_pty(&cmd_str, &[], &[]) {
         Ok(session) => {
             let ptr = Box::into_raw(Box::new(session)) as jlong;
             log::info!(target: "android-host", "ptySpawn ok ptr={}", ptr);
@@ -54,6 +54,9 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyRead(
     ptr: jlong,
     max_bytes: jint,
 ) -> jbyteArray {
+    if ptr == 0 {
+        return std::ptr::null_mut();
+    }
     let session = unsafe { &*(ptr as *const pty::PtySession) };
     let cap = max_bytes.max(0) as usize;
     let mut buf = vec![0u8; cap];
@@ -77,6 +80,9 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyWrite(
     ptr: jlong,
     data: JByteArray,
 ) -> jint {
+    if ptr == 0 {
+        return -1;
+    }
     let session = unsafe { &*(ptr as *const pty::PtySession) };
     let bytes: Vec<u8> = match env.convert_byte_array(&data) {
         Ok(b) => b,
@@ -97,6 +103,9 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyResize(
     rows: jshort,
     cols: jshort,
 ) -> jint {
+    if ptr == 0 {
+        return -1;
+    }
     let session = unsafe { &*(ptr as *const pty::PtySession) };
     match session.resize(rows as u16, cols as u16) {
         Ok(()) => 0,
