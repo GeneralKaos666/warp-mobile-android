@@ -25,15 +25,46 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ping(
 pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
     mut env: JNIEnv,
     _class: JClass,
-    cmd: JString,
-    _env_array: JObjectArray,
+    program: JString,
+    args_array: JObjectArray,
+    env_flat: JObjectArray,
 ) -> jlong {
     init_logger();
-    let cmd_str: String = match env.get_string(&cmd) {
+    let program_str: String = match env.get_string(&program) {
         Ok(s) => s.into(),
         Err(_) => return 0,
     };
-    match pty::spawn_pty(&cmd_str, &[], &[]) {
+
+    // Extract args from JObjectArray
+    let args_len = env.get_array_length(&args_array).unwrap_or(0);
+    let mut args_owned: Vec<String> = Vec::with_capacity(args_len as usize);
+    for i in 0..args_len {
+        if let Ok(elem) = env.get_object_array_element(&args_array, i) {
+            let jstr = unsafe { jni::objects::JString::from_raw(elem.into_raw()) };
+            if let Ok(s) = env.get_string(&jstr) {
+                args_owned.push(s.into());
+            }
+        }
+    }
+    let args_refs: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
+
+    // Extract env pairs from flat ["KEY=VALUE", ...] array
+    let env_len = env.get_array_length(&env_flat).unwrap_or(0);
+    let mut env_owned: Vec<(String, String)> = Vec::with_capacity(env_len as usize);
+    for i in 0..env_len {
+        if let Ok(elem) = env.get_object_array_element(&env_flat, i) {
+            let jstr = unsafe { jni::objects::JString::from_raw(elem.into_raw()) };
+            if let Ok(s) = env.get_string(&jstr) {
+                let kv: String = s.into();
+                if let Some(eq) = kv.find('=') {
+                    env_owned.push((kv[..eq].to_string(), kv[eq + 1..].to_string()));
+                }
+            }
+        }
+    }
+    let env_refs: Vec<(&str, &str)> = env_owned.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+
+    match pty::spawn_pty(&program_str, &args_refs, &env_refs) {
         Ok(session) => {
             let ptr = Box::into_raw(Box::new(session)) as jlong;
             log::info!(target: "android-host", "ptySpawn ok ptr={}", ptr);

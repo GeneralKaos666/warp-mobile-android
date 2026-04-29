@@ -27,6 +27,18 @@
                 android:value="explanation: long-lived terminal session host" />
         </service>
 
+        <!-- Exported receiver so `adb shell am broadcast` can reach the service -->
+        <receiver
+            android:name=".PtyBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.PTY_SPAWN" />
+                <action android:name="dev.warp.mobile.PTY_WRITE" />
+                <action android:name="dev.warp.mobile.PTY_RESIZE" />
+                <action android:name="dev.warp.mobile.PTY_KILL" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
