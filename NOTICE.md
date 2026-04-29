@@ -46,7 +46,7 @@ This project is a derivative work that ports [Warp Terminal](https://github.com/
 
 This work as a whole is distributed under **AGPL-3.0-only**. Per AGPL §6:
 - Object-code (APK/AAB) distribution must be accompanied by the corresponding source.
-- Source repository: <will be filled after `gh repo create` decision>.
+- Source repository: https://github.com/ImL1s/warp-mobile-android (private during M0-M2; will turn public before v1 alpha release per AGPL §6 source-disclosure obligation when binaries are distributed).
 - Each released APK `versionCode` corresponds to an exact tag in the source repository.
 
 Per AGPL §13: combination with GPL-3.0 work (Termux runtime / termux-packages) is explicitly permitted.
