@@ -3,6 +3,7 @@ package dev.warp.symlinktest
 import android.os.Bundle
 import android.system.ErrnoException
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity() {
             val copyPath = File(binDir, "hello_exec_copy")
             var negativeControlFailed = false
             var negativeErrno = "none"
+            var negativeErrnoName = "none"
             try {
                 copyPath.delete()
                 FileInputStream(soPath).use { inp ->
@@ -52,19 +54,25 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "negative_control_unexpectedly_passed exit=$exitCode")
                 negativeControlFailed = false
                 negativeErrno = "exec_succeeded_exit=$exitCode"
+                negativeErrnoName = "succeeded"
             } catch (e: ErrnoException) {
                 // Direct ErrnoException path (e.g. from Os.execv)
                 negativeControlFailed = true
                 negativeErrno = "ErrnoException(${e.errno}):${e.message}"
+                negativeErrnoName = OsConstants.errnoName(e.errno) ?: "E${e.errno}"
                 Log.i(TAG, "negative_control_denied errno=${e.errno} msg=${e.message}")
             } catch (e: IOException) {
                 // Runtime.exec wraps OS errors as IOException; this is the expected path on API 29+
+                // Parse numeric errno from message (e.g. "error=13") for structured logging.
                 negativeControlFailed = true
                 negativeErrno = "IOException:${e.message}"
+                val errnoInt = Regex("error=(\\d+)").find(e.message ?: "")?.groupValues?.get(1)?.toIntOrNull()
+                negativeErrnoName = if (errnoInt != null) OsConstants.errnoName(errnoInt) ?: "E$errnoInt" else "IOException"
                 Log.i(TAG, "negative_control_denied IOException msg=${e.message}")
             } catch (e: Exception) {
                 negativeControlFailed = true
                 negativeErrno = "${e.javaClass.simpleName}:${e.message}"
+                negativeErrnoName = e.javaClass.simpleName
                 Log.i(TAG, "negative_control_denied ${e.javaClass.simpleName} msg=${e.message}")
             }
 
@@ -84,7 +92,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: ErrnoException) {
                 symlinkErrno = "symlink_ErrnoException(${e.errno}):${e.message}"
                 Log.e(TAG, symlinkErrno)
-                logFinalResult(negativeControlFailed, negativeErrno, false, symlinkErrno, -1, "")
+                logFinalResult(negativeControlFailed, negativeErrno, negativeErrnoName, false, symlinkErrno, -1, "")
                 return
             }
 
@@ -114,25 +122,29 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "symlink_exec_failed ${e.javaClass.simpleName} msg=${e.message}")
             }
 
-            logFinalResult(negativeControlFailed, negativeErrno, symlinkPassed, symlinkErrno, symlinkExit, symlinkToken)
+            logFinalResult(negativeControlFailed, negativeErrno, negativeErrnoName, symlinkPassed, symlinkErrno, symlinkExit, symlinkToken)
 
         } catch (e: Exception) {
             Log.e(TAG, "unexpected_error: ${e.message}")
-            Log.i(TAG, "RESULT: negative_control_failed=false negative_errno=unexpected symlink_passed=false symlink_errno=unexpected result_exit=-99 stdout_token=")
+            Log.i(TAG, "RESULT: negative_control_failed=false NEGATIVE_ERRNO_BEGINunexpectedNEGATIVE_ERRNO_END negative_errno_name=unexpected symlink_passed=false symlink_errno=unexpected result_exit=-99 stdout_token=")
         }
     }
 
     private fun logFinalResult(
         negativeControlFailed: Boolean,
         negativeErrno: String,
+        negativeErrnoName: String,
         symlinkPassed: Boolean,
         symlinkErrno: String,
         symlinkExit: Int,
         symlinkToken: String
     ) {
+        // Use sentinel delimiters for negative_errno so the full message (with spaces) is parseable.
         Log.i(
             TAG,
-            "RESULT: negative_control_failed=$negativeControlFailed negative_errno=$negativeErrno" +
+            "RESULT: negative_control_failed=$negativeControlFailed" +
+            " NEGATIVE_ERRNO_BEGIN${negativeErrno}NEGATIVE_ERRNO_END" +
+            " negative_errno_name=$negativeErrnoName" +
             " symlink_passed=$symlinkPassed symlink_errno=$symlinkErrno" +
             " result_exit=$symlinkExit stdout_token=$symlinkToken"
         )

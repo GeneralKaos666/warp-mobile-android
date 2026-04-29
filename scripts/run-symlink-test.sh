@@ -59,7 +59,10 @@ NEG_FAILED=$(echo "$RESULT_LINE" | grep -oE 'negative_control_failed=(true|false
 SYMLINK_PASSED=$(echo "$RESULT_LINE" | grep -oE 'symlink_passed=(true|false)' | cut -d= -f2 || echo "false")
 EXIT_CODE=$(echo "$RESULT_LINE" | grep -oE 'result_exit=[-0-9]+' | cut -d= -f2 || echo "-1")
 STDOUT_TOKEN=$(echo "$RESULT_LINE" | grep -oE 'stdout_token=[^ ]+' | cut -d= -f2 || echo "")
-NEG_ERRNO=$(echo "$RESULT_LINE" | grep -oE 'negative_errno=[^ ]+' | cut -d= -f2 || echo "none")
+# Extract full errno message using sentinel delimiters (avoids whitespace truncation)
+NEG_ERRNO=$(echo "$RESULT_LINE" | sed -n 's/.*NEGATIVE_ERRNO_BEGIN\(.*\)NEGATIVE_ERRNO_END.*/\1/p' || echo "none")
+[[ -z "$NEG_ERRNO" ]] && NEG_ERRNO="none"
+NEG_ERRNO_NAME=$(echo "$RESULT_LINE" | grep -oE 'negative_errno_name=[^ ]+' | cut -d= -f2 || echo "none")
 SYMLINK_ERRNO=$(echo "$RESULT_LINE" | grep -oE 'symlink_errno=[^ ]+' | cut -d= -f2 || echo "none")
 
 # SDK >= 29: W^X enforced; negative control must fail AND symlink must pass.
@@ -74,7 +77,7 @@ else
     PASSED="$SYMLINK_PASSED"
 fi
 
-JSON='{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":'"${NEG_FAILED}"',"negative_errno":"'"${NEG_ERRNO}"'","symlink_passed":'"${SYMLINK_PASSED}"',"symlink_errno":"'"${SYMLINK_ERRNO}"'","exit_code":'"${EXIT_CODE}"',"stdout_token":"'"${STDOUT_TOKEN}"'","passed":'"${PASSED}"'}'
+JSON='{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":'"${NEG_FAILED}"',"negative_errno":"'"${NEG_ERRNO}"'","negative_errno_name":"'"${NEG_ERRNO_NAME}"'","symlink_passed":'"${SYMLINK_PASSED}"',"symlink_errno":"'"${SYMLINK_ERRNO}"'","exit_code":'"${EXIT_CODE}"',"stdout_token":"'"${STDOUT_TOKEN}"'","passed":'"${PASSED}"'}'
 echo "$JSON"
 
 if [[ "$PASSED" == "true" ]]; then
