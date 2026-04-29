@@ -1,0 +1,4 @@
+#!/bin/sh
+# Thin wrapper: use system gradle if wrapper jar not available
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec gradle "$@"

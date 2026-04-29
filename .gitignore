@@ -1,0 +1,110 @@
+# ===== Rust =====
+target/
+Cargo.lock.bak
+**/*.rs.bk
+*.pdb
+
+# ===== Android / Gradle =====
+*.iml
+*.apk
+*.aab
+*.ap_
+*.dex
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+proguard/
+release/
+
+# Android Studio
+.idea/
+*.iws
+*.ipr
+
+# Keystores (per-developer; never commit)
+*.jks
+*.keystore
+*.p12
+
+# ===== macOS =====
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# ===== Editors =====
+.vscode/
+*.swp
+*.swo
+*~
+.nvimlog
+
+# ===== direnv =====
+.envrc.local
+.direnv/
+
+# ===== Project-specific =====
+
+# Warp upstream fork — this is a separate git repo (warp-src/.git/).
+# Do NOT track it inside this root repo. M2: convert to git submodule.
+warp-src/
+
+# Cargo cross-compile config — contains absolute machine paths (/Users/<name>/...).
+# Track .cargo/config.toml.template instead; each dev runs tools/scripts/setup-cargo-config.sh
+# to generate their local .cargo/config.toml from the template.
+.cargo/config.toml
+
+# OMC orchestration runtime state — local only
+.omc/state/
+.omc/sessions/
+.omc/artifacts/
+.omc/notepad.md
+.omc/logs/
+.omc/skills/
+
+# Track these explicitly (negate for safety):
+!.omc/plans/
+!.omc/handoffs/
+!.omc/m0-artifacts/
+
+# OMX (other tooling state — entirely local)
+.omx/
+
+# Spike build outputs (per-spike target/)
+spikes/*/target/
+spikes/*/build/
+spikes/*/.gradle/
+
+# Test runner outputs (CSV/JSON per-device run results — keep one canonical, ignore re-runs)
+spikes/*/results/
+spikes/*/runs/
+
+# Generated APKs go to dist/ if shipping
+dist/
+
+# Tools cache
+tools/.cache/
+
+# Codex / Gemini ask transcripts (large, regenerable)
+*-transcript.md
+codex-*.md
+gemini-*.md
+!.omc/m0-artifacts/M0-*.md
+
+# Working notes
+SCRATCH.md
+NOTES.local.md
+TODO.local.md
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+secrets/
+*.secret

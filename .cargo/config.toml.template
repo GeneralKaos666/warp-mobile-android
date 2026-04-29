@@ -1,0 +1,13 @@
+# Template for .cargo/config.toml — DO NOT commit the rendered version.
+# Generate the local config via:
+#   tools/scripts/setup-cargo-config.sh
+# The script substitutes ${ANDROID_NDK_ROOT} from your shell (loaded via .envrc).
+
+[target.aarch64-linux-android]
+linker = "${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${HOST_TAG}/bin/aarch64-linux-android33-clang"
+
+# HOST_TAG examples:
+#   darwin-x86_64   — Intel Mac
+#   darwin-arm64    — Apple Silicon Mac (auto-uses x86_64 NDK clang via Rosetta if no native)
+#   linux-x86_64    — Linux dev box
+#   windows-x86_64  — Windows
