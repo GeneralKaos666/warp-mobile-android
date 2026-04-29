@@ -86,10 +86,9 @@ NOTIF_AFTER=${NOTIF_AFTER:-0}
 AFTER_PS=$(adb_cmd shell ps -A -o PID,PPID,USER,NAME 2>/dev/null || true)
 
 # Count any remaining warp package processes.
-# `grep -c X || print 0` is fragile: zero-match grep exits 1 and `print 0`
-# appends another "0", crashing arithmetic later. Use `grep + wc -l` which
-# always exits 0 and outputs a single line.
-PID_AFTER_PKG=$(printf '%s\n' "$AFTER_PS" | grep -F "$PKG" | wc -l | tr -d '[:space:]')
+# Under `set -euo pipefail`, grep exit 1 (zero matches) still crashes the
+# pipeline. Use awk + END count — awk always exits 0 even with no matches.
+PID_AFTER_PKG=$(printf '%s\n' "$AFTER_PS" | awk -v p="$PKG" 'index($0, p) > 0 { c++ } END { print c+0 }')
 
 # Count orphan children by UID. Android `ps USER` is `u{userid}_a{appid}` where
 # appid = UID - 10000 (per platform/system/sepolicy). dumpsys returns full UID
@@ -102,8 +101,9 @@ if [[ -n "$APP_UID" ]]; then
     else
         EXPECTED_USER="$APP_UID"  # system app (UID < 10000) — fall back to numeric
     fi
-    # Same idiom: count via wc to avoid grep -cv exit-1 stdout duplication.
-    ORPHAN_BY_UID=$(printf '%s\n' "$AFTER_PS" | awk -v uid="$EXPECTED_USER" '$3 == uid' | grep -Fv "$PKG" | wc -l | tr -d '[:space:]')
+    # Single awk: USER column matches AND line does not contain package name.
+    # awk always exits 0 → safe under set -euo pipefail with zero matches.
+    ORPHAN_BY_UID=$(printf '%s\n' "$AFTER_PS" | awk -v uid="$EXPECTED_USER" -v p="$PKG" '$3 == uid && index($0, p) == 0 { c++ } END { print c+0 }')
 fi
 
 AFTER_LISTING=$(print "$AFTER_PS" | grep "$PKG" || print "none")
