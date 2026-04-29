@@ -82,6 +82,7 @@
       "id": "M1-S05",
       "title": "Android Service + AndroidManifest + FGS skeleton",
       "passes": false,
+      "verifiedBy": "codex round-1 17-25-42-845Z REVISE (AC#7 missing POST_NOTIFICATIONS, AC#6 .so loaded by Activity not Service) → fix f424be2 (perm + Service companion init load) → device verify pending in Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "android/app/ project (or similar) created with build.gradle, AndroidManifest.xml, single Activity + WarpTerminalService extending Service",
@@ -98,6 +99,7 @@
       "id": "M1-S06",
       "title": "Activity recreate -> PTY reattach within 1s",
       "passes": false,
+      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Service holds the PTY session (Service-process-bound) so it survives Activity destroy/recreate",
@@ -110,6 +112,7 @@
       "id": "M1-S07",
       "title": "PTY resize via TIOCSWINSZ -> stty size in shell",
       "passes": false,
+      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Java side reads view dims and calls NativeBridge.ptyResize(cols, rows) on layout change",
@@ -122,6 +125,7 @@
       "id": "M1-S08",
       "title": "FGS persistence + clean kill",
       "passes": false,
+      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Notification visible continuously during PTY session",
@@ -134,6 +138,7 @@
       "id": "M1-S09",
       "title": "30-min idle stress test on S24 Ultra flagship",
       "passes": false,
+      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Spawn `bash` PTY session, leave idle 30 minutes on S24 Ultra",
@@ -148,6 +153,7 @@
       "id": "M1-S10",
       "title": "M1 close-out integration document",
       "passes": false,
+      "verifiedBy": "draft skeleton .omc/m1-artifacts/M1-go-no-go.md committed at a91e6b8; verdict §6 TBD, fill in once S05/S06/S07/S08/S09 device runs close",
       "ownerHint": "worker-env",
       "acceptanceCriteria": [
         ".omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories with PASS evidence + commit hashes",
