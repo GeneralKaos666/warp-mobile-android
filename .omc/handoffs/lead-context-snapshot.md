@@ -152,7 +152,7 @@ Reviews this M0 (chronological):
 5. **Task #14 re-review** (`burt4ykb0`): REVISE — 2 PASS / 1 PARTIAL / 1 FAIL → Task #17
 6. **Task #16 round-2 re-review** (`bx9i61htf`): REVISE — 1 FAIL / 1 PARTIAL / 1 PASS → Task #18 (FAIL fix only); PARTIAL Rust cleanup leaks accepted as M2 RAII rewrite
 7. **Task #17 round-3 re-review** (`b27gsey60`): REVISE — Item 2 ACCEPTED (regex compromise source-verified by AOSP UNIXProcess_md.c); Item 1 PARTIAL JSON quote injection → Task #19
-8. **M0 final consensus** (`brb8x4p5a`): IN BACKGROUND at snapshot time — covers Task #18/#19 verification + go/no-go decision soundness + carry-over scrutiny
+8. **M0 final consensus** (3 rounds; final `b3vr00fbb`): **CODEX_PASS** — M0 close-out approved, port proceeds to M1. Round-1 REVISE (4 doc consistency issues) → fix `3ca40a4` + `bbb336e`. Round-2 REVISE (#3 PARTIAL: stale plan-unification 待做 text) → fix `d1f92a8`. Round-3 PASS.
 
 **Commit-and-review SOP**:
 1. Worker SendMessage completion
@@ -165,15 +165,18 @@ Reviews this M0 (chronological):
 
 ## 10. Git State
 
-- **Branch**: `main` at `058a089` (origin/main synced)
+- **Branch**: `main` at `d1f92a8` (origin/main synced); M0 fully closed-out
 - **Recent commits** (newest → oldest):
+  - `d1f92a8` — Codex final round-2 fix: remove stale plan-unification text
+  - `bbb336e` — Plan D1.5-hybrid unification per Codex M0 final REVISE
+  - `3ca40a4` — M0 go/no-go S8/E1/L1 corrections per Codex final REVISE
+  - `cea573e` — snapshot M0 close-out (this file's prior version)
   - `058a089` — Task #10 go/no-go integration CONDITIONAL GO
   - `ff439ad` — Task #18 vulkan strict-assert + scope LIMIT comment
   - `3ceb777` — Task #19 symlink JSON via jq -n (worker-env silent)
   - `71faa8f` — Task #17 redo on main (sentinel + errno_name)
   - `f89f0ea` — Task #17 symlink errno cleanup
   - `1048a1e` — Task #8 + #16 3-device Vulkan rotation report (E1 NOT triggered)
-  - `181ccbc` — lead snapshot (this file)
   - `e041318` — Task #14 symlink redo
   - `e3ac5b5` — M0 L1 GO 3-device steady-state
   - `ba418ab` — Plan Amendment 2 D2-lite → D1.5-hybrid
@@ -187,15 +190,12 @@ Reviews this M0 (chronological):
 
 ## 11. Active Work + Next Action
 
-### M0 close-out: DONE (verdict CONDITIONAL GO landed in `058a089`)
+### M0 close-out: **PASS** (Codex 3-round consensus, final verdict `b3vr00fbb` PASS in `d1f92a8`)
 
-### Currently running (background)
-- Codex M0 final consensus review (`brb8x4p5a`) — covers Task #18/#19 verification + go/no-go decision soundness + carry-over scrutiny. On PASS: M0 fully closed. On REVISE: address before M1 starts.
+All 19 tasks closed. All 8 Codex review rounds resolved. M0-go-no-go.md verdict: **CONDITIONAL GO** with min API 31 caveat. Plan + go/no-go doc fully aligned on D1.5-hybrid (Plan Amendment 2). Port proceeds to M1.
 
-### When Codex final review returns
-1. Read `.omc/artifacts/ask/codex-*-m0-final-consensus*.md` (or latest)
-2. If CODEX_PASS → mark M0 closed-out, transition to M1 planning
-3. If CODEX_REVISE → spawn fix tasks, re-review, then close
+### M1 ready to start
+No background work in flight. Next inbound = user direction or M1 kickoff.
 
 ### M1 transition (after final Codex PASS)
 1. Plan amendment proposal: `min API 31 (Android 12) baseline` per S8/Mali-G71/A9 outlier evidence (E1 not triggered but real-world 1/3 device floor)
