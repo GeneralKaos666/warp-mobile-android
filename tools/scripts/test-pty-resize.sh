@@ -42,11 +42,12 @@ adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
 adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 2
-adb_cmd shell am broadcast -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
+adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
 sleep 1
 
 # Send resize broadcast
 adb_cmd shell am broadcast \
+    -n "${PKG}/.PtyBroadcastReceiver" \
     -a dev.warp.mobile.PTY_RESIZE \
     --ei rows "$ROWS" \
     --ei cols "$COLS" 2>/dev/null || true
@@ -54,6 +55,7 @@ sleep 1
 
 # Write stty size to PTY stdin via broadcast
 adb_cmd shell am broadcast \
+    -n "${PKG}/.PtyBroadcastReceiver" \
     -a dev.warp.mobile.PTY_WRITE \
     --es data "stty size\n" 2>/dev/null || true
 

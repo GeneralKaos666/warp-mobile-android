@@ -46,7 +46,8 @@ sleep 2
 
 # Spawn PTY via broadcast (Service must handle this intent)
 T_SPAWN=$(date +%s%3N)
-adb_cmd shell am broadcast -a dev.warp.mobile.PTY_SPAWN \
+adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" \
+    -a dev.warp.mobile.PTY_SPAWN \
     --es cmd "sleep ${DELAY} && echo ${TOKEN}" 2>/dev/null || true
 
 # Rotate device 5 times while PTY runs
