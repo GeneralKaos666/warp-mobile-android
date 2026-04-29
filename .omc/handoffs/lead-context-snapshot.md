@@ -109,6 +109,30 @@ User delegated via 「全自動」. Document: `.omc/m0-artifacts/M0-tension3-dec
 
 ---
 
+## 8b. M1 Status (REAL, as of 2026-04-29 ~17:40 UTC) — **IN FLIGHT** (4/10 stories PASS)
+
+Per `.omc/prd.json` (10 stories M1-S01..S10) — managed by ralph loop:
+
+| Story | Status | Verifier | Notes |
+|---|---|---|---|
+| S01 Plan Amendment 3 minSdk 31 | ✅ PASS | Codex round-1 | commit `2ccc0f7` |
+| S02 android-activity feature fix | ✅ PASS | Codex round-1 | commit `afc74ec` on warp-src fork ImL1s/warp:warp-mobile/m0-facade |
+| S03 crates/android-host skeleton | ✅ PASS | Codex round-2 | commits `10989b6` + `5b1424e` (README addendum after AC#5 REVISE) |
+| S04 PTY backend (openpty/setsid) | ✅ PASS | Codex round-3 | commits `ef0b06a` → `fb97d15` → `d9bf0d4`. Round-1 REJECT (6 safety bugs), round-2 REVISE (putenv+execvp+E0597), round-3 PASS. cargo test 2/2 PASS. |
+| S05 Service+FGS skeleton | 🟡 fix `f424be2` | round-1 REVISE → fix → device verify pending in Task #32 |
+| S06 PTY reattach < 1s | 🟡 driver fixed | drivers round-3 REVISE → fix `a91e6b8` → round-4 review running. Device run pending #32. |
+| S07 PTY resize | 🟡 driver | passed structural review, device run pending #32 |
+| S08 FGS clean kill | 🟡 driver fixed | UID format + grep -c bug fixed `a91e6b8` |
+| S09 30-min stress | ⏳ pending #34 dispatch (30-min wall clock — separate task) |
+| S10 close-out doc | 🟡 skeleton `a91e6b8` | verdict TBD |
+
+Out-of-prd-but-essential:
+- **Task #28** PTY plumbing (PtyManager + BroadcastReceivers + Service): commits `9479316` + `a6f08ef`. Codex review identified 4 issues (lifecycle deadlock + cmd_id race + receiver security + output broadcast leak). Task #33 dispatched to worker-spike — work-in-progress (PtyManager.kt has uncommitted spawn-side kill before replace). Required for S06/S07/S08 device runs.
+
+Real-device verification (Task #32 worker-env): in progress on S24 Ultra R5CX10VFFBA. Expected outputs at `.omc/m1-artifacts/M1-S0X-result.json` per story.
+
+---
+
 ## 8. M0 Status (REAL, as of 2026-04-29 ~16:00 UTC) — **CLOSE-OUT DONE**
 
 ### M0 task list (all 19 closed)
