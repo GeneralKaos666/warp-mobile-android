@@ -76,8 +76,11 @@ wait $LOGCAT_PID 2>/dev/null || true
 
 echo "=== Parsing results ===" >&2
 
-# Parse paired surfaceDestroyed_ts / first_frame_presented_ts lines.
-# Falls back to firstNonStaleFrame_ts for builds without swapchain (pre-B-item builds).
+# Parse swapchain recreate latency: surfaceCreated_ts → first_frame_presented_ts pairs.
+# Rotation via configChanges fires surfaceChanged (not surfaceDestroyed), so each cycle
+# produces surfaceCreated_ts + first_frame_presented_ts without a surfaceDestroyed_ts.
+# Recovery = first_frame_presented_ts - surfaceCreated_ts per cycle.
+# Also accepts surfaceDestroyed_ts → first_frame_presented_ts pairs (pause/resume path).
 # Log format: MM-DD HH:MM:SS.mmm  PID  PID I VulkanSpike: <key>=<val>
 python3 - "$LOGCAT_FILE" "$SERIAL" "$CYCLES" <<'PYEOF'
 import sys, re, csv
@@ -86,7 +89,13 @@ logfile  = sys.argv[1]
 serial   = sys.argv[2]
 expected = int(sys.argv[3])
 
+# Two pairing strategies:
+# 1. surfaceDestroyed_ts → first_frame_presented_ts  (pause/resume)
+# 2. surfaceCreated_ts → first_frame_presented_ts    (rotation via configChanges)
+# Strategy 1 takes priority when destroyed_ts is set.
+
 destroyed_ts = None
+created_ts   = None
 results = []
 
 with open(logfile) as f:
@@ -94,20 +103,28 @@ with open(logfile) as f:
         m = re.search(r'surfaceDestroyed_ts=(\d+)', line)
         if m:
             destroyed_ts = int(m.group(1))
+            created_ts = None  # destroyed resets any pending created
             continue
-        # Accept both swapchain metric and Choreographer fallback
+        m = re.search(r'surfaceCreated_ts=(\d+)', line)
+        if m:
+            created_ts = int(m.group(1))
+            continue
         m = re.search(r'(?:first_frame_presented_ts|firstNonStaleFrame_ts)=(\d+)', line)
-        if m and destroyed_ts is not None:
+        if m:
             frame_ts = int(m.group(1))
-            recovery = frame_ts - destroyed_ts
-            results.append(recovery)
-            destroyed_ts = None
+            if destroyed_ts is not None:
+                results.append(frame_ts - destroyed_ts)
+                destroyed_ts = None
+                created_ts = None
+            elif created_ts is not None:
+                results.append(frame_ts - created_ts)
+                created_ts = None
 
 if not results:
     print(f"ERROR: no paired timestamps found in {logfile}", file=sys.stderr)
     print("Check VulkanSpike logcat for:", file=sys.stderr)
-    print("  surfaceDestroyed_ts=<ms>", file=sys.stderr)
-    print("  first_frame_presented_ts=<ms>  OR  firstNonStaleFrame_ts=<ms>", file=sys.stderr)
+    print("  surfaceCreated_ts=<ms> + first_frame_presented_ts=<ms>", file=sys.stderr)
+    print("  OR surfaceDestroyed_ts=<ms> + first_frame_presented_ts=<ms>", file=sys.stderr)
     sys.exit(1)
 
 n = len(results)
