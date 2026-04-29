@@ -32,7 +32,7 @@
 
 ## ⚠️ Amendment 1 (2026-04-29) — D1 invalidated by M0 evidence
 
-**Tl;dr**: M0 worker-env Task 3 measured cfg-gate scope at **3,334 lines** — **6.7× the Pre-mortem C 500-line threshold**. Decision D1 (cfg-gate everywhere) is **formally invalidated**. The plan now adopts **D2-lite** (`warp_terminal_mobile_facade` excludes `warpui` from its dep graph entirely; Layer 1 self-implements 4 areas against Vulkan + cosmic-text + ANativeWindow). See Section 1.3 Decision D (revised) and Section 6 M2 (split into M2a / M2b) below.
+**Tl;dr**: M0 worker-env Task 3 measured cfg-gate scope at **3,334 lines** — **6.7× the Pre-mortem C 500-line threshold**. Decision D1 (cfg-gate everywhere) is **formally invalidated**. Amendment 1 first adopted **D2-lite** (`warp_terminal_mobile_facade` excludes `warpui` from its dep graph). Amendment 2 (below) revised this to **D1.5-hybrid** after Codex review found a Cargo graph contradiction in D2-lite. **The currently active decision is D1.5-hybrid** (see Amendment 2 above for details, Section 1.3 Decision D for table, Section 6 M2 for milestones).
 
 **Three convergent findings from M0** (all artifacts under `.omc/m0-artifacts/`):
 1. **`warp_terminal` itself clean; `warpui` is the contamination** — cfg-gate 3,334 lines distributed across 8 files / `font-kit` (~2,834 lines) + `winit`+`android-activity` (~500 lines).
@@ -101,14 +101,16 @@
 | Option | Pros | Cons |
 |---|---|---|
 | **D1: Surgical cfg-gating (`#[cfg(not(target_os = "android"))]`) at the dependency edges, with progressive extraction of pure-Rust facade as M3 progresses** *(rejected by M0 evidence)* | Keeps fork tractable; lets us merge upstream changes; doesn't require a clean architecture pre-condition. | **Empirically blown out**: M0 worker-env Task 3 measured 3,334 cfg-gate lines (font-kit ~2,834 lines + winit/android-activity ~500 lines), 6.7× Pre-mortem C threshold (500). Code becomes uglier than estimated; every upstream font/winit change re-enters our cfg-gate. |
-| **D2-lite: `warp_terminal_mobile_facade` excludes `warpui` entirely from its dep graph; Layer 1 self-implements 4 areas (`render_scene`, `request_frame_capture`, `FontDB` 15 methods, `TextLayoutSystem` 2 methods) against Vulkan + cosmic-text + ANativeWindow** *(chosen, Amendment 1)* | **Bounded** — we own the boundary. `warp_terminal`'s direct deps are clean (Critic verified); facade re-uses only the clean subset (`warp_completer` / `warp_core` / `warp_util` / `vte` / `sum_tree`). Layer 1 derives 85/89 methods from `warpui::platform::headless` (already stub-implemented), only writes 4 hand-coded areas. ~3-4 person-weeks for Layer 1, mirrors archeology Task 7 estimate. | Wider absolute LoC (~3,500 new Layer 1 lines + facade refactor) but concentrated in our own module tree. cosmic-text wrapping is the most likely M2a schedule risk (FontDB has 15 methods). |
+| **D2-lite: `warp_terminal_mobile_facade` excludes `warpui` entirely from its dep graph; Layer 1 self-implements 4 areas** *(superseded by Amendment 2 → D1.5-hybrid)* | Originally chosen in Amendment 1 because warp_terminal's direct deps were thought clean. Codex review found `warp_terminal/Cargo.toml:36` directly deps on `warpui` and source uses `warpui::keymap::Keystroke`/`warpui::platform::OperatingSystem`/`warpui::units::Lines` — Cargo graph contradiction. | Removing the warp_terminal→warpui edge would require either upstreaming a refactor (rejected as D2) or carrying a heavy fork patch. |
+| **D1.5-hybrid: keep `warp_terminal → warpui` Cargo edge; modify `warpui` internally with `cfg(target_os = "android")` gates on `font-kit` and desktop `winit` deps; add `crates/warpui/src/platform/android/` derived from `headless`; Layer 1's 4 hand-written areas land inside the new `warpui::platform::android` module** *(chosen, Amendment 2)* | Resolves D2-lite Cargo contradiction. cfg-gate scope is bounded (`warpui/Cargo.toml` + new `platform/android/` module, NOT 3,334 lines like D1). 85/89 methods still derive from `headless`. Facade crate (`warp_terminal_mobile_facade`) becomes optional escape hatch only. M2a still 4 person-weeks. | Modifying `warpui` internally means our fork now has a non-trivial patch on top of upstream Warp. Upstream re-merge cost: medium (touches dep manifest + new platform module, but each on a clear boundary). |
 | **D2: Refactor warp_terminal into a clean platform-agnostic core crate first, upstream the refactor PR** *(rejected)* | Cleaner. Upstream might even take the PR. | Refactoring someone else's just-open-sourced AGPL codebase before they have stable contributor process is a classic time-sink. Could spend 6 months on PR review cycles. Solo dev cannot afford it. |
 | **D3: Extract a tiny terminal-only sub-crate, ignore rest of Warp, write our own block/agent layer** *(rejected)* | Minimal binary; no AGPL drag from Warp's heavy crates. | Defeats the entire point of "porting Warp" — we'd just be making another mobile terminal. The blocks + agent UX are the moat. |
 
-**D1 → D2-lite migration steps (M3 prep)**:
-1. `crates/warp_terminal_mobile_facade/Cargo.toml` (commit `5400c66` on `warp-mobile/m0-facade` branch is currently a placeholder re-exporting `warp_terminal::*`): **remove `warp_terminal` direct dep**, add direct deps on the clean subset (`warp_completer`, `warp_core`, `warp_util`, `vte`, `sum_tree`). Re-export only `warp_terminal` types that don't transitively pull `warpui`.
-2. `crates/warpui/src/platform/android/` (new): copy `headless` mod, hand-write the 4 areas. Aim for `cargo ndk -t arm64-v8a check -p warpui` to pass with `target_os = "android"` cfg active.
-3. M2 split per Section 6 below.
+**D1 → D1.5-hybrid migration steps (M2 prep, supersedes original D2-lite migration list)**:
+1. `crates/warpui/Cargo.toml`: gate `font-kit` and desktop `winit` deps under `[target.'cfg(not(target_os = "android"))'.dependencies]`. Add `[target.'cfg(target_os = "android")'.dependencies]` block for Android-specific replacements (`cosmic-text`, `ash`, `ndk-sys`).
+2. `crates/warpui/src/platform/android/` (new): copy `headless` mod, hand-write the 4 areas (`render_scene` Vulkan via `ash` + `ANativeWindow`; `request_frame_capture` ash readback; `FontDB` 15 methods via `cosmic-text`; `TextLayoutSystem` 2 methods). Aim for `cargo ndk -t arm64-v8a check -p warpui` to pass with `target_os = "android"` cfg active.
+3. `warp_terminal -> warpui` Cargo edge stays intact. `warp_terminal_mobile_facade` (commit `5400c66`) demoted to optional escape hatch only — used if specific app-layer cfg-gates exceed budget after M3 archeology.
+4. M2 split per Section 6 below (M2a 4 weeks for the 4 areas, M2b 4-6 weeks for IME/lifecycle/perf).
 
 ---
 
@@ -342,12 +344,12 @@
 4. FGS notification persistent during session; on `adb shell am kill <package>` the service self-terminates cleanly (no orphan PTY processes).
 5. Stress test: 30-minute idle session on flagship + low-end Pixel 4a, no crashes, no PhantomProcessKiller events on flagship; documented behavior on low-end.
 
-### M2 — `warpui::platform::android` backend (8-12 weeks; **Amendment 1**: split into M2a + M2b under D2-lite)
+### M2 — `warpui::platform::android` backend (8-12 weeks; **Amendment 1+2**: split into M2a + M2b under D1.5-hybrid)
 
 **Goal**: Get pixels to screen, accept input, survive the Android lifecycle. (Builds on M0's de-risked Vulkan lifecycle spike; M2's job is to scale from the 50-line spike to a production-grade backend.)
 
-> **Amendment 1 split**:
-> - **M2a (4 weeks)** — Implement Layer 1's 4 hand-written areas under D2-lite: `render_scene` (`ash` Vulkan + `ANativeWindow`), `request_frame_capture` (wgpu/ash readback), `FontDB` (15 methods, `cosmic-text` wrapper + Android system fonts), `TextLayoutSystem` (2 methods). Derive other 85 trait methods from `warpui::platform::headless`.
+> **Amendment 1+2 split (D1.5-hybrid)**:
+> - **M2a (4 weeks)** — Implement Layer 1's 4 hand-written areas inside `crates/warpui/src/platform/android/` (per Amendment 2): `render_scene` (`ash` Vulkan + `ANativeWindow`), `request_frame_capture` (ash readback), `FontDB` (15 methods, `cosmic-text` wrapper + Android system fonts), `TextLayoutSystem` (2 methods). Derive other 85 trait methods from `warpui::platform::headless`. `warp_terminal → warpui` Cargo edge stays.
 > - **M2b (4-6 weeks)** — IME (`InputConnection`), touch + gesture, rotation + Surface lifecycle scaling, `WindowInsets`, validation-layer cleanup, performance tuning across device matrix.
 > - Combined: still 8-12 weeks but with cleaner internal milestone gate at M2a→M2b transition.
 
