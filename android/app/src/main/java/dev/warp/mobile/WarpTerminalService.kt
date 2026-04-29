@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 class WarpTerminalService : Service() {
 
     companion object {
+        init { System.loadLibrary("warp_mobile_android_host") }
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "warp-terminal"
         private const val LOG_TAG = "WarpTerminal"
