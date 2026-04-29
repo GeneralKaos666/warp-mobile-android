@@ -18,7 +18,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Thread { runTest() }.start()
+        Thread { runTest(); finish() }.start()
     }
 
     private fun runTest() {
@@ -89,7 +89,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             try {
+                Log.i(TAG, "symlink_exec_start path=${symlinkPath.absolutePath}")
                 val proc = Runtime.getRuntime().exec(symlinkPath.absolutePath)
+                Log.i(TAG, "symlink_exec_proc_created")
                 // Drain streams on separate threads before waitFor() to avoid deadlock
                 // when stdout/stderr pipe buffer fills (common in release builds).
                 var stdoutText = ""
@@ -97,8 +99,10 @@ class MainActivity : AppCompatActivity() {
                 val stdoutThread = Thread { stdoutText = proc.inputStream.bufferedReader().readText().trim() }
                 val stderrThread = Thread { stderrText = proc.errorStream.bufferedReader().readText().trim() }
                 stdoutThread.start(); stderrThread.start()
+                Log.i(TAG, "symlink_exec_waiting_for_exit")
                 symlinkExit = proc.waitFor()
-                stdoutThread.join(); stderrThread.join()
+                Log.i(TAG, "symlink_exec_exit_received exit=$symlinkExit")
+                stdoutThread.join(5000); stderrThread.join(5000)
                 symlinkToken = stdoutText
                 val stderr = stderrText
                 Log.i(TAG, "symlink_exec result_exit=$symlinkExit stdout_token=$symlinkToken stderr=$stderr")

@@ -29,13 +29,14 @@ echo "[symlink-test] device=${DEVICE_SERIAL} sdk=${ANDROID_SDK} variant=${VARIAN
 echo "[symlink-test] installing APK..." >&2
 adb_cmd install -r "${APK_PATH}" >/dev/null 2>&1 || adb_cmd install "${APK_PATH}" >/dev/null 2>&1
 
+adb_cmd shell am force-stop "${PKG}" 2>/dev/null || true
 adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${ACTIVITY}" >/dev/null 2>&1
 
 echo "[symlink-test] waiting for result..." >&2
 RESULT_LINE=""
 COUNT=0
-while [[ $COUNT -lt 10 ]]; do
+while [[ $COUNT -lt 25 ]]; do
     RAW=$(adb_cmd logcat -d -s "${LOG_TAG}:I" 2>/dev/null || true)
     RESULT_LINE=$(echo "$RAW" | grep "RESULT:" | tail -1 || true)
     if [[ -n "$RESULT_LINE" ]]; then
