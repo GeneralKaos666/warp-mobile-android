@@ -1,8 +1,12 @@
 #!/usr/bin/env zsh
 # run-vulkan-spike.sh <device-serial>
-# Installs Vulkan spike APK, drives 100 pause/resume cycles via screen rotation,
-# parses VulkanSpike logcat for surfaceDestroyed_ts and first_frame_presented_ts,
-# outputs CSV + p50/p95/p99 summary.
+# Installs Vulkan spike APK, drives 100 rotation cycles (landscape+portrait
+# per cycle = 200 surfaceChanged transitions). Parses VulkanSpike logcat with
+# dual-strategy pairing:
+#   1. surfaceDestroyed_ts -> first_frame_presented_ts  (pause/resume path)
+#   2. surfaceCreated_ts   -> first_frame_presented_ts  (rotation/configChanges)
+# Outputs CSV + p50/p95/p99 summary. Exits non-zero if pair count outside ±2
+# of expected (CYCLES * 2 = 200).
 #
 # Usage:
 #   ./scripts/run-vulkan-spike.sh R5CX10VFFBA
@@ -77,12 +81,12 @@ wait $LOGCAT_PID 2>/dev/null || true
 echo "=== Parsing results ===" >&2
 
 # Parse swapchain recreate latency: surfaceCreated_ts → first_frame_presented_ts pairs.
-# Rotation via configChanges fires surfaceChanged (not surfaceDestroyed), so each cycle
-# produces surfaceCreated_ts + first_frame_presented_ts without a surfaceDestroyed_ts.
-# Recovery = first_frame_presented_ts - surfaceCreated_ts per cycle.
-# Also accepts surfaceDestroyed_ts → first_frame_presented_ts pairs (pause/resume path).
+# Each loop iteration fires landscape (1) + portrait (0) rotations, producing 2
+# surfaceChanged transitions per cycle = CYCLES * 2 expected pairs.
+# Pause/resume path uses surfaceDestroyed_ts → first_frame_presented_ts.
 # Log format: MM-DD HH:MM:SS.mmm  PID  PID I VulkanSpike: <key>=<val>
-python3 - "$LOGCAT_FILE" "$SERIAL" "$CYCLES" <<'PYEOF'
+EXPECTED_PAIRS=$((CYCLES * 2))
+python3 - "$LOGCAT_FILE" "$SERIAL" "$EXPECTED_PAIRS" <<'PYEOF'
 import sys, re, csv
 
 logfile  = sys.argv[1]
@@ -128,11 +132,17 @@ if not results:
     sys.exit(1)
 
 n = len(results)
+# Strict assert: ±2 tolerance accommodates occasional logcat drop or first/last
+# transition straddling the capture window. Outside that window means systematic
+# loss and the run is unreliable.
+TOLERANCE = 2
+if abs(n - expected) > TOLERANCE:
+    print(f"ERROR: expected {expected} pairs (±{TOLERANCE}) but found {n} — "
+          f"systematic loss; run is unreliable", file=sys.stderr)
+    sys.exit(1)
 if n != expected:
-    print(f"WARNING: expected {expected} cycles but found {n} paired timestamps — "
-          f"some cycles may have been missed or logcat lines dropped", file=sys.stderr)
-    if n == 0:
-        sys.exit(1)
+    print(f"NOTE: expected {expected} pairs, found {n} (within ±{TOLERANCE} tolerance)",
+          file=sys.stderr)
 
 writer = csv.writer(sys.stdout)
 writer.writerow(["device", "cycle", "recovery_ms"])

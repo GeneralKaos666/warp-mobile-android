@@ -14,11 +14,14 @@
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
-            <!-- configChanges prevents Activity recreation on rotation.
-                 The same MainActivity instance receives onConfigurationChanged instead,
-                 so waitingForRecovery survives the orientation change.
-                 A real renderer would need full swapchain recreate on configChanges;
-                 for this spike, Surface lifecycle measurement is the goal. -->
+            <!-- configChanges scope: orientation|screenSize|screenLayout|keyboardHidden
+                 prevents Activity recreation on rotation. MainActivity instance survives
+                 and receives onConfigurationChanged, so waitingForRecovery state persists.
+                 SCOPE LIMIT: this list does NOT cover all teardown paths. Process kill,
+                 low-memory reaping, theme/locale change, multi-window resize, PiP entry,
+                 and foldable posture changes still tear down the Activity. A production
+                 renderer must handle full Activity recreate via savedInstanceState plus
+                 swapchain rebuild. This spike measures Surface lifecycle only. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
