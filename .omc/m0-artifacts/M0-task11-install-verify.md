@@ -45,3 +45,11 @@ pass the surface to a Rust JNI function that accepts `jobject` and calls
 - `spikes/vulkan-surface-recreate/scripts/run-vulkan-spike.sh <device-serial>`
 - Drives 100 rotation cycles, parses `surfaceDestroyed_ts` / `firstNonStaleFrame_ts`
   pairs from logcat, outputs CSV + p50/p95/p99 summary
+
+## Update (Task #13)
+
+**VkSurfaceKHR creation 'silent failure' caveat resolved.** Task #13 replaced
+the failing `getNativeHandle()` reflection with `ANativeWindow_fromSurface()` (NDK
+public API, API 26+). All three devices now log `VkSurfaceKHR created successfully`
+with non-null ANativeWindow pointers. Task #8 is now unblocked.
+See `.omc/m0-artifacts/M0-task13-surface-fix-verify.md` for full verification log.
