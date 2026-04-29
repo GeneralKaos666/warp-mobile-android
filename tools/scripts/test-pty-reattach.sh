@@ -35,8 +35,8 @@ if [[ "$DEVICE_STATE" != "device" ]]; then
     exit 2
 fi
 
-# Reset rotation to 0 on exit
-trap 'adb_cmd shell settings put system user_rotation 0 2>/dev/null || true' EXIT
+# Reset rotation to 0 on EXIT or interrupt — keeps device usable if SIGINT/SIGTERM
+trap 'adb_cmd shell settings put system user_rotation 0 2>/dev/null || true' EXIT INT TERM
 
 # Launch app
 adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
@@ -64,7 +64,9 @@ FOUND=""
 FOUND_LINE=""
 COUNT=0
 while [[ $COUNT -lt 30 ]]; do
-    RAW=$(adb_cmd logcat -d 2>/dev/null || true)
+    # Use -v epoch so timestamps are unambiguous seconds since epoch — bypasses
+    # timezone, DST, and year-rollover issues that plague MM-DD parsing.
+    RAW=$(adb_cmd logcat -d -v epoch 2>/dev/null || true)
     FOUND_LINE=$(print "$RAW" | grep "$LOGCAT_TAG" | grep "$TOKEN" | tail -1 || true)
     if [[ -n "$FOUND_LINE" ]]; then
         FOUND="$FOUND_LINE"
