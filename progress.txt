@@ -1,6 +1,22 @@
 # Ralph Progress Log — M1 Milestone
 
-## Iteration 1 (2026-04-29)
+## Iteration 2 (2026-04-29 ~17:15 UTC) — S01 PASS, S02/S03 in review
+
+### Story closures
+- **M1-S01 PASS** (Codex `bjgcjtndf` → 17-12-55-500Z, CODEX_PASS): Plan Amendment 3 in commit `2ccc0f7`. minSdk 26→31, S8 dropped from primary device matrix, Pixel 4a/A52s replacement noted, M2/M3 acceptance criteria + risk register updated. All 5 acceptance criteria PASS.
+
+### Inflight
+- M1-S02 (Task #21): commit afc74ec on warp-src branch warp-mobile/m0-facade pushed to fork ImL1s/warp. Codex review (bmjqoxyf3) running.
+- M1-S03 (Task #22): commit 10989b6 on main with .so size 16.7MB sha256 6e6960002e7e5fe9a5b9ee3b81723de4cbe1d4687c1c3a093a651818baf8f219. Codex review (b5nr5q9pk) running.
+- M1-S04 (Task #23 PTY backend): worker-spike re-dispatched after idle.
+- M1-S05 (Task #24 Service skeleton): worker-env re-dispatched after idle.
+
+### Lessons learned (iteration 2)
+- omc ask codex inherits the working dir from the most recent cd. Earlier `cd warp-src` in commit-and-push step caused codex artifacts to land at `warp-src/.omc/artifacts/ask/` instead of the main repo path. Worked around by reading absolute path. Future: always run `omc ask` from repo root or pass --cwd if available.
+- warp-src had no fork remote until this iteration; created via `gh repo fork warpdotdev/Warp`, added as `fork` remote, pushed `warp-mobile/m0-facade` branch to `ImL1s/warp`.
+- worker-spike completed Task #22 (cargo skeleton) cleanly with .so size + sha256 in commit message — different from M0 pattern where worker fabricated completion claims. Better.
+
+## Iteration 1 (2026-04-29 ~16:50 UTC)
 
 ### Setup
 - prd.json refined with 10 M1-specific stories, M1-S01 through M1-S10

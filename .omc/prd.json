@@ -26,7 +26,8 @@
     {
       "id": "M1-S01",
       "title": "Plan Amendment 3 — raise minSdk 26 -> 31",
-      "passes": false,
+      "passes": true,
+      "verifiedBy": "codex review 17-12-55-500Z, CODEX_PASS, all 5 acceptance criteria PASS, commit 2ccc0f7",
       "ownerHint": "worker-env",
       "acceptanceCriteria": [
         "ralplan-warp-on-mobile.md has new Amendment 3 block above existing Amendment 2 (or as latest top-level amendment)",
@@ -39,7 +40,8 @@
     {
       "id": "M1-S02",
       "title": "android-activity Cargo feature fix in warp-src/crates/warpui",
-      "passes": false,
+      "passes": true,
+      "verifiedBy": "codex review 17-14-12-718Z, CODEX_PASS, all 3 acceptance criteria PASS, commit afc74ec on ImL1s/warp:warp-mobile/m0-facade. Note: Codex flagged warpui/Cargo.toml explicit android-activity dep as redundant — actual E0282 fix is workspace winit feature. Carry-over: M2 may remove redundant warpui dep when reorganizing for D1.5-hybrid.",
       "ownerHint": "worker-env",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/Cargo.toml has [target.'cfg(target_os = \"android\")'.dependencies] block adding android-activity = { version = \"0.6\", features = [\"native-activity\"] }",
