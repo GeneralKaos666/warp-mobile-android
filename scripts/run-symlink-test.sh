@@ -77,7 +77,19 @@ else
     PASSED="$SYMLINK_PASSED"
 fi
 
-JSON='{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":'"${NEG_FAILED}"',"negative_errno":"'"${NEG_ERRNO}"'","negative_errno_name":"'"${NEG_ERRNO_NAME}"'","symlink_passed":'"${SYMLINK_PASSED}"',"symlink_errno":"'"${SYMLINK_ERRNO}"'","exit_code":'"${EXIT_CODE}"',"stdout_token":"'"${STDOUT_TOKEN}"'","passed":'"${PASSED}"'}'
+JSON=$(jq -n \
+  --arg     device         "$DEVICE_SERIAL" \
+  --argjson sdk            "$ANDROID_SDK" \
+  --arg     variant        "$VARIANT" \
+  --argjson neg_failed     "$NEG_FAILED" \
+  --arg     neg_errno      "$NEG_ERRNO" \
+  --arg     neg_errno_name "$NEG_ERRNO_NAME" \
+  --argjson symlink_passed "$SYMLINK_PASSED" \
+  --arg     symlink_errno  "$SYMLINK_ERRNO" \
+  --argjson exit_code      "$EXIT_CODE" \
+  --arg     stdout_token   "$STDOUT_TOKEN" \
+  --argjson passed         "$PASSED" \
+  '{device:$device,android_sdk:$sdk,variant:$variant,negative_control_failed:$neg_failed,negative_errno:$neg_errno,negative_errno_name:$neg_errno_name,symlink_passed:$symlink_passed,symlink_errno:$symlink_errno,exit_code:$exit_code,stdout_token:$stdout_token,passed:$passed}')
 echo "$JSON"
 
 if [[ "$PASSED" == "true" ]]; then
