@@ -8,6 +8,11 @@ class PtyManager {
 
     @Synchronized
     fun spawn(cmdId: String, program: String, args: Array<String>, env: Map<String, String>): Boolean {
+        // Kill any existing session with same cmdId before replacing (Fix #2: no orphan)
+        sessions[cmdId]?.let { oldPtr ->
+            NativeBridge.ptyKill(oldPtr)
+            Log.i(LOG_TAG, "spawn: killed existing session cmdId=$cmdId ptr=$oldPtr")
+        }
         val envFlat = env.map { (k, v) -> "$k=$v" }.toTypedArray()
         val ptr = NativeBridge.ptySpawn(program, args, envFlat)
         return if (ptr != 0L) {
@@ -15,6 +20,7 @@ class PtyManager {
             Log.i(LOG_TAG, "spawn ok cmdId=$cmdId ptr=$ptr")
             true
         } else {
+            sessions.remove(cmdId)
             Log.e(LOG_TAG, "spawn failed cmdId=$cmdId")
             false
         }
@@ -26,9 +32,12 @@ class PtyManager {
         return NativeBridge.ptyWrite(ptr, data)
     }
 
-    @Synchronized
-    fun read(cmdId: String, maxBytes: Int): ByteArray? {
-        val ptr = sessions[cmdId] ?: return null
+    // Fix #1: read is NOT @Synchronized — libc::read blocks and holding the
+    // monitor while blocked would deadlock kill()/killAll() on the same monitor.
+    // The fd is per-session; concurrent read+kill is safe because close(fd)
+    // causes read to return EBADF immediately.
+    fun readDirect(cmdId: String, maxBytes: Int): ByteArray? {
+        val ptr = synchronized(this) { sessions[cmdId] } ?: return null
         return NativeBridge.ptyRead(ptr, maxBytes)
     }
 

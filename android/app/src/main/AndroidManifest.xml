@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Fix #3: signature-level permission so only our own signed APKs can control PTY -->
+    <permission android:name="dev.warp.mobile.permission.PTY_CONTROL"
+        android:protectionLevel="signature" />
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="dev.warp.mobile.permission.PTY_CONTROL" />
 
     <application
         android:label="@string/app_name"
@@ -28,10 +33,11 @@
                 android:value="explanation: long-lived terminal session host" />
         </service>
 
-        <!-- Exported receiver so `adb shell am broadcast` can reach the service -->
+        <!-- Fix #3: PTY_CONTROL permission applied; debug overlay (src/debug/) removes it for adb tests -->
         <receiver
             android:name=".PtyBroadcastReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
             <intent-filter>
                 <action android:name="dev.warp.mobile.PTY_SPAWN" />
                 <action android:name="dev.warp.mobile.PTY_WRITE" />

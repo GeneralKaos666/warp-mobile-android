@@ -90,9 +90,10 @@ class WarpTerminalService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Cancel coroutines FIRST so read loops stop before killAll closes fds (Fix #1)
+        serviceJob.cancel()
         unregisterReceiver(receiver)
         ptyManager.killAll()
-        serviceJob.cancel()
         Log.i(LOG_TAG, "WarpTerminalService destroyed, all PTY sessions killed")
     }
 
@@ -115,6 +116,7 @@ class WarpTerminalService : Service() {
         }
 
         Log.i(LOG_TAG, "PTY_SPAWN cmdId=$cmdId program=$resolvedProgram args=${resolvedArgs.toList()}")
+        // Fix #2: PtyManager.spawn() kills existing session before replacing
         val ok = ptyManager.spawn(cmdId, resolvedProgram, resolvedArgs, emptyMap())
         if (ok) startReadLoop(cmdId)
     }
@@ -123,7 +125,6 @@ class WarpTerminalService : Service() {
         val cmdId = intent.getStringExtra("cmd_id") ?: "default"
         val data  = intent.getByteArrayExtra("data")
             ?: intent.getStringExtra("data")?.let {
-                // Replace literal \n escape sequences, then ensure line ends with newline
                 val s = it.replace("\\n", "\n").replace("\\r", "\r")
                 val bytes = s.toByteArray()
                 if (bytes.isNotEmpty() && bytes.last() != '\n'.code.toByte()) bytes + "\n".toByteArray() else bytes
@@ -151,10 +152,13 @@ class WarpTerminalService : Service() {
     // ── PTY read loop ────────────────────────────────────────────────────────
 
     private fun startReadLoop(cmdId: String) {
+        // Fix #2: cancel existing read job before replacing to avoid competing loops
+        readJobs.remove(cmdId)?.cancel()
         val job = scope.launch {
             val buf = ByteArray(4096)
             while (true) {
-                val chunk = ptyManager.read(cmdId, buf.size) ?: break
+                // Fix #1: use readDirect (non-locking) to avoid deadlock with kill()
+                val chunk = ptyManager.readDirect(cmdId, buf.size) ?: break
                 if (chunk.isEmpty()) {
                     kotlinx.coroutines.delay(20)
                     continue
@@ -166,8 +170,9 @@ class WarpTerminalService : Service() {
                         Log.i(PTY_OUTPUT_TAG, line)
                     }
                 }
-                // Also broadcast back for Activity consumers
+                // Fix #4: restrict PTY_OUTPUT to our own package (no data leak)
                 val out = Intent(ACTION_OUTPUT).apply {
+                    setPackage(packageName)
                     putExtra("cmd_id", cmdId)
                     putExtra("data", chunk)
                 }

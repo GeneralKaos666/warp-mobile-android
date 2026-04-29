@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug overlay: removes PTY_CONTROL permission from PtyBroadcastReceiver
+  so `adb shell am broadcast` can reach it without the signature check.
+  This file is ONLY merged into debugBuilds; release builds use main manifest only.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <receiver
+            android:name=".PtyBroadcastReceiver"
+            android:exported="true"
+            android:permission=""
+            tools:replace="android:permission">
+        </receiver>
+    </application>
+
+</manifest>
