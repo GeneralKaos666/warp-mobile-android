@@ -74,3 +74,7 @@ AGPL-3.0-only. See [`LICENSE-AGPL`](LICENSE-AGPL) and [`NOTICE.md`](NOTICE.md).
 ## Contributing
 
 This is currently a solo-dev personal project. Contribution guidelines and PR process will be defined post-M2 alpha (when external interest becomes meaningful). For now, the canonical communication channel is `.omc/handoffs/` (stage decisions) and `.omc/m0-artifacts/` (evidence).
+
+## For AI assistants resuming this project
+
+If you are an AI instance picking this project up after a context compact or in a new session: **read [`.omc/handoffs/lead-context-snapshot.md`](.omc/handoffs/lead-context-snapshot.md) first**. It captures user preferences (full-auto delegation), plan state (D1.5-hybrid), worker state, Codex review history, connected devices (3 Samsungs via adb), and the current task list. The snapshot is a one-file recovery path designed to avoid re-reading 100k+ tokens of conversation history.
