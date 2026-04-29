@@ -37,8 +37,8 @@ echo "[symlink-test] waiting for result..." >&2
 RESULT_LINE=""
 COUNT=0
 while [[ $COUNT -lt 25 ]]; do
-    RAW=$(adb_cmd logcat -d -s "${LOG_TAG}:I" 2>/dev/null || true)
-    RESULT_LINE=$(echo "$RAW" | grep "RESULT:" | tail -1 || true)
+    RAW=$(adb_cmd logcat -d 2>/dev/null || true)
+    RESULT_LINE=$(echo "$RAW" | grep "SymlinkExec" | grep "RESULT:" | tail -1 || true)
     if [[ -n "$RESULT_LINE" ]]; then
         break
     fi
@@ -48,7 +48,7 @@ done
 
 if [[ -z "$RESULT_LINE" ]]; then
     echo "[symlink-test] no RESULT line found, dumping logcat:" >&2
-    adb_cmd logcat -d -s "${LOG_TAG}:I" >&2 || true
+    adb_cmd logcat -d 2>/dev/null | grep "SymlinkExec" >&2 || true
     echo '{"device":"'"${DEVICE_SERIAL}"'","android_sdk":'"${ANDROID_SDK}"',"variant":"'"${VARIANT}"'","negative_control_failed":false,"symlink_passed":false,"errno":"no_result_line","passed":false}'
     exit 1
 fi
