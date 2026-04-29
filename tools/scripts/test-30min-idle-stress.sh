@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # test-30min-idle-stress.sh — M1-S09 acceptance: 30-min idle PTY stress test
 #
 # PREREQUISITE: M1-S05 (WarpTerminalService + JNI PTY) and M1-S06 (PTY reattach)
@@ -24,13 +24,63 @@ ARTIFACT_FILE="${ARTIFACT_DIR}/M1-stress-test.md"
 LOGCAT_TAG="WarpTerminal:PtyOutput"
 PID_FILE="/tmp/stress_pid_$$"
 LOGCAT_FULL="/tmp/logcat_full_$$.txt"
+SCRIPT_VERSION="1.0"
+GIT_COMMIT="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || print 'unknown')"
 
 adb_cmd() { "$ADB" -s "$DEVICE" "$@"; }
 
 log() { print "[$(date '+%H:%M:%S')] $*" >&2; }
 
+# Preflight: confirm device is online
+DEVICE_STATE=$(adb_cmd get-state 2>/dev/null || print "error")
+if [[ "$DEVICE_STATE" != "device" ]]; then
+    print "ERROR: device $DEVICE is not ready (state: $DEVICE_STATE). Check USB/WiFi connection." >&2
+    exit 2
+fi
+
+mkdir -p "$ARTIFACT_DIR"
+
+# ── partial-artifact trap ────────────────────────────────────────────────────
+write_partial_artifact() {
+    log "Writing partial artifact on exit..."
+    {
+        print "# M1-S09 30-min Idle Stress Test (PARTIAL / INTERRUPTED)"
+        print ""
+        print "Device: \`${DEVICE}\`  "
+        print "Run time: $(date -u '+%Y-%m-%dT%H:%M:%SZ')  "
+        print "Pass: **INCOMPLETE**"
+        print ""
+        print "## Interval Snapshots (captured so far)"
+        print ""
+        for interval in t0 t10 t20 t30; do
+            local alive_var="SNAP_${interval}_ALIVE"
+            local notif_var="SNAP_${interval}_NOTIF"
+            local anom_var="SNAP_${interval}_ANOMALIES"
+            local ps_var="SNAP_${interval}_PS"
+            local logcat_var="SNAP_${interval}_LOGCAT"
+            if [[ -n "${(P)alive_var+x}" ]]; then
+                print "### $interval"
+                print "- alive: ${(P)alive_var}"
+                print "- notification_visible: ${(P)notif_var}"
+                print "- anomalies: ${(P)anom_var}"
+                print ""
+                print "\`\`\`"
+                cat "${(P)ps_var}" 2>/dev/null || print "(no ps output)"
+                print "\`\`\`"
+                print ""
+                print "#### logcat snippet ($interval)"
+                print "\`\`\`"
+                tail -20 "${(P)logcat_var}" 2>/dev/null || print "(no logcat)"
+                print "\`\`\`"
+                print ""
+            fi
+        done
+    } > "$ARTIFACT_FILE"
+}
+
+trap 'write_partial_artifact' EXIT INT TERM
+
 # ── snapshot helper ──────────────────────────────────────────────────────────
-# Returns: alive (0/1), notification_visible (0/1), anomalies count
 take_snapshot() {
     local label="$1"
     local logcat_file="/tmp/logcat_${label}_$$.txt"
@@ -50,7 +100,6 @@ take_snapshot() {
     anomalies=$(adb_cmd logcat -d 2>/dev/null \
         | grep -cE "PhantomProcess|signal [0-9]+|FATAL|crash" 2>/dev/null || true)
 
-    # Store for artifact
     eval "SNAP_${label}_ALIVE=$alive"
     eval "SNAP_${label}_NOTIF=$notif"
     eval "SNAP_${label}_ANOMALIES=$anomalies"
@@ -62,7 +111,6 @@ take_snapshot() {
 
 # ── main ─────────────────────────────────────────────────────────────────────
 log "Starting 30-min idle stress test on $DEVICE"
-mkdir -p "$ARTIFACT_DIR"
 
 # Launch app and spawn PTY
 adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
@@ -71,7 +119,6 @@ adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${PKG}/.MainActivity" > /dev/null 2>&1
 sleep 3
 
-# Spawn bash PTY via broadcast
 log "Spawning bash PTY via broadcast..."
 adb_cmd shell am broadcast -a dev.warp.mobile.PTY_SPAWN \
     --es cmd "bash" 2>/dev/null || true
@@ -128,10 +175,11 @@ PASS="true"
 [[ "$SNAP_t30_ALIVE" -eq 0 ]] && PASS="false"
 [[ "$SNAP_t30_NOTIF" -eq 0 ]] && PASS="false"
 [[ "$FINAL_ANOMALIES" -gt 0 ]] && PASS="false"
-# pwd latency check: -1 means no response found
-[[ "$PWD_RESPONSE_MS" -eq -1 || "$PWD_RESPONSE_MS" -gt 500 ]] && PASS="false"
+# pwd latency: -1 means no response; >= 500 is also a fail (PRD says <500ms)
+[[ "$PWD_RESPONSE_MS" -eq -1 || "$PWD_RESPONSE_MS" -ge 500 ]] && PASS="false"
 
-# ── write artifact ───────────────────────────────────────────────────────────
+# ── write full artifact (overrides partial trap output) ──────────────────────
+trap - EXIT INT TERM
 {
     print "# M1-S09 30-min Idle Stress Test"
     print ""
@@ -146,6 +194,7 @@ PASS="true"
         eval "local_notif=\$SNAP_${interval}_NOTIF"
         eval "local_anom=\$SNAP_${interval}_ANOMALIES"
         eval "local_ps=\$SNAP_${interval}_PS"
+        eval "local_logcat=\$SNAP_${interval}_LOGCAT"
         print "### $interval"
         print "- alive: $local_alive"
         print "- notification_visible: $local_notif"
@@ -153,6 +202,11 @@ PASS="true"
         print ""
         print "\`\`\`"
         cat "$local_ps" 2>/dev/null || print "(no ps output)"
+        print "\`\`\`"
+        print ""
+        print "#### logcat snippet ($interval)"
+        print "\`\`\`"
+        tail -20 "$local_logcat" 2>/dev/null || print "(no logcat)"
         print "\`\`\`"
         print ""
     done
@@ -186,6 +240,9 @@ jq -n \
   --argjson t30_anomalies   "$SNAP_t30_ANOMALIES" \
   --argjson pwd_response_ms "$PWD_RESPONSE_MS" \
   --argjson pass            "$PASS" \
+  --arg  script_version     "$SCRIPT_VERSION" \
+  --arg  git_commit         "$GIT_COMMIT" \
+  --arg  artifact_path      "$ARTIFACT_FILE" \
   '{
     device: $device,
     t0:  {alive: $t0_alive,  notification_visible: $t0_notif,  anomalies: $t0_anomalies},
@@ -193,7 +250,10 @@ jq -n \
     t20: {alive: $t20_alive, notification_visible: $t20_notif, anomalies: $t20_anomalies},
     t30: {alive: $t30_alive, notification_visible: $t30_notif, anomalies: $t30_anomalies},
     pwd_response_ms: $pwd_response_ms,
-    pass: $pass
+    pass: $pass,
+    script_version: $script_version,
+    git_commit: $git_commit,
+    artifact_path: $artifact_path
   }'
 
 [[ "$PASS" == "true" ]]

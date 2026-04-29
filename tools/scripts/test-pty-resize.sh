@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 # test-pty-resize.sh — S07 acceptance: PTY resize propagated to child process
 #
 # PREREQUISITE: S05 (android/ Gradle project + WarpTerminalService) must be
@@ -24,8 +24,18 @@ COLS="${3:-80}"
 PKG="dev.warp.mobile"
 ADB="/Users/iml1s/Library/Android/sdk/platform-tools/adb"
 LOGCAT_TAG="WarpTerminal:PtyOutput"
+SCRIPT_VERSION="1.0"
+GIT_COMMIT="$(git -C "$(dirname "$0")" rev-parse HEAD 2>/dev/null || print 'unknown')"
+ARTIFACT_PATH=""
 
 adb_cmd() { "$ADB" -s "$DEVICE" "$@"; }
+
+# Preflight: confirm device is online
+DEVICE_STATE=$(adb_cmd get-state 2>/dev/null || print "error")
+if [[ "$DEVICE_STATE" != "device" ]]; then
+    print "ERROR: device $DEVICE is not ready (state: $DEVICE_STATE). Check USB/WiFi connection." >&2
+    exit 2
+fi
 
 # Launch app and spawn bash PTY
 adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
@@ -44,7 +54,7 @@ sleep 1
 
 # Write stty size to PTY stdin via broadcast
 adb_cmd shell am broadcast \
-    -a dev.warp.mobile.PTY_INPUT \
+    -a dev.warp.mobile.PTY_WRITE \
     --es data "stty size\n" 2>/dev/null || true
 
 # Wait for stty size output in logcat
@@ -52,9 +62,10 @@ OBSERVED=""
 COUNT=0
 while [[ $COUNT -lt 15 ]]; do
     RAW=$(adb_cmd logcat -d 2>/dev/null || true)
-    LINE=$(print "$RAW" | grep "$LOGCAT_TAG" | grep -E '^[0-9]+ [0-9]+$' | tail -1 || true)
+    # Match any line from our logcat tag that contains two numbers separated by space
+    LINE=$(print "$RAW" | grep "$LOGCAT_TAG" | grep -oE '[0-9]+ [0-9]+' | tail -1 || true)
     if [[ -n "$LINE" ]]; then
-        OBSERVED=$(print "$LINE" | grep -oE '[0-9]+ [0-9]+' | tail -1)
+        OBSERVED="$LINE"
         break
     fi
     COUNT=$(( COUNT + 1 ))
@@ -65,12 +76,15 @@ EXPECTED="${ROWS} ${COLS}"
 PASS=$([[ "$OBSERVED" == "$EXPECTED" ]] && print "true" || print "false")
 
 jq -n \
-  --arg  device   "$DEVICE" \
-  --argjson rows  "$ROWS" \
-  --argjson cols  "$COLS" \
-  --arg  expected "$EXPECTED" \
-  --arg  observed "${OBSERVED:-none}" \
-  --argjson pass  "$PASS" \
-  '{device:$device,rows:$rows,cols:$cols,expected:$expected,observed:$observed,pass:$pass}'
+  --arg  device         "$DEVICE" \
+  --argjson rows         "$ROWS" \
+  --argjson cols         "$COLS" \
+  --arg  expected        "$EXPECTED" \
+  --arg  observed        "${OBSERVED:-none}" \
+  --argjson pass         "$PASS" \
+  --arg  script_version  "$SCRIPT_VERSION" \
+  --arg  git_commit      "$GIT_COMMIT" \
+  --arg  artifact_path   "$ARTIFACT_PATH" \
+  '{device:$device,rows:$rows,cols:$cols,expected:$expected,observed:$observed,pass:$pass,script_version:$script_version,git_commit:$git_commit,artifact_path:$artifact_path}'
 
 [[ "$PASS" == "true" ]]
