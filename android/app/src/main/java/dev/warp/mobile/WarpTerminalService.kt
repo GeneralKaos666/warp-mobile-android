@@ -122,7 +122,12 @@ class WarpTerminalService : Service() {
     private fun handleWrite(intent: Intent) {
         val cmdId = intent.getStringExtra("cmd_id") ?: "default"
         val data  = intent.getByteArrayExtra("data")
-            ?: intent.getStringExtra("data")?.let { it.replace("\\n", "\n").toByteArray() }
+            ?: intent.getStringExtra("data")?.let {
+                // Replace literal \n escape sequences, then ensure line ends with newline
+                val s = it.replace("\\n", "\n").replace("\\r", "\r")
+                val bytes = s.toByteArray()
+                if (bytes.isNotEmpty() && bytes.last() != '\n'.code.toByte()) bytes + "\n".toByteArray() else bytes
+            }
             ?: return
         Log.d(LOG_TAG, "PTY_WRITE cmdId=$cmdId bytes=${data.size}")
         ptyManager.write(cmdId, data)

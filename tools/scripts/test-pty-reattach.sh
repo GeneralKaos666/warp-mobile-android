@@ -45,7 +45,8 @@ adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 2
 
 # Spawn PTY via broadcast (Service must handle this intent)
-T_SPAWN=$(date +%s%3N)
+# %3N not supported on all platforms; fall back to seconds * 1000
+T_SPAWN=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo $(( $(date +%s) * 1000 )))
 adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" \
     -a dev.warp.mobile.PTY_SPAWN \
     --es cmd "sleep ${DELAY} && echo ${TOKEN}" 2>/dev/null || true
@@ -67,7 +68,7 @@ while [[ $COUNT -lt 30 ]]; do
     # Use -v epoch so timestamps are unambiguous seconds since epoch — bypasses
     # timezone, DST, and year-rollover issues that plague MM-DD parsing.
     RAW=$(adb_cmd logcat -d -v epoch 2>/dev/null || true)
-    FOUND_LINE=$(print "$RAW" | grep "$LOGCAT_TAG" | grep "$TOKEN" | tail -1 || true)
+    FOUND_LINE=$(printf '%s\n' "$RAW" | grep -F "$LOGCAT_TAG" | grep "$TOKEN" | tail -1 || true)
     if [[ -n "$FOUND_LINE" ]]; then
         FOUND="$FOUND_LINE"
         break
@@ -88,23 +89,18 @@ if [[ -z "$FOUND" ]]; then
     exit 1
 fi
 
-# Parse timestamp from logcat line (format: MM-DD HH:MM:SS.mmm)
-# e.g. "04-29 17:23:45.123  1234  5678 I WarpTerminal:PtyOutput: ..."
-LOGCAT_TS=$(print "$FOUND" | grep -oE '^[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+' | head -1 || true)
+# Parse epoch timestamp from logcat line. With `-v epoch`, format is:
+# "1729087425.123  1234  5678 I WarpTerminal:PtyOutput: ..."
+# (seconds.millis at line start). No timezone / year ambiguity.
+LOGCAT_EPOCH=$(printf '%s\n' "$FOUND" | grep -oE '^[[:space:]]*[0-9]+\.[0-9]+' | head -1 | tr -d '[:space:]' || true)
 
-if [[ -n "$LOGCAT_TS" ]]; then
-    # Convert MM-DD HH:MM:SS.mmm to epoch ms using python3
-    YEAR=$(date +%Y)
-    T_SEEN=$(python3 -c "
-import datetime, calendar
-ts = '${YEAR}-${LOGCAT_TS}'
-# ts format: YYYY-MM-DD HH:MM:SS.mmm
-dt = datetime.datetime.strptime(ts, '%Y-%m-%d %H:%M:%S.%f')
-epoch_ms = int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000)
-print(epoch_ms)
-" 2>/dev/null || date +%s%3N)
+if [[ -n "$LOGCAT_EPOCH" ]]; then
+    # Convert seconds.millis to integer milliseconds since epoch
+    T_SEEN=$(python3 -c "print(int(float('$LOGCAT_EPOCH') * 1000))" 2>/dev/null \
+        || python3 -c "import time; print(int(time.time()*1000))")
 else
-    T_SEEN=$(date +%s%3N)
+    # Fallback: host time at moment we found the token (less accurate)
+    T_SEEN=$(python3 -c "import time; print(int(time.time()*1000))")
 fi
 
 DELTA=$(( T_SEEN > T_EXPECTED ? T_SEEN - T_EXPECTED : T_EXPECTED - T_SEEN ))

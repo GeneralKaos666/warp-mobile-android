@@ -52,7 +52,8 @@
     {
       "id": "M1-S03",
       "title": "crates/android-host/ Rust skeleton with JNI ping",
-      "passes": false,
+      "passes": true,
+      "verifiedBy": "codex round-1 17-14-47-766Z REVISE (AC#5 FAIL on commit 10989b6 missing .so size/sha256) → fix README addendum 5b1424e → codex round-2 17-17-33-280Z CODEX_PASS",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "crates/android-host/Cargo.toml exists with name=\"warp-mobile-android-host\", crate-type=[\"cdylib\"], deps include jni 0.21+, ndk 0.9+, ndk-sys 0.6+, log 0.4+, android_logger 0.13+",
@@ -66,7 +67,8 @@
     {
       "id": "M1-S04",
       "title": "PTY backend in pure Rust (openpty + setsid + TIOCSCTTY)",
-      "passes": false,
+      "passes": true,
+      "verifiedBy": "codex round-1 17-19-21-298Z REJECT (6 safety bugs) → fix fb97d15 → round-2 17-29-02-836Z REVISE (putenv/execvp + E0597) → fix d9bf0d4 → round-3 17-37-08-437Z CODEX_PASS. cargo test 2/2 PASS. AS-safe execve, FD_CLOEXEC, kill timeout+SIGKILL, Drop impl, JNI null guards, signature locked.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "crates/android-host/src/pty.rs exists with public functions: spawn_pty(cmd: &str, env: &[(&str,&str)]) -> Result<PtySession>, write(buf: &[u8]) -> Result<usize>, read(buf: &mut [u8]) -> Result<usize>, resize(rows: u16, cols: u16) -> Result<()>, kill() -> Result<()>",

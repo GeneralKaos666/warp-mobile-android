@@ -37,11 +37,11 @@ APP_UID=$(adb_cmd shell dumpsys package "$PKG" 2>/dev/null \
 
 # Launch app and spawn bash PTY
 adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
-sleep 1
-adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 2
+adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
+sleep 4
 adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
-sleep 1
+sleep 2
 
 # Check notification is present before kill (Samsung may suppress display; treat empty as 0)
 NOTIF_BEFORE=$(adb_cmd shell dumpsys notification --noredact 2>/dev/null \
@@ -51,8 +51,9 @@ NOTIF_BEFORE=${NOTIF_BEFORE:-0}
 # Snapshot all processes before kill (full ps with PID/PPID/USER/NAME)
 BEFORE_PS=$(adb_cmd shell ps -A -o PID,PPID,USER,NAME 2>/dev/null || true)
 
-# Count warp-related processes before kill
-PID_BEFORE_COUNT=$(print "$BEFORE_PS" | grep -c "$PKG" || print 0)
+# Count warp-related processes before kill (use printf to avoid print treating '-' lines as options)
+PID_BEFORE_COUNT=$(printf '%s\n' "$BEFORE_PS" | grep -c "$PKG" || true)
+PID_BEFORE_COUNT=${PID_BEFORE_COUNT:-0}
 
 # FAIL if app wasn't running (script header line 7)
 if [[ "$PID_BEFORE_COUNT" -eq 0 ]]; then
@@ -72,8 +73,8 @@ if [[ "$PID_BEFORE_COUNT" -eq 0 ]]; then
     exit 1
 fi
 
-# Kill the app
-adb_cmd shell am kill "$PKG" 2>/dev/null || true
+# Force-stop the app (am kill leaves coroutine threads; force-stop kills all)
+adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
 sleep 2
 
 # Check notification is absent after kill (Samsung may suppress; treat empty as 0)
@@ -84,8 +85,11 @@ NOTIF_AFTER=${NOTIF_AFTER:-0}
 # Snapshot all processes after kill
 AFTER_PS=$(adb_cmd shell ps -A -o PID,PPID,USER,NAME 2>/dev/null || true)
 
-# Count any remaining warp package processes
-PID_AFTER_PKG=$(print "$AFTER_PS" | grep -c "$PKG" || print 0)
+# Count any remaining warp package processes.
+# `grep -c X || print 0` is fragile: zero-match grep exits 1 and `print 0`
+# appends another "0", crashing arithmetic later. Use `grep + wc -l` which
+# always exits 0 and outputs a single line.
+PID_AFTER_PKG=$(printf '%s\n' "$AFTER_PS" | grep -F "$PKG" | wc -l | tr -d '[:space:]')
 
 # Count orphan children by UID. Android `ps USER` is `u{userid}_a{appid}` where
 # appid = UID - 10000 (per platform/system/sepolicy). dumpsys returns full UID
@@ -98,7 +102,8 @@ if [[ -n "$APP_UID" ]]; then
     else
         EXPECTED_USER="$APP_UID"  # system app (UID < 10000) — fall back to numeric
     fi
-    ORPHAN_BY_UID=$(print "$AFTER_PS" | awk -v uid="$EXPECTED_USER" '$3 == uid' | grep -cv "$PKG" || print 0)
+    # Same idiom: count via wc to avoid grep -cv exit-1 stdout duplication.
+    ORPHAN_BY_UID=$(printf '%s\n' "$AFTER_PS" | awk -v uid="$EXPECTED_USER" '$3 == uid' | grep -Fv "$PKG" | wc -l | tr -d '[:space:]')
 fi
 
 AFTER_LISTING=$(print "$AFTER_PS" | grep "$PKG" || print "none")
