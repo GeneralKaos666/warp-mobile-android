@@ -123,16 +123,18 @@
     },
     {
       "id": "M3-S07",
-      "title": "Block model — start_time / command / exit_code (M3 Acceptance #3)",
+      "title": "Block model extract + DCS event aggregation (Plan Amendment 5; M3 Acceptance #3)",
       "passes": false,
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "warp_terminal model side: Block struct with fields {start_time: SystemTime, command: String, exit_code: Option<i32>, output_range: Range<usize>} — verify upstream warp_terminal Block struct",
-        "DCS parser (S05) emits BlockEvent::Start(start_time, command) on precmd hook + BlockEvent::End(exit_code) on preexec hook",
-        "Block aggregation: terminal model maintains Vec<Block>; on Start emits new block; on End updates current block exit_code + finalizes",
-        "Verification (acceptance #3): run 3 sample commands in zsh on the device (`ls`, `whoami`, `false`); inspect Block model state via JNI debug accessor (e.g., NativeBridge.terminalBlocksDump()) — assert 3 Block entries with correct start_time + command + exit_code (0/0/1)",
-        "Driver: tools/scripts/test-block-model.sh <serial> drives the test; result.json with block_count, command_match[], exit_code_match[], gate.overall_pass",
+        "Per Plan Amendment 5: extract app::terminal::model::block + blocks into facade::app_terminal::model::block + blocks (continuing M3-S03-v2 extraction pattern). Block struct fields: start_time / command / exit_code / output_range — verify upstream app::terminal::model::Block struct shape.",
+        "DCS parser from M3-S05 emits BlockEvent on hook delivery: Precmd → BlockEvent::Start(start_time, command_placeholder); Preexec → fills in command; CommandFinished → BlockEvent::End(exit_code) — wire through TerminalModel::ingest_pty_bytes after DProtoHook::deserialize.",
+        "Block aggregation in TerminalModel: maintain Vec<Block>; on Start emit new block; on End update current block exit_code + finalize. Test via synthetic DCS injection (TerminalSimulationReceiver TERM_INJECT_RAW from M3-S05) since S24U has no zsh.",
+        "JNI debug accessor: Java_dev_warp_mobile_NativeBridge_terminalBlocksDump returns JSON array of {start_time, command, exit_code} for current Vec<Block> state.",
+        "Hook execution constraint (DEFERRED to M5 Termux per M3-S06 amendment): real zsh hooks via PTY require zsh which is M5. M3-S07 verification uses synthetic DCS injection per the M3-S05 path; AC#4 zsh sample run moves to M5.",
+        "Verification (M3 Acceptance #3): inject 3 synthetic DCS sequences mirroring zsh ls/whoami/false flow (Precmd + Preexec + CommandFinished triplets, exit codes 0/0/1) via TerminalSimulationReceiver; verify 3 Block entries via terminalBlocksDump + each has correct command + exit_code.",
+        "Driver: tools/scripts/test-block-model.sh <serial> drives synthetic injection + verification; result.json with block_count, command_match[], exit_code_match[], gate.overall_pass.",
         "Codex review dispatched and PASS verdict received"
       ]
     },
