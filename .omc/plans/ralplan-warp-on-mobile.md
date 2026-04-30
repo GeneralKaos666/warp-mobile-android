@@ -1,10 +1,27 @@
 # RALPLAN: Warp Terminal on Android (Open-Source First Port)
 
 > **Mode**: DELIBERATE consensus plan (high-risk: 12-18 month porting, GPL fork, multi-platform native, AGPL compliance)
-> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 partial findings amended (2026-04-29 evening)** → **Amendment 3 (2026-04-29 M1) — minSdk raised 26 → 31**
+> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 CLOSED CONDITIONAL GO** (2026-04-29) → **M1 CLOSED CONDITIONAL GO 10/10 stories PASS** (2026-04-30) → **M2 NEXT (warpui Android backend, 8-12 weeks)**
+> **Amendments**: 1 (D1 invalidated) → 2 (D1.5-hybrid) → 3 (minSdk 31) → **4 (M1: am force-stop semantics)**
 > **Upstream commit referenced**: `warpdotdev/Warp@d0f045c` (just-released 2026-04-28)
-> **Author**: Planner agent (RALPLAN-DR deliberate); **Amendment 1 by team-lead@warp-mobile-m0** post-M0 autonomous tasks
-> **Date**: 2026-04-29
+> **Author**: Planner agent (RALPLAN-DR deliberate); **Amendments 1+3+4 by team-lead@warp-mobile** post-M0/M1 autonomous tasks
+> **Date**: 2026-04-29 → 2026-04-30 (M1 close-out)
+
+---
+
+## ⚠️ Amendment 4 (2026-04-30 M1 close) — M1 acceptance criterion #4 corrected: `am force-stop` is the lifecycle primitive, not `am kill`
+
+**Tl;dr**: M1-S08 device verification empirically demonstrated that `adb shell am kill <package>` is a no-op against an actively running foreground service (FGS). The original M1 §6 acceptance criterion #4 (line 367) said "on `adb shell am kill <package>` the service self-terminates cleanly" — but per AOSP `ActivityManagerService.killApplicationProcess` semantics, `am kill` only targets cached/background processes. Verified on Galaxy S24 Ultra: `am kill dev.warp.mobile` against the running FGS leaves PID 5942 alive. **`am force-stop` is the correct primitive** for "stop a foreground-service app cleanly with all child PTY processes reaped".
+
+**Evidence**: `.omc/m1-artifacts/M1-go-no-go.md:121` (verdict §6 deviation note); `.omc/m1-artifacts/M1-S08-result.json:5` `"orphans": 0` after `am force-stop`; empirical test sequence in `.omc/m1-artifacts/M1-go-no-go.md:121` documents the no-op behavior of `am kill` against the live FGS.
+
+**This amendment**:
+
+1. **§6 M1 acceptance criterion #4 line 367** — `am kill` → `am force-stop`. Concretely, the test driver `tools/scripts/test-fgs-clean-kill.sh` (line 77) uses `am force-stop "$PKG"` and that pattern stands as the canonical primitive.
+
+2. **§7 Risk register** (no change required — orphan-process risk is empirically retired on flagship at M1 close).
+
+**M2 implication**: `am kill` is still valid as a "non-destructive backgrounding" primitive in test harnesses where you specifically want to NOT kill the FGS. Plan §6 M2-M5 acceptance criteria that mention "am kill" should be reviewed at each milestone close to ensure the intent matches Android lifecycle semantics.
 
 ---
 
@@ -357,15 +374,17 @@
 8. **(NEW) Tension 3 user decision gate**: the user answers Questions A-E (see ADR "Tension 3" subsection) and commits `M0-tension3-decision.md`. Without this, M1 does not start.
 9. Documented decision: "M1 starts" or "M0 expanded by N weeks" or "project pivots/cancels". No bleed into M1 without explicit gate.
 
-### M1 — Android PTY/service prototype, no UI (6-8 weeks)
+### M1 — Android PTY/service prototype, no UI (6-8 weeks) — **CLOSED CONDITIONAL GO 2026-04-30, 10/10 stories PASS**
+
+**Status**: Closed CONDITIONAL GO at 2026-04-30T04:41:13Z (Codex round-5 PASS on M1-S10 close-out doc). All flagship-pathway risks retired on Galaxy S24 Ultra. See `.omc/m1-artifacts/M1-go-no-go.md` §6 verdict + §7 per-criterion citation table for evidence. Low-end device matrix deferred to M2 per Plan Amendment 3.
 
 **Goal**: Prove the systems plumbing — PTY + lifecycle — independent of UI.
 
-1. Pure-Rust+JNI service spawns `bash -c 'echo hello'` via `openpty()` + `setsid()` + `TIOCSCTTY` + `dup2(stdio)` on Pixel 7 emulator, captures `hello\n` from PTY master, asserts process exits cleanly with `SIGCHLD` reaped (no zombie).
-2. Activity destroy + recreate (rotation, minimize-2-min-restore) preserves a running `sleep 60 && echo done` session — re-attached PTY emits `done` to the new Activity binding within 1s of `done` actually firing.
-3. PTY resize via `TIOCSWINSZ` reflects in shell's `stty size` output (verified by sending `stty size > /tmp/x; cat /tmp/x` → expected dimensions).
-4. FGS notification persistent during session; on `adb shell am kill <package>` the service self-terminates cleanly (no orphan PTY processes).
-5. Stress test: 30-minute idle session on flagship + low-end Pixel 4a, no crashes, no PhantomProcessKiller events on flagship; documented behavior on low-end.
+1. Pure-Rust+JNI service spawns `bash -c 'echo hello'` via `openpty()` + `setsid()` + `TIOCSCTTY` + `dup2(stdio)` on Pixel 7 emulator, captures `hello\n` from PTY master, asserts process exits cleanly with `SIGCHLD` reaped (no zombie). **PASS** — `crates/android-host/src/pty.rs:test_pty_echo_hello`.
+2. Activity destroy + recreate (rotation, minimize-2-min-restore) preserves a running `sleep 60 && echo done` session — re-attached PTY emits `done` to the new Activity binding within 1s of `done` actually firing. **PASS** — `M1-S06-result.json:6` `delta_ms=26` (S24 Ultra, 5 device rotations).
+3. PTY resize via `TIOCSWINSZ` reflects in shell's `stty size` output (verified by sending `stty size > /tmp/x; cat /tmp/x` → expected dimensions). **PASS** — `M1-S07-result.json:6` `observed="24 80"` exact match.
+4. FGS notification persistent during session; on `adb shell am force-stop <package>` (was `am kill`, see Amendment 4) the service self-terminates cleanly (no orphan PTY processes). **PASS** — `M1-S08-result.json:5` `orphans=0`.
+5. Stress test: 30-minute idle session on flagship + low-end Pixel 4a, no crashes, no PhantomProcessKiller events on flagship; documented behavior on low-end. **FLAGSHIP PASS** — `M1-S09-result.json:8,12,13,15` (PID 24008 constant 30-min, alive=1+notif=1 all 4 checkpoints, 0 warp-app anomalies, pwd 4ms). Low-end **DEFERRED to M2** (Pixel 4a / A52s acquisition pending).
 
 ### M2 — `warpui::platform::android` backend (8-12 weeks; **Amendment 1+2**: split into M2a + M2b under D1.5-hybrid)
 

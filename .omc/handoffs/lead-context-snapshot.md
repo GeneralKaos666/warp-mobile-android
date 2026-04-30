@@ -2,7 +2,7 @@
 
 > **For AI instance resuming this project (post-compact or new session)**: read this file FIRST. It captures everything you need to pick up where the previous lead left off, without re-deriving from full conversation history.
 >
-> **Last updated**: 2026-04-29 by team-lead@warp-mobile-m0 (Claude Opus 4.7, 1M context)
+> **Last updated**: 2026-04-30 by team-lead@warp-mobile-m1 (Claude Opus 4.7, 1M context) — **M0 + M1 both CLOSED CONDITIONAL GO; M2 ready to start**
 
 ---
 
@@ -109,30 +109,60 @@ User delegated via 「全自動」. Document: `.omc/m0-artifacts/M0-tension3-dec
 
 ---
 
-## 8b. M1 Status (REAL, as of 2026-04-30 ~04:25 UTC) — **CLOSE-OUT** (9/10 stories PASS, S10 Codex review in flight)
+## 8b. M1 Status — **CLOSED 10/10 stories PASS, CONDITIONAL GO** (2026-04-30T04:41:13Z)
 
-Per `.omc/prd.json` (10 stories M1-S01..S10):
+Per `.omc/prd.json` (10 stories M1-S01..S10) — all `passes: true`:
 
-| Story | Status | Verifier | Notes |
-|---|---|---|---|
-| S01 Plan Amendment 3 minSdk 31 | ✅ PASS | Codex round-1 | commit `2ccc0f7` |
-| S02 android-activity feature fix | ✅ PASS | Codex round-1 | commit `afc74ec` on warp-src fork ImL1s/warp:warp-mobile/m0-facade |
-| S03 crates/android-host skeleton | ✅ PASS | Codex round-2 | commits `10989b6` + `5b1424e` (README addendum after AC#5 REVISE) |
-| S04 PTY backend (openpty/setsid) | ✅ PASS | Codex round-3 | commits `ef0b06a` → `fb97d15` → `d9bf0d4`. Round-1 REJECT (6 safety bugs) → round-2 REVISE → round-3 PASS. cargo test 3/3 PASS (incl test_arc_concurrent_read_kill). |
-| S05 Service+FGS skeleton | ✅ PASS | Codex + device | round-1 REVISE → fix `f424be2` → PTY plumbing chain Task#28→#33→#35 → device run on S24 Ultra: isForeground=true, foregroundId=1, types=SPECIAL_USE, native lib loaded. Evidence `M1-S05-evidence-v2.md` @ `1b737f3`. |
-| S06 PTY reattach < 1s | ✅ PASS | device | delta_ms=36, PTY survived 5 device rotations, sleep+echo round-trip exact. Evidence `M1-S06-result.json` @ `1b737f3`. |
-| S07 PTY resize | ✅ PASS | device | observed="24 80" exact match. Evidence `M1-S07-result.json` @ `1b737f3`. |
-| S08 FGS clean kill | ✅ PASS | device | pid_before=1, pid_after=0, orphans=0. Evidence `M1-S08-result.json` @ `1b737f3`. |
-| S09 30-min stress | ✅ PASS | device | PID 24008 constant 30-min, alive=1+notif=1 all 4 checkpoints, 0 warp-app anomalies, pwd response 4ms. Evidence `M1-S09-result.json` + `M1-stress-test.md` @ `81ec72a`. |
-| S10 close-out doc | 🟡 Codex review in flight | bg `be0wdtaua` | M1-go-no-go.md verdict §6 = **CONDITIONAL GO** (low-end device deferred to M2 per Plan Amendment 3). |
+| Story | Verifier | Evidence |
+|---|---|---|
+| S01 Plan Amendment 3 minSdk 31 | Codex round-1 PASS | commit `2ccc0f7` |
+| S02 android-activity feature fix | Codex round-1 PASS | commit `afc74ec` on warp-src fork `ImL1s/warp:warp-mobile/m0-facade` |
+| S03 crates/android-host skeleton | Codex round-2 PASS | commits `10989b6` + `5b1424e` |
+| S04 PTY backend (openpty/setsid) | Codex round-3 PASS | commits `ef0b06a` → `fb97d15` → `d9bf0d4`. cargo test 3/3 (incl `test_arc_concurrent_read_kill` stress test) |
+| S05 Service+FGS skeleton | device + Codex | `f424be2` (POST_NOTIFICATIONS fix) → device run S24 Ultra: isForeground=true, foregroundId=1, types=SPECIAL_USE. Evidence `M1-S05-evidence-v2.md` @ `1b737f3` |
+| S06 PTY reattach < 1s | device | `M1-S06-result.json:6` delta_ms=26 (under 1000ms threshold), PTY survived 5 device rotations |
+| S07 PTY resize | device | `M1-S07-result.json:6` observed="24 80" exact match |
+| S08 FGS clean kill | device | `M1-S08-result.json:5` orphans=0 (uses `am force-stop` per Amendment 4) |
+| S09 30-min flagship stress | device | `M1-S09-result.json:8,12,13,15` PID 24008 constant 30-min, alive=1+notif=1 all 4 checkpoints, 0 warp-app anomalies, pwd 4ms |
+| S10 close-out doc | Codex round-5 PASS | `M1-go-no-go.md` verdict §6 CONDITIONAL GO; rounds 1-4 REVISE addressed in commits `7513445`/`ad3d0cc`/`fc0a892`/`4f37601`; round-5 final PASS at 04-41-13-401Z |
 
-**Latest main**: `53378d3`
+**Final main**: `f7feb3f` (post-cleanup; ralplan Amendment 4 added at this revision)
 
-**M1 PTY plumbing chain Task#28 → #33 → #35**: closed with Codex Task #35 PASS at 03-32-36-215Z. Final state: Arc<PtySession> + ptyAcquire/Release JNI + AtomicI32 master_fd + ANR-safe scope.launch + signature-permission receiver + tools:remove debug overlay.
+**Plan Amendment 4** (2026-04-30): M1 §6 AC#4 corrected from `am kill` → `am force-stop`. Empirically verified `am kill` is no-op against running FGS (PID 5942 stays alive); `am force-stop` is the correct primitive. See `ralplan-warp-on-mobile.md:11` Amendment 4 block.
 
-**Lead direct execution of Task #32**: when worker-env didn't respond to status ping for 15+ min, lead took over device runs on S24 Ultra (R5CX10VFFBA). 5 driver bug-fix iterations during runs (&& shell quoting, t_expected anchoring on PTY_WRITE log, end-anchored token regex, broadcast→FGS direct path, anomaly regex tightening). Worker-env later acknowledged stand-down; their local uncommitted changes were duplicates of commits already landed via lead.
+**M1 PTY plumbing chain Task#28 → #33 → #35**: closed with Codex Task #35 PASS at 03-32-36-215Z. Final state: `Arc<PtySession>` + `ptyAcquire/Release` JNI + `AtomicI32 master_fd` + ANR-safe `scope.launch` + signature-permission receiver + `tools:remove` debug overlay.
 
-**Verdict path to full GO**: acquire Pixel 4a / Galaxy A52s and re-run S06/S07/S08/S09 on it before M2 close. Tracked as M2 carry-over #2.
+**Lead direct execution of Task #32**: when worker-env didn't respond to status ping for 15+ min, lead took over device runs on S24 Ultra (R5CX10VFFBA). 5 driver bug-fix iterations during runs (&& shell quoting, t_expected anchoring on PTY_WRITE log, end-anchored token regex, broadcast→FGS direct path, anomaly regex tightening, `isForeground=true` proxy for Samsung-suppressed notification drawer).
+
+**Path to full GO**: acquire Pixel 4a / Galaxy A52s API 31 and re-run S06/S07/S08/S09 on it before M2 close. Tracked as M2 carry-over #1.
+
+---
+
+## 8c. M2 Ready to Start — `warpui::platform::android` backend (8-12 weeks)
+
+**Goal** (per Plan §6 M2): get pixels to screen, accept input, survive Android lifecycle. Build on M0 Vulkan spike + M1 PTY/Service infrastructure.
+
+**Carry-overs from M1** (in `.omc/m1-artifacts/M1-go-no-go.md` §5):
+1. Acquire Pixel 4a / Galaxy A52s API 31 → re-run S06/S07/S08/S09 to close low-end coverage
+2. Gradle copy task replacing `jniLibs/arm64-v8a/libwarp_mobile_android_host.so` symlink (M2 ergonomics fix)
+3. **D1.5-hybrid main work**: `warpui::platform::android` backend deriving from headless + 4 hand-written areas (per Plan §6 M2 §M2a/M2b split under Amendment 1+2)
+4. android-activity / winit reorganization (warpui/Cargo.toml redundant dep cleanup)
+5. Notification customization (session count, command preview, tap → MainActivity intent)
+6. Clippy lint cleanup (7 style nits — uninlined format args, let_unit_value)
+
+**Architecture state at M1 close**:
+- `android/app/` — Gradle project minSdk 31 / targetSdk 36 / compileSdk 36
+- `crates/android-host/` — Rust workspace member, cdylib JNI host (PTY + ping)
+- `tools/scripts/test-pty-{reattach,resize}.sh`, `test-fgs-clean-kill.sh`, `test-30min-idle-stress.sh` — 4 device drivers
+- M0 spikes archived under `spikes/{vulkan-surface-recreate,symlink-jnilibs}/`
+- warp-src submodule on `warp-mobile/m0-facade` branch (fork at `ImL1s/warp`)
+
+**M2 entry criteria** (already satisfied):
+- M0 Vulkan surface recreate verified <200ms p95 ✅
+- M1 PTY/Service plumbing verified ✅
+- minSdk 31 baseline established ✅ (Plan Amendment 3)
+
+**To start M2**: invoke `/oh-my-claudecode:ralph` or `/oh-my-claudecode:autopilot` with M2 scope per ralplan §6 M2. PRD scaffold for M2 stories should be auto-generated and refined per the autopilot/ralph PRD-mode workflow. Seed tasks per Plan §6 M2 table (lines 470-500): static-grid wgpu surface, IME glue, touch input mapping, rotation handling, etc.
 
 ---
 
