@@ -2,18 +2,18 @@
   "story": "M2-S04",
   "device_serial": "R5CX10VFFBA",
   "capture_seconds": 60,
-  "frames_observed": 7629,
+  "frames_observed": 7625,
   "first_frame_num": 1,
-  "last_frame_num": 7629,
-  "first_ts_ms": 124093901,
-  "last_ts_ms": 124157367,
-  "attach_ts_ms": 124093819,
+  "last_frame_num": 7625,
+  "first_ts_ms": 126726634,
+  "last_ts_ms": 126790075,
+  "attach_ts_ms": 126726569,
   "detach_ts_ms": null,
   "frame_interval_ms": {
     "p50": 8,
     "p95": 9,
     "p99": 10,
-    "count": 7628
+    "count": 7624
   },
   "peak_fps_in_1s_window": 122,
   "validation_layer": {
@@ -24,7 +24,7 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 20:45:01.355 D/warp-android-host(31912): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11133.bin for reading (it may not exist yet)"
+        "line": "04-30 21:28:54.104 D/warp-android-host(32709): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11143.bin for reading (it may not exist yet)"
       }
     ]
   },

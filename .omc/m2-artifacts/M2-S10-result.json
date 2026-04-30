@@ -1,0 +1,78 @@
+{
+  "story": "M2-S10",
+  "device_serial": "R5CX10VFFBA",
+  "environment": {
+    "gboard_present": false,
+    "pinyin_ime_present": false,
+    "default_ime": "com.samsung.android.honeyboard/.service.HoneyBoardService"
+  },
+  "attach_ts_ms": 128224972,
+  "detach_ts_ms": null,
+  "latin_chars_received": 5,
+  "pinyin_composing_seen": 5,
+  "pinyin_committed_text": "你好",
+  "ime_event_count": 12,
+  "ime_state_machine_transitions": {
+    "sub_test_2_latin_hello": {
+      "latin_commit_count": 5,
+      "expected": 5,
+      "pass": true
+    },
+    "sub_test_4_pinyin_compose_commit": {
+      "composing_update_count": 5,
+      "composing_commit_count": 1,
+      "composing_update_texts": [
+        "n",
+        "ni",
+        "nih",
+        "niha",
+        "nihao"
+      ],
+      "composing_commit_texts": [
+        "你好"
+      ],
+      "expected_update_count": 5,
+      "expected_commit_count": 1,
+      "expected_committed_text": "你好",
+      "pass": true
+    },
+    "sub_test_5_empty_finish_after_commit": {
+      "empty_finish_count": 1,
+      "composing_finish_count": 0,
+      "expected_empty_finish_count": 1,
+      "expected_composing_finish_count": 0,
+      "pass": true
+    }
+  },
+  "cumulative": {
+    "latin_commit": 5,
+    "composing_update": 5,
+    "composing_commit": 1,
+    "composing_finish": 0,
+    "empty_finish": 1,
+    "events_total": 12
+  },
+  "ic_kotlin_calls": {
+    "commitText": 6,
+    "setComposingText": 5,
+    "finishComposingText": 1
+  },
+  "method": "simulation_broadcasts_via_ImeSimulationReceiver",
+  "manual_verification_steps": [
+    "Open Settings > General Management > Keyboard list and default",
+    "Enable Gboard with Chinese (Pinyin) layout",
+    "Set Gboard as default IME",
+    "Launch dev.warp.mobile/.MainActivity with --ez ime_mode true",
+    "Tap the screen — Gboard appears, type \"ni hao\", select 你好 candidate",
+    "Verify logcat shows IC.setComposingText for n/ni/nih/niha/nihao + IC.commitText for 你好",
+    "Verify the same ime_event lines emit in logcat (warp-android-host target)"
+  ],
+  "acceptance_gate": {
+    "latin_pass": true,
+    "pinyin_compose_pass": true,
+    "pinyin_committed_pass": true,
+    "no_double_commit_pass": true,
+    "empty_finish_seen_pass": true,
+    "overall_pass": true
+  }
+}

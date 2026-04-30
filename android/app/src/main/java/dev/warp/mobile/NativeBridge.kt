@@ -154,4 +154,48 @@ object NativeBridge {
      * round-trip diagnostic info into the result JSON.
      */
     external fun renderStaticGridStats(): String
+
+    // ── IME composing-text state machine (M2-S10) ───────────────────────────
+    //
+    // Drives the state machine in `crates/android-host/src/ime.rs` (which
+    // mirrors `warp-src/crates/warpui/src/platform/android/ime.rs`). Called
+    // from `WarpInputView.WarpInputConnection` overrides on the View's UI
+    // thread.
+    //
+    // All four entry points are thread-safe (Mutex inside the Rust singleton).
+    // Logcat tag: `WarpIme` (Rust target). The M2-S10 driver greps these.
+
+    /**
+     * `InputConnection.commitText(text, newCursorPosition)` — finalize text
+     * into the buffer. If a composing region is active, the region is replaced
+     * atomically (Pinyin candidate-pick path); otherwise the text is committed
+     * as a Latin keystroke.
+     */
+    external fun imeCommitText(text: String, newCursorPosition: Int)
+
+    /**
+     * `InputConnection.setComposingText(text, newCursorPosition)` — update
+     * the in-progress composing region. Empty text clears the region.
+     */
+    external fun imeSetComposingText(text: String, newCursorPosition: Int)
+
+    /**
+     * `InputConnection.finishComposingText()` — clear composing region. If
+     * the region is non-empty, emits a `composing_finish` event. If empty
+     * (Gboard known issue: spurious calls between setComposingText and
+     * commitText), emits an `empty_finish` marker without double-committing.
+     */
+    external fun imeFinishComposingText()
+
+    /**
+     * Returns IME state machine counters as a comma-separated string:
+     * "commit_calls=N,set_composing_calls=N,finish_calls=N,events=N,
+     *  latin=N,composing_update=N,composing_commit=N,composing_finish=N,
+     *  empty_finish=N,is_composing=B,composing_text=S"
+     */
+    external fun imeStats(): String
+
+    /** Reset IME state (clear counters + composing region). Driver uses
+     *  this between sub-tests. */
+    external fun imeReset()
 }

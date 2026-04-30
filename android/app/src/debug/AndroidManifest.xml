@@ -18,6 +18,12 @@
         <receiver
             android:name=".CaptureFrameReceiver"
             tools:remove="android:permission" />
+        <!-- M2-S10: same pattern as CaptureFrameReceiver — strip the
+             PTY_CONTROL signature requirement so `adb shell am broadcast`
+             can deliver IME_* simulation events during device-driver tests. -->
+        <receiver
+            android:name=".ImeSimulationReceiver"
+            tools:remove="android:permission" />
         <!-- Export service in debug so `adb shell am start-foreground-service` works -->
         <service
             android:name=".WarpTerminalService"

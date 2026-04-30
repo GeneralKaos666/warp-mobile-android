@@ -72,6 +72,28 @@
             </intent-filter>
         </receiver>
 
+        <!-- M2-S10: IME simulation receiver. `adb shell input text` does NOT
+             route through InputConnection (it synthesizes raw KeyEvents at
+             the dispatcher level), so to exercise the WarpInputConnection
+             commitText / setComposingText / finishComposingText code path
+             end-to-end without a custom IME on the device, the driver
+             broadcasts these intents which the receiver forwards through
+             the real BaseInputConnection subclass (or directly to JNI as
+             fallback). Same PTY_CONTROL signature permission as the other
+             debug-only test hooks. -->
+        <receiver
+            android:name=".ImeSimulationReceiver"
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.IME_COMMIT_TEXT" />
+                <action android:name="dev.warp.mobile.IME_SET_COMPOSING_TEXT" />
+                <action android:name="dev.warp.mobile.IME_FINISH_COMPOSING_TEXT" />
+                <action android:name="dev.warp.mobile.IME_RESET" />
+                <action android:name="dev.warp.mobile.IME_TYPE_LATIN" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

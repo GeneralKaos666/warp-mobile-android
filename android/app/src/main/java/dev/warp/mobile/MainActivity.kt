@@ -1,5 +1,6 @@
 package dev.warp.mobile
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -10,7 +11,11 @@ import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -62,6 +67,11 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private var gridCellWPx: Float = 200.0f
     @Volatile
     private var gridCellHPx: Float = 60.0f
+
+    // M2-S10: input focus target for IME attachment. SurfaceView cannot
+    // receive `onCreateInputConnection`, so we overlay a 1x1 transparent
+    // focusable View on top.
+    private var warpInputView: WarpInputView? = null
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -160,12 +170,39 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // Start the FGS so PTY backend is reachable for M1+M2 integration.
         startForegroundService(Intent(this, WarpTerminalService::class.java))
 
-        // SurfaceView for Vulkan rendering (M2-S04).
+        // M2-S10: composite layout = SurfaceView (rendering, full screen)
+        // + WarpInputView overlay (1x1, transparent, focusable in touch mode)
+        // for IME attachment. SurfaceView's surface is on a separate Z-layer
+        // and the framework's IME-routing assumes the focused View also owns
+        // the visible content, so we host an invisible focusable View on top.
+        val frame = FrameLayout(this)
         val surfaceView = SurfaceView(this)
         surfaceView.holder.addCallback(this)
-        setContentView(surfaceView)
+        frame.addView(
+            surfaceView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        warpInputView = WarpInputView(this).apply {
+            // 1x1 px in the top-left corner; alpha 0 so it doesn't obscure
+            // anything but the framework still considers it visible (alpha
+            // 0 on Android 5+ does not skip layout/measurement).
+            alpha = 0f
+        }
+        frame.addView(
+            warpInputView,
+            FrameLayout.LayoutParams(1, 1)
+        )
+        setContentView(frame)
+        warpInputView!!.requestFocus()
+        // M2-S10: publish the input view to companion object so the
+        // ImeSimulationReceiver can route driver broadcasts through the
+        // real WarpInputConnection.
+        activeWarpInputView = warpInputView
 
-        Log.i(TAG, "MainActivity ready ping=${NativeBridge.ping()}")
+        Log.i(TAG, "MainActivity ready ping=${NativeBridge.ping()} input_focus=${warpInputView!!.isFocused}")
 
         // M2-S08: optional grid mode via launch intent extras. Driver uses
         //   am start -n dev.warp.mobile/.MainActivity \
@@ -212,12 +249,40 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             gridCellHPx = cellH
             gridMode = true
         }
+
+        // M2-S10: optional auto-show IME on launch. Driver uses
+        //   am start --ez ime_mode true
+        // to request the soft keyboard popup so logcat captures
+        // setComposingText/commitText events end-to-end.
+        if (intent.getBooleanExtra("ime_mode", false)) {
+            // Wait for the View to be attached to the window before showing
+            // the soft keyboard (otherwise InputMethodManager.showSoftInput
+            // returns false silently). post() runs after layout pass.
+            warpInputView?.post {
+                warpInputView?.requestFocus()
+                val imm =
+                    getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                // SHOW_IMPLICIT is preferred over deprecated SHOW_FORCED on
+                // API 30+; we always have a focused View at this point.
+                val shown = imm?.showSoftInput(warpInputView, InputMethodManager.SHOW_IMPLICIT) ?: false
+                Log.i(
+                    TAG,
+                    "ime_mode requested: showSoftInput shown=$shown focus=${warpInputView?.isFocused} ime_visible_post_call=${imm?.isAcceptingText}"
+                )
+            }
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         renderActive = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
+        // M2-S10: clear input-view companion-object pointer; ImeSimulation-
+        // Receiver will fall back to direct JNI if a stray broadcast arrives
+        // post-destroy.
+        if (activeWarpInputView === warpInputView) {
+            activeWarpInputView = null
+        }
     }
 
     // ── SurfaceHolder.Callback ───────────────────────────────────────────────
@@ -315,5 +380,17 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     companion object {
         private const val TAG = "WarpRender"
+
+        /**
+         * M2-S10: the currently-foregrounded MainActivity's WarpInputView.
+         * Set in `onCreate` (after the View is built) and cleared in
+         * `onDestroy`. Read by [ImeSimulationReceiver] to forward driver
+         * IME-event broadcasts through the real `WarpInputConnection` code
+         * path. Volatile because reader and writer are on different threads
+         * (broadcast receiver vs UI thread on cold start).
+         */
+        @Volatile
+        var activeWarpInputView: WarpInputView? = null
+            private set
     }
 }

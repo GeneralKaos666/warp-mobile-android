@@ -4,6 +4,11 @@ pub mod pty;
 #[cfg(target_os = "android")]
 mod font_render;
 
+// M2-S10 IME state machine. Pure Rust + atomics; no Vulkan / NDK deps so we
+// build it on host targets too (allows `cargo test -p warp-mobile-android-host`
+// to exercise the state-machine tests without cross-compilation).
+pub mod ime;
+
 #[cfg(target_os = "android")]
 mod static_grid;
 
@@ -504,6 +509,111 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderStaticGridStats(
 
 // On non-Android Unix targets (host-side cargo test) the Vulkan symbols are
 // gated out — JNI bindings are only meaningful on Android.
+
+// ── M2-S10: IME composing-text JNI bindings ─────────────────────────────────
+//
+// Drives `crates/android-host/src/ime.rs::global_ime()` (which mirrors the
+// canonical state machine in `warp-src/crates/warpui/src/platform/android/
+// ime.rs` per M2-S10 AC#1). Java side is `WarpInputView.WarpInputConnection`
+// in `android/app/src/main/java/dev/warp/mobile/WarpInputView.kt`.
+//
+// JNI call thread: the View's UI thread (per Android InputConnection contract).
+// All three event entry points are guarded by a process-wide `Mutex` inside
+// `ime::global_ime()` so the driver-side `imeStats` query (potentially on a
+// different thread) is serialized against UI-thread updates.
+
+/// M2-S10: Java `WarpInputView.WarpInputConnection.commitText` → Rust state.
+///
+/// `text` may be empty (some IMEs send empty commits as no-ops); the state
+/// machine handles that internally without emitting LatinCommit events for
+/// empty Latin commits.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeCommitText(
+    mut env: JNIEnv,
+    _class: JClass,
+    text: JString,
+    new_cursor_position: jint,
+) {
+    init_logger();
+    let text_str: String = match env.get_string(&text) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(target: "WarpIme", "imeCommitText: get_string failed: {:?}", e);
+            return;
+        }
+    };
+    ime::commit_text(&text_str, new_cursor_position as i32);
+}
+
+/// M2-S10: Java `WarpInputView.WarpInputConnection.setComposingText` → Rust.
+///
+/// Empty `text` while a region is active is treated as a finish (clears the
+/// region without inserting); empty + no active region is a no-op.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeSetComposingText(
+    mut env: JNIEnv,
+    _class: JClass,
+    text: JString,
+    new_cursor_position: jint,
+) {
+    init_logger();
+    let text_str: String = match env.get_string(&text) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(target: "WarpIme", "imeSetComposingText: get_string failed: {:?}", e);
+            return;
+        }
+    };
+    ime::set_composing_text(&text_str, new_cursor_position as i32);
+}
+
+/// M2-S10: Java `WarpInputView.WarpInputConnection.finishComposingText` → Rust.
+///
+/// If the composing region is empty (Gboard known issue: spurious empty
+/// finishComposingText between setComposingText and commitText), emits an
+/// `EmptyFinish` marker rather than double-committing.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeFinishComposingText(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    init_logger();
+    ime::finish_composing_text();
+}
+
+/// M2-S10: returns the current IME stats as a comma-separated string. Driver
+/// queries this between sub-tests to read counters without parsing logcat.
+///
+/// Schema:
+///   `commit_calls=N,set_composing_calls=N,finish_calls=N,events=N,
+///    latin=N,composing_update=N,composing_commit=N,composing_finish=N,
+///    empty_finish=N,is_composing=B,composing_text=S`
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeStats(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let s = ime::stats_string();
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
+/// M2-S10: reset the IME state (clear counters + composing region). Driver
+/// calls this between Latin and Pinyin sub-tests so counters are independent.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeReset(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    init_logger();
+    ime::reset();
+}
 
 // ── Logger ──────────────────────────────────────────────────────────────────
 

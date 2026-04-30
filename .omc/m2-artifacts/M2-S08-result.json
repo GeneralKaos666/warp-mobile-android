@@ -11,20 +11,20 @@
     "text_per_cell": "Hello, World",
     "glyphs_per_frame": 11000,
     "atlas_glyphs": 9,
-    "init_dt_ms": 108
+    "init_dt_ms": 161
   },
-  "frames_observed": 4224,
+  "frames_observed": 4202,
   "first_frame_num": 1,
-  "last_frame_num": 4224,
-  "first_ts_ms": 124242130,
-  "last_ts_ms": 124277263,
-  "attach_ts_ms": 124241961,
+  "last_frame_num": 4202,
+  "first_ts_ms": 126842296,
+  "last_ts_ms": 126877245,
+  "attach_ts_ms": 126842083,
   "detach_ts_ms": null,
   "frame_interval_ms": {
     "p50": 8,
     "p95": 9,
     "p99": 10,
-    "count": 4223
+    "count": 4201
   },
   "peak_fps_in_1s_window": 122,
   "validation_layer": {
@@ -35,7 +35,7 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 20:47:29.497 D/warp-android-host( 5061): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11137.bin for reading (it may not exist yet)"
+        "line": "04-30 21:30:49.618 D/warp-android-host( 4192): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11145.bin for reading (it may not exist yet)"
       }
     ]
   },
