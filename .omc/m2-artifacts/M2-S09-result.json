@@ -3,15 +3,15 @@
   "device_serial": "R5CX10VFFBA",
   "cycles": 100,
   "expected_pairs": 200,
-  "pair_count": 93,
+  "pair_count": 63,
   "pair_count_within_tolerance": false,
   "pair_tolerance": 2,
-  "unmatched_destroyed_events": 1,
+  "unmatched_destroyed_events": 0,
   "dropped_pid_boundary_pairs": 0,
-  "pid_transitions_observed": 0,
+  "pid_transitions_observed": 1,
   "min_samples_required": 60,
   "sample_size_ok": true,
-  "elapsed_seconds": 261,
+  "elapsed_seconds": 262,
   "grid": {
     "rows": 20,
     "cols": 50,
@@ -21,14 +21,14 @@
     "text_per_cell": "Hello, World"
   },
   "swapchain_recovery_ms": {
-    "p50": 144,
-    "p95": 152,
-    "p99": 159,
-    "min": 131,
-    "max": 179,
-    "count": 93
+    "p50": 143,
+    "p95": 155,
+    "p99": 163,
+    "min": 132,
+    "max": 170,
+    "count": 63
   },
-  "max_black_frame_ms": 179,
+  "max_black_frame_ms": 170,
   "outliers_over_p95_ms": [],
   "outliers_over_max_ms": [],
   "validation_layer": {
@@ -39,83 +39,83 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 23:04:08.103 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:24.649 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:08.161 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:24.710 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:09.398 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:25.927 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:09.443 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:25.972 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:10.684 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:27.214 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:10.732 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:27.258 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:11.967 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:28.498 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:12.005 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:28.552 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:13.311 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:29.790 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:13.351 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:29.838 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:14.631 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:31.092 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:14.680 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:31.138 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:15.929 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:32.378 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:15.975 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:32.424 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:17.246 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:33.693 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:17.297 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:33.743 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:18.563 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:35.010 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:18.599 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:35.056 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:19.871 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for writing"
+        "line": "05-01 00:59:36.326 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 23:04:19.922 D/warp-android-host( 8876): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11162.bin for reading (it may not exist yet)"
+        "line": "05-01 00:59:36.362 D/warp-android-host(11873): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11183.bin for reading (it may not exist yet)"
       }
     ]
   },
