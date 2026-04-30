@@ -32,13 +32,21 @@ class PtyManager {
         return NativeBridge.ptyWrite(ptr, data)
     }
 
-    // Fix #1: read is NOT @Synchronized — libc::read blocks and holding the
-    // monitor while blocked would deadlock kill()/killAll() on the same monitor.
-    // The fd is per-session; concurrent read+kill is safe because close(fd)
-    // causes read to return EBADF immediately.
+    // readDirect is NOT @Synchronized — blocking libc::read must not hold the
+    // class monitor. We increment Arc refcount (ptyAcquire) while holding the
+    // lock, then release the lock before calling ptyRead. ptyRelease in finally
+    // decrements the Arc so the session can be freed after kill.
     fun readDirect(cmdId: String, maxBytes: Int): ByteArray? {
-        val ptr = synchronized(this) { sessions[cmdId] } ?: return null
-        return NativeBridge.ptyRead(ptr, maxBytes)
+        val ptr = synchronized(this) {
+            val p = sessions[cmdId] ?: return null
+            NativeBridge.ptyAcquire(p)
+            p
+        }
+        return try {
+            NativeBridge.ptyRead(ptr, maxBytes)
+        } finally {
+            NativeBridge.ptyRelease(ptr)
+        }
     }
 
     @Synchronized

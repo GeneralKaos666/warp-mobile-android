@@ -4,6 +4,7 @@ pub mod pty;
 use jni::objects::{JByteArray, JClass, JObjectArray, JString};
 use jni::sys::{jbyteArray, jint, jlong, jshort, jstring};
 use jni::JNIEnv;
+use std::sync::Arc;
 
 #[allow(non_snake_case)]
 #[no_mangle]
@@ -67,7 +68,8 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
 
     match pty::spawn_pty(&program_str, &args_refs, &env_refs) {
         Ok(session) => {
-            let ptr = Box::into_raw(Box::new(session)) as jlong;
+            // Arc refcount=1 owned by Java's PtyManager map
+            let ptr = Arc::into_raw(Arc::new(session)) as jlong;
             log::info!(target: "android-host", "ptySpawn ok ptr={}", ptr);
             ptr
         }
@@ -76,6 +78,31 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptySpawn(
             0
         }
     }
+}
+
+/// Increment Arc refcount. Called under PtyManager map lock before ptyRead.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyAcquire(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) -> jlong {
+    if ptr == 0 { return 0; }
+    unsafe { Arc::increment_strong_count(ptr as *const pty::PtySession) };
+    ptr
+}
+
+/// Decrement Arc refcount. Called in finally after ptyRead completes.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyRelease(
+    _env: JNIEnv,
+    _class: JClass,
+    ptr: jlong,
+) {
+    if ptr == 0 { return; }
+    unsafe { Arc::decrement_strong_count(ptr as *const pty::PtySession) };
 }
 
 #[allow(non_snake_case)]
@@ -89,6 +116,7 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyRead(
     if ptr == 0 {
         return std::ptr::null_mut();
     }
+    // Safety: caller holds an Arc ref (via ptyAcquire) for the duration of this call
     let session = unsafe { &*(ptr as *const pty::PtySession) };
     let cap = max_bytes.max(0) as usize;
     let mut buf = vec![0u8; cap];
@@ -155,8 +183,12 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyKill(
     if ptr == 0 {
         return;
     }
-    let session = unsafe { Box::from_raw(ptr as *mut pty::PtySession) };
+    let session = unsafe { &*(ptr as *const pty::PtySession) };
+    // Close fd eagerly so concurrent reads return EBADF immediately
+    session.kill_eager();
     session.kill().ok();
+    // Decrement the Arc refcount held by the Java map (spawned with Arc::into_raw)
+    unsafe { Arc::decrement_strong_count(ptr as *const pty::PtySession) };
 }
 
 // ── Logger ──────────────────────────────────────────────────────────────────

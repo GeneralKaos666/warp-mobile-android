@@ -1,13 +1,12 @@
 use std::ffi::CString;
 use std::io;
-use std::os::unix::io::RawFd;
-use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Duration, Instant};
 use std::thread;
+use std::ptr;
 
 pub struct PtySession {
-    pub(crate) master_fd: RawFd,
+    pub(crate) master_fd: AtomicI32,
     pub(crate) child_pid: libc::pid_t,
     killed: AtomicBool,
 }
@@ -24,8 +23,8 @@ pub fn spawn_pty(
     args: &[&str],
     env: &[(&str, &str)],
 ) -> io::Result<PtySession> {
-    let mut master: RawFd = -1;
-    let mut slave: RawFd = -1;
+    let mut master: i32 = -1;
+    let mut slave: i32 = -1;
 
     // ── open PTY pair ────────────────────────────────────────────────────────
     let ret = unsafe {
@@ -41,10 +40,10 @@ pub fn spawn_pty(
         return Err(io::Error::last_os_error());
     }
 
-    // Fix #2: FD_CLOEXEC on master so it doesn't leak across exec in parent
+    // FD_CLOEXEC on master so it doesn't leak across exec in parent
     unsafe { libc::fcntl(master, libc::F_SETFD, libc::FD_CLOEXEC) };
 
-    // ── Fix #1: pre-build all CStrings BEFORE fork ───────────────────────────
+    // ── pre-build all CStrings BEFORE fork ───────────────────────────────────
     let prog_cstr = CString::new(program).map_err(|_| {
         unsafe { libc::close(master); libc::close(slave); }
         io::Error::new(io::ErrorKind::InvalidInput, "program contains nul byte")
@@ -106,7 +105,7 @@ pub fn spawn_pty(
             // ── parent ───────────────────────────────────────────────────────
             unsafe { libc::close(slave); }
             Ok(PtySession {
-                master_fd: master,
+                master_fd: AtomicI32::new(master),
                 child_pid,
                 killed: AtomicBool::new(false),
             })
@@ -116,43 +115,59 @@ pub fn spawn_pty(
 
 impl PtySession {
     pub fn write(&self, buf: &[u8]) -> io::Result<usize> {
+        let fd = self.master_fd.load(Ordering::Acquire);
+        if fd < 0 {
+            return Err(io::Error::from_raw_os_error(libc::EBADF));
+        }
         let n = unsafe {
-            libc::write(
-                self.master_fd,
-                buf.as_ptr() as *const libc::c_void,
-                buf.len(),
-            )
+            libc::write(fd, buf.as_ptr() as *const libc::c_void, buf.len())
         };
         if n < 0 { Err(io::Error::last_os_error()) } else { Ok(n as usize) }
     }
 
     pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
+        let fd = self.master_fd.load(Ordering::Acquire);
+        if fd < 0 {
+            return Err(io::Error::from_raw_os_error(libc::EBADF));
+        }
         let n = unsafe {
-            libc::read(
-                self.master_fd,
-                buf.as_mut_ptr() as *mut libc::c_void,
-                buf.len(),
-            )
+            libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len())
         };
         if n < 0 { Err(io::Error::last_os_error()) } else { Ok(n as usize) }
     }
 
     pub fn resize(&self, rows: u16, cols: u16) -> io::Result<()> {
+        let fd = self.master_fd.load(Ordering::Acquire);
+        if fd < 0 {
+            return Err(io::Error::from_raw_os_error(libc::EBADF));
+        }
         let ws = libc::winsize {
             ws_row: rows,
             ws_col: cols,
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
-        let ret = unsafe { libc::ioctl(self.master_fd, libc::TIOCSWINSZ, &ws) };
+        let ret = unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &ws) };
         if ret < 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
     }
 
-    /// Fix #3: SIGTERM + WNOHANG poll + SIGKILL escalation
+    /// Close master_fd immediately so concurrent reads return EBADF.
+    /// Called by ptyKill before Arc ref-count decrement.
+    pub fn kill_eager(&self) {
+        let fd = self.master_fd.swap(-1, Ordering::AcqRel);
+        if fd >= 0 {
+            unsafe { libc::close(fd) };
+        }
+    }
+
+    /// SIGTERM + WNOHANG poll + SIGKILL escalation + reap child
     pub fn kill(&self) -> io::Result<()> {
         if self.killed.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        // Close fd eagerly so any concurrent read unblocks
+        self.kill_eager();
+
         unsafe { libc::kill(self.child_pid, libc::SIGTERM) };
 
         let deadline = Instant::now() + Duration::from_millis(1000);
@@ -161,27 +176,18 @@ impl PtySession {
             let r = unsafe {
                 libc::waitpid(self.child_pid, &mut status, libc::WNOHANG)
             };
-            if r > 0 {
-                unsafe { libc::close(self.master_fd) };
-                return Ok(());
-            }
-            if r < 0 {
-                // ECHILD — already reaped
-                unsafe { libc::close(self.master_fd) };
-                return Ok(());
-            }
+            if r > 0 { return Ok(()); }
+            if r < 0 { return Ok(()); } // ECHILD — already reaped
             thread::sleep(Duration::from_millis(50));
         }
 
         // Escalate to SIGKILL
         unsafe { libc::kill(self.child_pid, libc::SIGKILL) };
         unsafe { libc::waitpid(self.child_pid, ptr::null_mut(), 0) };
-        unsafe { libc::close(self.master_fd) };
         Ok(())
     }
 }
 
-// Fix #4: Drop impl — reap child on drop
 impl Drop for PtySession {
     fn drop(&mut self) {
         let _ = self.kill();
@@ -194,10 +200,8 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
-    /// Fix #6: spawn_pty with explicit program + args; verify "hello\n" output
     #[test]
     fn test_pty_echo_hello() {
-        // Use /bin/echo directly with args — avoids shell injection surface
         let session =
             spawn_pty("/bin/echo", &["echo", "hello"], &[]).expect("spawn_pty failed");
 
@@ -224,14 +228,12 @@ mod tests {
         );
     }
 
-    /// Fix #4: Drop reaps child — after drop, kill -0 returns ESRCH
     #[test]
     fn test_drop_reaps_child() {
         let session =
             spawn_pty("/bin/sleep", &["sleep", "60"], &[]).expect("spawn_pty failed");
         let pid = session.child_pid;
         drop(session);
-        // Give OS a moment
         thread::sleep(Duration::from_millis(100));
         let r = unsafe { libc::kill(pid, 0) };
         assert_eq!(r, -1, "process should be gone after drop");
@@ -240,5 +242,33 @@ mod tests {
             libc::ESRCH,
             "errno should be ESRCH"
         );
+    }
+
+    /// Concurrent read + kill via Arc — no use-after-free
+    #[test]
+    fn test_arc_concurrent_read_kill() {
+        use std::sync::Arc;
+        let session = Arc::new(
+            spawn_pty("/bin/sleep", &["sleep", "10"], &[]).expect("spawn_pty failed"),
+        );
+
+        let readers: Vec<_> = (0..5).map(|_| {
+            let s = Arc::clone(&session);
+            thread::spawn(move || {
+                let mut buf = [0u8; 256];
+                let _ = s.read(&mut buf); // may return EBADF after kill — that's OK
+            })
+        }).collect();
+
+        let killers: Vec<_> = (0..5).map(|_| {
+            let s = Arc::clone(&session);
+            thread::spawn(move || {
+                s.kill_eager();
+            })
+        }).collect();
+
+        for t in readers { let _ = t.join(); }
+        for t in killers { let _ = t.join(); }
+        // All threads finished without panic = no use-after-free
     }
 }

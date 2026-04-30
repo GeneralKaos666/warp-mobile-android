@@ -2,18 +2,16 @@
 <!--
   Debug overlay: removes PTY_CONTROL permission from PtyBroadcastReceiver
   so `adb shell am broadcast` can reach it without the signature check.
-  This file is ONLY merged into debugBuilds; release builds use main manifest only.
+  This file is ONLY merged into debug builds; release builds use main manifest only.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+        <!-- tools:remove properly strips android:permission from merged debug manifest -->
         <receiver
             android:name=".PtyBroadcastReceiver"
-            android:exported="true"
-            android:permission=""
-            tools:replace="android:permission">
-        </receiver>
+            tools:remove="android:permission" />
         <!-- Export service in debug so `adb shell am start-foreground-service` works -->
         <service
             android:name=".WarpTerminalService"

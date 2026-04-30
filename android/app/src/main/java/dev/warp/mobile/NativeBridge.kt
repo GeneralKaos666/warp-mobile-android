@@ -8,6 +8,8 @@ object NativeBridge {
     external fun ping(): String
 
     external fun ptySpawn(program: String, args: Array<String>, envFlat: Array<String>): Long
+    external fun ptyAcquire(ptr: Long): Long
+    external fun ptyRelease(ptr: Long)
     external fun ptyRead(ptr: Long, maxBytes: Int): ByteArray?
     external fun ptyWrite(ptr: Long, data: ByteArray): Int
     external fun ptyResize(ptr: Long, rows: Short, cols: Short): Int

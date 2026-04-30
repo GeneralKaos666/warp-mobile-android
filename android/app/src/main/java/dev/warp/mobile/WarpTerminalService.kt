@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class WarpTerminalService : Service() {
@@ -160,7 +161,7 @@ class WarpTerminalService : Service() {
         readJobs.remove(cmdId)?.cancel()
         val job = scope.launch {
             val buf = ByteArray(4096)
-            while (true) {
+            while (isActive) {
                 // Fix #1: use readDirect (non-locking) to avoid deadlock with kill()
                 val chunk = ptyManager.readDirect(cmdId, buf.size) ?: break
                 if (chunk.isEmpty()) {
