@@ -119,8 +119,8 @@
     {
       "id": "M2-S07",
       "title": "FontDB 15-method cosmic-text + Android system fonts (M2a-font sub-gate)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src 70e472c + main 0bbace1. M2a-font sub-gate (per Plan Amendment 2) CLEARED. 15 FontDB methods implemented (only fallback_fonts returns Vec::new — cosmic-text Shaping::Advanced auto-resolves at shape time). Discovery via ASystemFontIterator NDK API 29+ (primary) + /system/fonts/ scan (fallback). On Galaxy S24 Ultra R5CX10VFFBA (Adreno 750, API 36): 358 fonts loaded across 197 families; CJK fallback found Samsung One UI's renamed 'SEC CJK SC' (= Noto Sans CJK SC, 16 SEC CJK / Noto Serif CJK families discovered). 'Hello, 世界' rendered with 9 glyphs / 0 missing / 11,138 composed pixels; visually inspected no tofu (codex pulled PNG and confirmed). Validation layer clean (W=0/E=0). 4 honest pivots: (1) Samsung CJK rename (fallback regex with Hanunoo/Myanmar guards); (2) adb shell am broadcast drops codepoints > U+007F via shell, used text_b64 base64 extra; (3) cosmic-text other.rs has empty fallback tables on Android — emulated unix.rs::script_fallback via per-script Family::Name spans (file upstream PR for M3); (4) cross-workspace duplication font_render.rs in main mirrors AndroidFontDB (M3 unification). Codex verified: cargo ndk check warpui 0 errors / 32 warnings (1 less than S06 baseline); cargo ndk check + cargo check warp-mobile-android-host PASS; PNG visually inspected. 6 non-blocking nits for S08: fallback_fonts empty acceptable; font_id_for_internal:467 read-then-write race tighten before S08; SubpixelMask/Color smoke test; CJK span hack file upstream; cross-workspace dup M3 unification.",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/font.rs implements all 15 FontDB methods identified in M0-platform-trait-delta.md",
