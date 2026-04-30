@@ -109,27 +109,30 @@ User delegated via 「全自動」. Document: `.omc/m0-artifacts/M0-tension3-dec
 
 ---
 
-## 8b. M1 Status (REAL, as of 2026-04-29 ~17:40 UTC) — **IN FLIGHT** (4/10 stories PASS)
+## 8b. M1 Status (REAL, as of 2026-04-30 ~04:25 UTC) — **CLOSE-OUT** (9/10 stories PASS, S10 Codex review in flight)
 
-Per `.omc/prd.json` (10 stories M1-S01..S10) — managed by ralph loop:
+Per `.omc/prd.json` (10 stories M1-S01..S10):
 
 | Story | Status | Verifier | Notes |
 |---|---|---|---|
 | S01 Plan Amendment 3 minSdk 31 | ✅ PASS | Codex round-1 | commit `2ccc0f7` |
 | S02 android-activity feature fix | ✅ PASS | Codex round-1 | commit `afc74ec` on warp-src fork ImL1s/warp:warp-mobile/m0-facade |
 | S03 crates/android-host skeleton | ✅ PASS | Codex round-2 | commits `10989b6` + `5b1424e` (README addendum after AC#5 REVISE) |
-| S04 PTY backend (openpty/setsid) | ✅ PASS | Codex round-3 | commits `ef0b06a` → `fb97d15` → `d9bf0d4`. Round-1 REJECT (6 safety bugs), round-2 REVISE (putenv+execvp+E0597), round-3 PASS. cargo test 2/2 PASS. |
-| S05 Service+FGS skeleton | 🟡 fix `f424be2` | round-1 REVISE → fix → device verify pending in Task #32 |
-| S06 PTY reattach < 1s | 🟡 driver fixed | drivers round-3 REVISE → fix `a91e6b8` → round-4 review running. Device run pending #32. |
-| S07 PTY resize | 🟡 driver | passed structural review, device run pending #32 |
-| S08 FGS clean kill | 🟡 driver fixed | UID format + grep -c bug fixed `a91e6b8` |
-| S09 30-min stress | ⏳ pending #34 dispatch (30-min wall clock — separate task) |
-| S10 close-out doc | 🟡 skeleton `a91e6b8` | verdict TBD |
+| S04 PTY backend (openpty/setsid) | ✅ PASS | Codex round-3 | commits `ef0b06a` → `fb97d15` → `d9bf0d4`. Round-1 REJECT (6 safety bugs) → round-2 REVISE → round-3 PASS. cargo test 3/3 PASS (incl test_arc_concurrent_read_kill). |
+| S05 Service+FGS skeleton | ✅ PASS | Codex + device | round-1 REVISE → fix `f424be2` → PTY plumbing chain Task#28→#33→#35 → device run on S24 Ultra: isForeground=true, foregroundId=1, types=SPECIAL_USE, native lib loaded. Evidence `M1-S05-evidence-v2.md` @ `1b737f3`. |
+| S06 PTY reattach < 1s | ✅ PASS | device | delta_ms=36, PTY survived 5 device rotations, sleep+echo round-trip exact. Evidence `M1-S06-result.json` @ `1b737f3`. |
+| S07 PTY resize | ✅ PASS | device | observed="24 80" exact match. Evidence `M1-S07-result.json` @ `1b737f3`. |
+| S08 FGS clean kill | ✅ PASS | device | pid_before=1, pid_after=0, orphans=0. Evidence `M1-S08-result.json` @ `1b737f3`. |
+| S09 30-min stress | ✅ PASS | device | PID 24008 constant 30-min, alive=1+notif=1 all 4 checkpoints, 0 warp-app anomalies, pwd response 4ms. Evidence `M1-S09-result.json` + `M1-stress-test.md` @ `81ec72a`. |
+| S10 close-out doc | 🟡 Codex review in flight | bg `be0wdtaua` | M1-go-no-go.md verdict §6 = **CONDITIONAL GO** (low-end device deferred to M2 per Plan Amendment 3). |
 
-Out-of-prd-but-essential:
-- **Task #28** PTY plumbing (PtyManager + BroadcastReceivers + Service): commits `9479316` + `a6f08ef`. Codex review identified 4 issues (lifecycle deadlock + cmd_id race + receiver security + output broadcast leak). Task #33 dispatched to worker-spike — work-in-progress (PtyManager.kt has uncommitted spawn-side kill before replace). Required for S06/S07/S08 device runs.
+**Latest main**: `53378d3`
 
-Real-device verification (Task #32 worker-env): in progress on S24 Ultra R5CX10VFFBA. Expected outputs at `.omc/m1-artifacts/M1-S0X-result.json` per story.
+**M1 PTY plumbing chain Task#28 → #33 → #35**: closed with Codex Task #35 PASS at 03-32-36-215Z. Final state: Arc<PtySession> + ptyAcquire/Release JNI + AtomicI32 master_fd + ANR-safe scope.launch + signature-permission receiver + tools:remove debug overlay.
+
+**Lead direct execution of Task #32**: when worker-env didn't respond to status ping for 15+ min, lead took over device runs on S24 Ultra (R5CX10VFFBA). 5 driver bug-fix iterations during runs (&& shell quoting, t_expected anchoring on PTY_WRITE log, end-anchored token regex, broadcast→FGS direct path, anomaly regex tightening). Worker-env later acknowledged stand-down; their local uncommitted changes were duplicates of commits already landed via lead.
+
+**Verdict path to full GO**: acquire Pixel 4a / Galaxy A52s and re-run S06/S07/S08/S09 on it before M2 close. Tracked as M2 carry-over #2.
 
 ---
 
