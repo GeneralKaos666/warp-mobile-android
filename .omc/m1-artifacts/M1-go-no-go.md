@@ -1,7 +1,7 @@
 # M1 Go/No-Go 整合報告
 
 **日期**：2026-04-30 (M1 milestone close-out)
-**主分支**：`main` @ `aa91462`
+**主分支**：`main` @ `7513445`
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` (Amendment 3 minSdk 31)
 **前置 milestone**：M0 close-out CONDITIONAL GO @ commit `24a2c1c`
 
@@ -90,9 +90,9 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 | Plan §6 M1 Acceptance Criterion | Story Mapping | Status |
 |---|---|---|
 | 1. Service with FGS, persistent notification, 30-min idle survival on flagship | S05 + S09 | S05 **PASS** (isForeground=true, FGS state confirmed); S09 **PASS** (PID constant 30-min, alive=1+notif=1 all checkpoints, pwd 4ms) |
-| 2. Activity destroy/recreate (rotation, minimize-2-min-restore) preserves running PTY session, re-attaches within 1s | S06 | **PASS** (delta_ms=36, 5 rotations) |
+| 2. Activity destroy/recreate (rotation, minimize-2-min-restore) preserves running PTY session, re-attaches within 1s | S06 | **PASS** (delta_ms=26 per `M1-S06-result.json:6`, 5 rotations) |
 | 3. PTY resize via TIOCSWINSZ reflects in shell stty size | S07 | **PASS** (observed "24 80" exact) |
-| 4. FGS notification persistent during session; adb shell am kill cleans up cleanly (no orphan PTY processes) | S08 | **PASS** (orphans=0) |
+| 4. FGS notification persistent during session; adb shell am force-stop cleans up cleanly (no orphan PTY processes) — see §6 deviation note re: am kill vs am force-stop | S08 | **PASS** (orphans=0 per `M1-S08-result.json:5`) |
 | 5. 30-min idle stress test on flagship + low-end (Pixel 4a or Galaxy A52) | S09 | Flagship **PASS** (PID constant 30-min, pwd 4ms, 0 warp-app anomalies); low-end **DEFERRED** to M2 (Pixel 4a / A52s acquisition — Plan Amendment 3 carry-over) |
 
 ---
@@ -100,8 +100,8 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 ## 5. M2 Carry-Overs
 
 1. **Acquire replacement low-end device** (Pixel 4a / Galaxy A52s API 31) and re-run M1-S06/S07/S08/S09 on it before M2 close (Plan Amendment 3 §3)
-3. **gradle copy task replacing jniLibs symlink** (currently absolute symlink to `target/aarch64-linux-android/debug/`, fragile on CI/clean-checkout — M2 ergonomics fix)
-4. **D1.5-hybrid M2 implementation** (M2 main work: warpui::platform::android backend + 4 hand-written areas — see Plan §6 M2)
+2. **gradle copy task replacing jniLibs symlink** (currently absolute symlink to `target/aarch64-linux-android/debug/`, fragile on CI/clean-checkout — M2 ergonomics fix)
+3. **D1.5-hybrid M2 implementation** (M2 main work: warpui::platform::android backend + 4 hand-written areas — see Plan §6 M2)
 5. **android-activity / winit M2 reorganization** (warpui/Cargo.toml explicit android-activity dep currently redundant per Codex S02 review; fold into D1.5-hybrid restructuring)
 6. **Notification customization** (current notification is generic "Warp terminal"; M2 should add session count, command preview, tap → MainActivity intent)
 7. **Clippy lint cleanup** (`cargo clippy -p warp-mobile-android-host --target aarch64-linux-android -- -D warnings` flags 7 style issues — uninlined format args, let_unit_value on init_logger result; non-blocking for M1 functional milestone, M2 should clean up before scope expansion)
@@ -123,7 +123,7 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 
 **Rationale for CONDITIONAL (not full) GO**: Acceptance criterion 5 is partially deferred — the original Plan §6 M1 spec required both flagship AND low-end device coverage. Plan Amendment 3 (commit `2ccc0f7`) raised minSdk 26→31 dropping the original S8/Mali-G71 baseline; the replacement low-end device (Pixel 4a / Galaxy A52s API 31) has not been acquired yet. All other M1 risk areas — L0 Android Host Service correctness, PTY plumbing safety (Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + signature-permission receiver), Activity recreate reattach <1s, TIOCSWINSZ resize, FGS clean kill, 30-min flagship idle survival — are empirically validated end-to-end on S24 Ultra. The CONDITIONAL is purely a device-matrix completeness gap, not a code-quality or architecture concern.
 
-**Path to full GO**: Acquire Pixel 4a or Galaxy A52s, re-run S06/S07/S08/S09 drivers on it before M2 close. Track as M2 carry-over #2.
+**Path to full GO**: Acquire Pixel 4a or Galaxy A52s, re-run S06/S07/S08/S09 drivers on it before M2 close. Track as M2 carry-over #1 (see §5).
 
 **Decision**: Proceed to M2 (warpui::platform::android backend). M1 milestone closes with all flagship-pathway risks retired.
 
@@ -171,40 +171,40 @@ This section maps each prd.json M1-S0[1-9] acceptance criterion to its supportin
 - AC8 dumpsys lists Service in foreground state → `M1-S05-evidence-v2.md` "isForeground=true foregroundId=1 types=0x40000000"
 
 ### M1-S06 (commit `1b737f3`)
-- AC1 Service holds PTY session (process-bound) → PtyManager.sessions Map persists across Activity destroy
-- AC2 Activity binds to Service via ServiceConnection on each onCreate → MainActivity uses NativeBridge.ping demo + Service init
-- AC3 spawn `sleep N && echo done`, rotate 5 times, `done` within 1s of fire → `M1-S06-result.json:8` delta_ms=26
-- AC4 Test driver script + artifact under .omc/m1-artifacts → `tools/scripts/test-pty-reattach.sh` + `M1-S06-result.json`
+- AC1 Service holds PTY session (process-bound) → `PtyManager.kt:7` `private val sessions = mutableMapOf<String, Long>()` survives Activity recreate (Service singleton-process)
+- AC2 Activity binds to Service via ServiceConnection on each onCreate → `MainActivity.kt` (NativeBridge.ping demo) + Service `companion init { System.loadLibrary }` at `WarpTerminalService.kt:23`
+- AC3 spawn `sleep N && echo done`, rotate 5 times, `done` within 1s of fire → `M1-S06-result.json:6` `"delta_ms": 26` (under 1000ms)
+- AC4 Test driver script + artifact under .omc/m1-artifacts → `tools/scripts/test-pty-reattach.sh` + `.omc/m1-artifacts/M1-S06-result.json`
 
 ### M1-S07 (commit `1b737f3`)
-- AC1 Java reads view dims and calls NativeBridge.ptyResize → `WarpTerminalService.handleResize` invokes `ptyManager.resize(rows, cols)`
-- AC2 Rust resize() calls libc::ioctl(fd, TIOCSWINSZ, &winsize) → `pty.rs:139-152`
-- AC3 stty size returns "24 80" after resize(24, 80) → `M1-S07-result.json:5` observed="24 80"
-- AC4 Artifact under .omc/m1-artifacts with logcat evidence → `M1-S07-result.json`
+- AC1 Java reads view dims and calls NativeBridge.ptyResize → `WarpTerminalService.kt:141-147` `handleResize` invokes `ptyManager.resize(cmdId, rows, cols)`
+- AC2 Rust resize() calls libc::ioctl(fd, TIOCSWINSZ, &winsize) → `crates/android-host/src/pty.rs:139-152`
+- AC3 stty size returns "24 80" after resize(24, 80) → `M1-S07-result.json:6` `"observed": "24 80"`
+- AC4 Artifact under .omc/m1-artifacts with logcat evidence → `.omc/m1-artifacts/M1-S07-result.json`
 
 ### M1-S08 (commit `1b737f3`)
-- AC1 Notification visible continuously during PTY session → `M1-S05-evidence-v2.md` `isForeground=true` (Samsung suppresses drawer)
-- AC2 Service.onDestroy → pty.kill() + remove notification → `WarpTerminalService.onDestroy:95-102` cancels serviceJob then ptyManager.killAll()
-- AC3 After kill: ps -A | grep dev.warp shows no orphan processes → `M1-S08-result.json:5` orphans=0. Note: test uses `am force-stop` not `am kill` per Plan AC text — rationale documented in §6 above.
-- AC4 Artifact logs before/after process listings → `M1-S08-result.json` + after_listing field
+- AC1 Notification visible continuously during PTY session → `.omc/m1-artifacts/M1-S05-evidence-v2.md` "isForeground=true" line + Samsung One UI drawer-suppression note
+- AC2 Service.onDestroy → pty.kill() + remove notification → `WarpTerminalService.kt:95-102` cancels `serviceJob` then `ptyManager.killAll()`
+- AC3 After kill: ps -A | grep dev.warp shows no orphan processes → `M1-S08-result.json:5` `"orphans": 0`. Note: test uses `am force-stop` not `am kill` per Plan AC text — rationale + empirical evidence (`am kill dev.warp.mobile` no-op against running FGS) documented in §6 above.
+- AC4 Artifact logs before/after process listings → `M1-S08-result.json:7` `"after_listing": "none"` + `pid_before:1, pid_after:0`
 
 ### M1-S09 (commit `81ec72a`)
-- AC1 Spawn bash PTY, idle 30 min on S24 Ultra → `M1-S09-result.json:7` duration_min=30
-- AC2 No crashes, no Service termination → `M1-S09-result.json` t30.alive=1, PID 24008 constant
-- AC3 No PhantomProcessKiller events on warp app → `M1-S09-result.json` warp_app_anomalies=0 across all checkpoints
-- AC4 Notification still present at t=30 → `M1-S09-result.json` t30.notification_visible=1 (isForeground=true)
-- AC5 PTY responsive: pwd in <500ms → `M1-S09-result.json` pwd_response_ms=4
-- AC6 Artifact M1-stress-test.md with raw logcat snippets at t=0/10/20/30 → `M1-stress-test.md` interval snapshots present
+- AC1 Spawn bash PTY, idle 30 min on S24 Ultra → `M1-S09-result.json:8` `"duration_min": 30`
+- AC2 No crashes, no Service termination → `M1-S09-result.json:13` t30 `"alive": 1`, PID 24008 constant per `M1-S09-result.json:21` `"pid_throughout": 24008`
+- AC3 No PhantomProcessKiller events on warp app → `M1-S09-result.json:13` t30 `"warp_app_anomalies": 0` across all 4 checkpoints (lines 9-13)
+- AC4 Notification still present at t=30 → `M1-S09-result.json:13` t30 `"notification_visible": 1` (mapped to isForeground=true via dumpsys activity services)
+- AC5 PTY responsive: pwd in <500ms → `M1-S09-result.json:14` `"pwd_response_ms": 4`
+- AC6 Artifact M1-stress-test.md with raw logcat snippets at t=0/10/20/30 → `.omc/m1-artifacts/M1-stress-test.md` "Interval Snapshots" section
 
 ### M1-S10 (this doc)
-- AC1 .omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories → THIS DOC
-- AC2 Each prd.json acceptance criterion has one-line citation → THIS §7 (per-criterion table above)
-- AC3 M1 verdict GO/CONDITIONAL GO/NO-GO with rationale → §6 above (CONDITIONAL GO)
-- AC4 Carry-overs for M2 listed → §5 (7 carry-overs)
-- AC5 Codex review dispatched + PASS verdict received → Codex round-1 REVISE at 2026-04-30T04:25:55Z (5 issues this revision addresses); round-2 review pending after this commit
+- AC1 .omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories → `M1-go-no-go.md` §1 ledger (10 rows, lines 14-23)
+- AC2 Each prd.json acceptance criterion has one-line citation → `M1-go-no-go.md` §7 (this section, ~50 ACs with file:line refs)
+- AC3 M1 verdict GO/CONDITIONAL GO/NO-GO with rationale → `M1-go-no-go.md` §6 (CONDITIONAL GO, lines 113-128)
+- AC4 Carry-overs for M2 listed → `M1-go-no-go.md` §5 (7 carry-overs at lines 102-108)
+- AC5 Codex review dispatched + PASS verdict received → Codex round-1 REVISE at 04-25-55-060Z → round-2 REVISE at 04-31-32-544Z → round-3 review pending after this commit
 
 ---
 
 *撰寫人：team-lead@warp-mobile-m1 (M0 close-out same governance)*
-*Closed at commit `aa91462` + this revision*
-*下一步：dispatch Codex round-2 review of M1-S10 close-out doc; on PASS mark prd.json M1-S10.passes:true and proceed to M2.*
+*Closed at commit `7513445` + this revision (round-2 fixes)*
+*下一步：dispatch Codex round-3 review of M1-S10 close-out doc; on PASS mark prd.json M1-S10.passes:true and proceed to M2.*

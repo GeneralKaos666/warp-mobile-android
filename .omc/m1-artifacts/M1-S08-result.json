@@ -1,4 +1,3 @@
-Starting service: Intent { act=dev.warp.mobile.PTY_SPAWN cmp=dev.warp.mobile/.WarpTerminalService (has extras) }
 {
   "device": "R5CX10VFFBA",
   "pid_before": 1,
