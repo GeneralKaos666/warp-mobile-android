@@ -137,8 +137,8 @@
     {
       "id": "M1-S09",
       "title": "30-min idle stress test on S24 Ultra flagship",
-      "passes": false,
-      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
+      "passes": true,
+      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — 30-min idle: PID 24008 constant throughout, alive=1 + isForeground=true at all 4 checkpoints (t=0/10/20/30), 0 warp-app anomalies (script's broad regex over-counted unrelated system Zygote kills for OTHER apps; manual app-filter returns 0), pwd response latency 4ms via device-side logcat epoch delta. Two script bugs discovered + documented as M2 carry-overs (macOS BSD date %3N incompatibility, anomaly regex too broad). Evidence: .omc/m1-artifacts/M1-S09-result.json + M1-stress-test.md @ commit pending.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Spawn `bash` PTY session, leave idle 30 minutes on S24 Ultra",

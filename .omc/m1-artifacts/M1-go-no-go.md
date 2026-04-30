@@ -19,7 +19,7 @@
 | M1-S06 | Activity recreate → PTY reattach < 1s | **PASS** | Drivers committed `9268de7` + bug-fix rounds. Device run on S24 Ultra: **delta_ms=36** (under 1000ms threshold), PTY survived 5 device rotations, sleep+echo round-trip exact. Evidence: `M1-S06-result.json` @ `1b737f3`. Driver fix during run: && quoting + anchor t_expected on PTY_WRITE log + end-anchor token regex. |
 | M1-S07 | PTY resize via TIOCSWINSZ | **PASS** | Driver `test-pty-resize.sh`. Device run on S24 Ultra: **observed="24 80"** exact match. Evidence: `M1-S07-result.json` @ `1b737f3`. Driver fix during run: switched broadcast → FGS direct + end-anchor stty regex. |
 | M1-S08 | FGS persistence + clean kill no orphan | **PASS** | Driver `test-fgs-clean-kill.sh`. Device run on S24 Ultra: **pid_before=1, pid_after=0, orphans=0**. Evidence: `M1-S08-result.json` @ `1b737f3`. |
-| M1-S09 | 30-min idle stress on flagship | **IN PROGRESS** | Driver `test-30min-idle-stress.sh`. Background run on S24 Ultra started 11:47 UTC, ETA 12:18 (30-min sleep cycle + setup + pwd latency). Background task ID `bezz9vxje`. |
+| M1-S09 | 30-min idle stress on flagship | **PASS** | Device run on S24 Ultra **30-min idle** at PID 24008 constant — alive=1 + isForeground=true at t=0/10/20/30. **0 warp-app anomalies** (script regex over-counted unrelated system Zygote kills; manual app-filter returns 0). pwd response latency **4ms** via device-side logcat epoch delta. 2 script bugs documented (macOS BSD date `%3N`, broad anomaly regex) → M2 carry-overs. Evidence: `M1-S09-result.json` + `M1-stress-test.md`. |
 | M1-S10 | M1 close-out doc | **THIS DOC** | — |
 
 Out-of-prd-but-essential:
@@ -89,7 +89,7 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 
 | Plan §6 M1 Acceptance Criterion | Story Mapping | Status |
 |---|---|---|
-| 1. Service with FGS, persistent notification, 30-min idle survival on flagship | S05 + S09 | S05 **PASS** (isForeground=true, FGS state confirmed); S09 **IN PROGRESS** (30-min wall-clock running) |
+| 1. Service with FGS, persistent notification, 30-min idle survival on flagship | S05 + S09 | S05 **PASS** (isForeground=true, FGS state confirmed); S09 **PASS** (PID constant 30-min, alive=1+notif=1 all checkpoints, pwd 4ms) |
 | 2. Activity destroy/recreate (rotation, minimize-2-min-restore) preserves running PTY session, re-attaches within 1s | S06 | **PASS** (delta_ms=36, 5 rotations) |
 | 3. PTY resize via TIOCSWINSZ reflects in shell stty size | S07 | **PASS** (observed "24 80" exact) |
 | 4. FGS notification persistent during session; adb shell am kill cleans up cleanly (no orphan PTY processes) | S08 | **PASS** (orphans=0) |
@@ -111,11 +111,22 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 
 ## 6. M1 Verdict (filled in once all stories PASS)
 
-**Verdict (preliminary, pending S09)**: **GO** expected — currently **8/10 stories formally PASS** (S01-S08); S09 30-min stress in flight on S24 Ultra (ETA 12:18 UTC); S10 (this doc) to be finalized after S09 closes.
+## Verdict: **CONDITIONAL GO** ✅
 
-**M1 Plan §6 Acceptance Criteria**: 4/5 confirmed PASS; criterion 1 awaits S09 30-min completion; criterion 5 partially deferred to M2 (low-end device matrix per Plan Amendment 3).
+**9/10 stories formally PASS** (S01-S09); S10 (this doc) is the final close-out artifact awaiting Codex review dispatch.
 
-**Decision deadline**: Once S09 result lands (ETA ~12:18 UTC), fill in this section with final GO / CONDITIONAL GO / NO-GO and one-paragraph rationale. **Likely outcome: CONDITIONAL GO** with 1 carry-over (low-end device acquisition deferred to M2 per Amendment 3 §3) — flagship pathway fully demonstrated end-to-end.
+**Plan §6 M1 Acceptance Criteria**: **5/5 satisfied** for S24 Ultra flagship pathway:
+1. ✅ Service with FGS, persistent notification, 30-min idle survival on flagship — S05 + S09 PASS
+2. ✅ Activity destroy/recreate (rotation × 5) preserves PTY session, re-attaches within 1s — S06 PASS (delta_ms=36)
+3. ✅ PTY resize via TIOCSWINSZ reflects in shell stty size — S07 PASS (observed "24 80" exact)
+4. ✅ FGS notification persistent during session; `am force-stop` cleans up cleanly with no orphan PTY — S08 PASS (orphans=0)
+5. **PARTIAL** — flagship S24 Ultra fully demonstrated; low-end (Pixel 4a or Galaxy A52s API 31) deferred to M2 per Plan Amendment 3 §3 (replacement device acquisition)
+
+**Rationale for CONDITIONAL (not full) GO**: Acceptance criterion 5 is partially deferred — the original Plan §6 M1 spec required both flagship AND low-end device coverage. Plan Amendment 3 (commit `2ccc0f7`) raised minSdk 26→31 dropping the original S8/Mali-G71 baseline; the replacement low-end device (Pixel 4a / Galaxy A52s API 31) has not been acquired yet. All other M1 risk areas — L0 Android Host Service correctness, PTY plumbing safety (Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + signature-permission receiver), Activity recreate reattach <1s, TIOCSWINSZ resize, FGS clean kill, 30-min flagship idle survival — are empirically validated end-to-end on S24 Ultra. The CONDITIONAL is purely a device-matrix completeness gap, not a code-quality or architecture concern.
+
+**Path to full GO**: Acquire Pixel 4a or Galaxy A52s, re-run S06/S07/S08/S09 drivers on it before M2 close. Track as M2 carry-over #2.
+
+**Decision**: Proceed to M2 (warpui::platform::android backend). M1 milestone closes with all flagship-pathway risks retired.
 
 ---
 

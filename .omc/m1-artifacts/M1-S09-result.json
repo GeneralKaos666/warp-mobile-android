@@ -1,0 +1,23 @@
+{
+  "device": "R5CX10VFFBA",
+  "device_model": "Galaxy S24 Ultra",
+  "android_version": "15",
+  "sdk": 36,
+  "git_commit": "f8a8eed",
+  "run_at": "2026-04-30T03:49:41Z",
+  "duration_min": 30,
+  "t0":  {"alive": 1, "notification_visible": 1, "system_anomalies_total": 0,  "warp_app_anomalies": 0},
+  "t10": {"alive": 1, "notification_visible": 1, "system_anomalies_total": 12, "warp_app_anomalies": 0},
+  "t20": {"alive": 1, "notification_visible": 1, "system_anomalies_total": 24, "warp_app_anomalies": 0},
+  "t30": {"alive": 1, "notification_visible": 1, "system_anomalies_total": 36, "warp_app_anomalies": 0},
+  "pwd_response_ms": 4,
+  "pwd_response_method": "device-side logcat epoch (PTY_WRITE → PtyOutput delta)",
+  "pid_throughout": 24008,
+  "pid_constant": true,
+  "pass": true,
+  "pass_method": "manual reconstruction — script crashed on macOS BSD `date +%s%3N` during pwd latency test; all 4 checkpoint snapshots completed successfully with alive=1 + isForeground=true; 0 warp-app anomalies (system_anomalies_total counts unrelated Zygote process kills, Samsung battery service crashes, etc. for OTHER apps); pwd reproduced manually with device-side timestamps post-script-crash showing 4ms response.",
+  "script_bug": "test-30min-idle-stress.sh:163 uses `date +%s%3N` which is GNU coreutils-specific. macOS BSD date does not support %3N (returns literal 'N'). M2 carry-over: replace with `python3 -c 'import time; print(int(time.time()*1000))'` or pure-shell alternative. Note: t30 snapshot DID complete successfully at 12:19:56 before the date bug fired.",
+  "anomaly_filter_bug": "test-30min-idle-stress.sh:101 grep -cE 'PhantomProcess|signal [0-9]+|FATAL|crash' counts ALL device-wide events. Should filter to dev.warp.mobile / u0a1073. M2 carry-over: tighten regex to `grep -cE 'PhantomProcess.*dev\\.warp|signal [0-9]+.*dev\\.warp|FATAL.*dev\\.warp|crash.*dev\\.warp' || true`. Verified manually: zero warp-app anomalies across 30 min.",
+  "script_version": "1.0",
+  "artifact_path": ".omc/m1-artifacts/M1-stress-test.md"
+}
