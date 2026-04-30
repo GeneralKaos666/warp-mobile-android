@@ -58,3 +58,29 @@
 - S21+ Adreno 660 Android 15 SDK 35 (secondary, retained from M0 matrix)
 - S8 Mali-G71 Android 9 SDK 28 — NOW BELOW MIN MATRIX per Amendment 3, will be retired from M1 testing
 - TODO: acquire Pixel 4a (Adreno 619 API 30) or Galaxy A52 (Adreno 618 API 31) for low-end coverage
+
+## Iteration 7 (2026-04-30 ~03:20 UTC) — post compact resume
+
+### Codex Task #33 verdict (artifact 17-46-20-350Z)
+- CODEX_REVISE — 3 issues, dispatched as Task #35 to worker-spike:
+  1. **FAIL** lifetime: `Box::from_raw` in ptyKill races with `&*ptr` in ptyRead → use-after-free
+  2. **PARTIAL** cmd_id race: `while (true)` ignores coroutine cancellation
+  3. **PARTIAL** debug overlay: `android:permission=""` merges to empty, not removed; need `tools:remove`
+- Fix design: Arc<PtySession> + ptyAcquire/Release JNI + AtomicI32 fd + while(isActive) + tools:remove
+
+### Worker-env Task #32 in flight (parallel)
+- Pivoted PtyBroadcastReceiver from receiver-broadcast to direct FGS path because Task #33 added signature permission to receiver
+- WarpTerminalService: scope.launch dispatch (ANR avoidance on blocking JNI) — committed e1b056d
+- debug/AndroidManifest.xml: service exported=true so adb tests can run `am start-foreground-service` direct
+- All test scripts (S06/S07/S08) updated to use FGS direct path instead of PtyBroadcastReceiver
+
+### State
+- main @ e1b056d
+- prd.json: S01-S04 PASS; S05 verifiedBy commit f424be2; S10 draft skeleton; S06-S09 structuralPassNote (drivers PASS, device runs pending)
+- Active workers: 7 (3× worker-spike on Task #35, 4× worker-env on Task #32 + driver pivot)
+- Tasks: #31 done, #32 in_progress, #33 done, #34 blocked by #35, #35 dispatched
+
+### Lessons learned (iteration 7)
+- Codex caught real production-grade lifetime bug (Box::from_raw UAF) that would have crashed under concurrent kill+read in Activity recreate flow
+- Worker-env auto-pivoted test path when receiver became signature-protected — good autonomous decision but should have notified team-lead before committing
+- "PostToolUse:Bash hook: Command failed" can fire even on success; ignore unless command output actually shows failure (re-confirmed pattern from M0)
