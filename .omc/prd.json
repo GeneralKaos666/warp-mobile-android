@@ -184,7 +184,7 @@
       "id": "M2-S11",
       "title": "Touch input + gesture mapping",
       "passes": true,
-      "verifiedBy": "codex gpt-5.5 xhigh 2026-04-30 — round-3 audit (lead-dispatched) found 4 OPEN: #2 driver false-pass, #3 pre-detector feed missing, #4 ACTION_CANCEL no emit, #5 sign convention inconsistent. round-4 (executor sonnet 2026-05-01) fixed all 4: TouchCancel event + JNI + NativeBridge + View emit; VelocityTracker fed BEFORE gestureDetector; split-window logcat gate; sign convention unified (positive vy = finger down). Device run R5CX10VFFBA: 5/5 sub-tests PASS (1+2+3+B+C). cargo test 18/18 PASS (+1 cancel_after_down_emits_touch_cancel). Regression S05+S08+S10 PASS. Pending codex round-4 PASS verdict.",
+      "verifiedBy": "codex gpt-5.5 xhigh 2026-05-01 round-5 CODEX_PASS. Round-1 found 4 issues; round-3 audit kept #2 driver false-pass, #3 VelocityTracker feed ordering, #4 ACTION_CANCEL no emit, #5 sign convention docs OPEN; round-4 closed #2/#3/#4 but left #5 OPEN at 3 stale comments; round-5 verified #5 CLOSED at tools/scripts/test-touch.sh:18, crates/android-host/src/input.rs:422, warp-src/crates/warpui/src/platform/android/input.rs:152-155. Convention consistent: positive vx = finger right, positive vy = finger down in Android screen coords. cargo test -p warp-mobile-android-host PASS 18/18. M2-S04..S10 regression previously PASS; S05/S08/S10 rerun artifacts updated in c644af7. M2-S11 fully resolved across all 5 issues.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/input.rs maps onTouchEvent → MouseDown/Up with screen coords",
