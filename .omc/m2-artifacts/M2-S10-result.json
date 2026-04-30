@@ -6,7 +6,7 @@
     "pinyin_ime_present": false,
     "default_ime": "com.samsung.android.honeyboard/.service.HoneyBoardService"
   },
-  "attach_ts_ms": 133935937,
+  "attach_ts_ms": 136335048,
   "detach_ts_ms": null,
   "latin_chars_received": 5,
   "pinyin_composing_seen": 5,

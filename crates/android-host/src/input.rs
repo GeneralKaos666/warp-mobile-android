@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn scroll_event_records_velocity() {
         let mut input = AndroidInput::new();
-        // Downward swipe (finger moves down → content scrolls up → vy > 0 px/s).
+        // Upward swipe (finger moves up → y decreasing → vy < 0 in Android screen coordinates).
         input.scroll(540.0, 1000.0, 0.0, -100.0, 0.0, -1200.0);
         let stats = input.stats();
         assert_eq!(stats.scroll_count, 1);

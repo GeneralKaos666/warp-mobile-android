@@ -15,7 +15,7 @@
 #      exact coords; ACTION_DOWN + ACTION_UP, so two events expected.)
 #
 #   Sub-test 2: swipe simulation broadcast
-#     → INPUT_SCROLL broadcast with vy=-1200.0 (downward swipe, upward scroll)
+#     → INPUT_SCROLL broadcast with vy=-1200.0 (upward swipe — finger moves up, vy < 0 in screen coords)
 #     → Rust receives scroll event with vy < 0 (non-zero velocity)
 #
 #   Sub-test 3: long-press simulation broadcast

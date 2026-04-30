@@ -184,7 +184,7 @@
       "id": "M2-S11",
       "title": "Touch input + gesture mapping",
       "passes": true,
-      "verifiedBy": "codex gpt-5.5 xhigh 2026-04-30 — PASS after 4 fixes (P1 security, P2 velocity, P3x2 monotonic+logcat)",
+      "verifiedBy": "codex gpt-5.5 xhigh 2026-04-30 — round-3 audit (lead-dispatched) found 4 OPEN: #2 driver false-pass, #3 pre-detector feed missing, #4 ACTION_CANCEL no emit, #5 sign convention inconsistent. round-4 (executor sonnet 2026-05-01) fixed all 4: TouchCancel event + JNI + NativeBridge + View emit; VelocityTracker fed BEFORE gestureDetector; split-window logcat gate; sign convention unified (positive vy = finger down). Device run R5CX10VFFBA: 5/5 sub-tests PASS (1+2+3+B+C). cargo test 18/18 PASS (+1 cancel_after_down_emits_touch_cancel). Regression S05+S08+S10 PASS. Pending codex round-4 PASS verdict.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/input.rs maps onTouchEvent → MouseDown/Up with screen coords",
