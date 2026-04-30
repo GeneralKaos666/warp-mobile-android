@@ -97,3 +97,31 @@ Verified: cargo test + processDebugMainManifest + processReleaseMainManifest + c
 Task #28/#33/#35 PTY plumbing chain CLOSED. main @ 06f70bd.
 
 Worker-env Task #32 (device runs S05/S06/S07/S08 on S24 Ultra) still in flight. After artifacts arrive: bulk update prd.json S05-S08 + dispatch Task #34 to worker-spike for S09 30-min stress.
+
+## Iteration 8 (2026-04-30 ~03:50 UTC) — Lead takes over Task #32
+
+### Why
+Worker-env did not respond to status ping for 15+ min. APK was building locally cleanly. Devices accessible. Per user "全自動" directive, lead should not wait indefinitely on stuck workers — take initiative.
+
+### Lead direct execution
+1. cargo ndk -t arm64-v8a build → libwarp_mobile_android_host.so 17.4MB at 11:38
+2. ./gradlew :app:assembleDebug → app-debug.apk 13.9MB
+3. adb install on R5CX10VFFBA → Success
+4. Iterative driver fixes during run:
+   - test-pty-reattach.sh: && quoting + PTY_WRITE log epoch anchor + token regex tightening (3 rounds: pass=false→pass=true delta_ms=36)
+   - test-pty-resize.sh: broadcast→FGS direct + stty regex tightening (2 rounds: pass=false→pass=true observed="24 80")
+   - test-fgs-clean-kill.sh: PASS first try, orphans=0
+5. S05 evidence-v2 captured: isForeground=true, foregroundId=1, types=SPECIAL_USE, native lib loaded, ptySpawn ok
+6. S09 30-min stress dispatched in background — 1st run had Samsung notification suppression issue (notif check at framework level not drawer level) → killed + fixed script to use isForeground from dumpsys activity services (Samsung-aware) → 2nd run started 11:49, t=0 notif=1 confirmed
+
+### Results (commit 1b737f3)
+- M1-S05/S06/S07/S08: ALL PASS on S24 Ultra
+- prd.json: 8/10 stories formally PASS (S01-S08), S09 in flight, S10 close-out doc skeleton
+- Task #32 marked completed; Task #34 in_progress (owner=team-lead direct)
+
+### Lessons learned (iteration 8)
+- adb shell variable expansion: device shell interprets &&; must wrap entire shell command in double quotes + value in single quotes.
+- t_expected anchoring: don't trust host clock for `sleep N && echo TOKEN` tests — find PTY_WRITE log epoch and use that as base.
+- logcat regex: extracting trailing numbers via `grep -oE '[0-9]+ [0-9]+'` matches PID/TID columns. Always end-anchor `$` to message portion only.
+- Samsung One UI: suppresses FGS notification drawer display via importance=NONE; check isForeground=true from dumpsys activity services as proxy for FGS state correctness.
+- Worker autonomy: workers can stall silently. Lead should not wait > 5 min after status ping with no response — take over and complete personally.
