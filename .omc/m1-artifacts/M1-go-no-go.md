@@ -1,7 +1,7 @@
 # M1 Go/No-Go 整合報告
 
 **日期**：2026-04-30 (M1 milestone close-out)
-**主分支**：`main` @ `7513445`
+**主分支**：`main` @ `ad3d0cc`
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` (Amendment 3 minSdk 31)
 **前置 milestone**：M0 close-out CONDITIONAL GO @ commit `24a2c1c`
 
@@ -16,7 +16,7 @@
 | M1-S03 | crates/android-host/ Rust skeleton | **PASS** | Codex round-1 REVISE (AC#5 missing .so info) → fix `5b1424e` (README addendum) → round-2 PASS. Cargo skeleton + JNI ping export + cdylib build. .so 16.7MB sha256 6e6960002e... |
 | M1-S04 | PTY backend openpty/setsid/TIOCSCTTY | **PASS** | Codex round-1 REJECT (6 safety issues) → round-2 REVISE (putenv+execvp not AS-safe; E0597 borrow-check) → round-3 fix `d9bf0d4` (execve+pre-built envp + E0597 fix) → Codex round-3 PASS. Subsequent PTY plumbing chain Task#28→#33→#35 closed: Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + tools:remove debug overlay; Codex Task#35 PASS at 03-32-36-215Z @ commit `06f70bd`. cargo test 3/3 PASS. |
 | M1-S05 | Android Service + AndroidManifest + FGS | **PASS** | Codex round-1 REVISE → fix `f424be2` → device run on S24 Ultra (R5CX10VFFBA): isForeground=true, foregroundId=1, types=0x40000000 (SPECIAL_USE), channel=warp-terminal, ONGOING_EVENT|FOREGROUND_SERVICE flags, native lib loaded, ptySpawn ok. 7/8 ACs PASS, 1/8 PARTIAL (Samsung One UI drawer suppression — documented vendor behavior, framework state correct). Evidence: `M1-S05-evidence-v2.md` @ `1b737f3`. |
-| M1-S06 | Activity recreate → PTY reattach < 1s | **PASS** | Drivers committed `9268de7` + bug-fix rounds. Device run on S24 Ultra: **delta_ms=26** (under 1000ms threshold; per `M1-S06-result.json:8`), PTY survived 5 device rotations, sleep+echo round-trip exact. Evidence: `M1-S06-result.json` @ `1b737f3`. Driver fix during run: && quoting + anchor t_expected on PTY_WRITE log + end-anchor token regex. |
+| M1-S06 | Activity recreate → PTY reattach < 1s | **PASS** | Drivers committed `9268de7` + bug-fix rounds. Device run on S24 Ultra: **delta_ms=26** (under 1000ms threshold; per `M1-S06-result.json:6`), PTY survived 5 device rotations, sleep+echo round-trip exact. Evidence: `M1-S06-result.json` @ `1b737f3`. Driver fix during run: && quoting + anchor t_expected on PTY_WRITE log + end-anchor token regex. |
 | M1-S07 | PTY resize via TIOCSWINSZ | **PASS** | Driver `test-pty-resize.sh`. Device run on S24 Ultra: **observed="24 80"** exact match. Evidence: `M1-S07-result.json` @ `1b737f3`. Driver fix during run: switched broadcast → FGS direct + end-anchor stty regex. |
 | M1-S08 | FGS persistence + clean kill no orphan | **PASS** | Driver `test-fgs-clean-kill.sh`. Device run on S24 Ultra: **pid_before=1, pid_after=0, orphans=0**. Evidence: `M1-S08-result.json` @ `1b737f3`. |
 | M1-S09 | 30-min idle stress on flagship | **PASS** | Device run on S24 Ultra **30-min idle** at PID 24008 constant — alive=1 + isForeground=true at t=0/10/20/30. **0 warp-app anomalies** (script regex over-counted unrelated system Zygote kills; manual app-filter returns 0). pwd response latency **4ms** via device-side logcat epoch delta. 2 script bugs documented (macOS BSD date `%3N`, broad anomaly regex) → M2 carry-overs. Evidence: `M1-S09-result.json` + `M1-stress-test.md` @ commit `81ec72a`. |
@@ -102,15 +102,15 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 1. **Acquire replacement low-end device** (Pixel 4a / Galaxy A52s API 31) and re-run M1-S06/S07/S08/S09 on it before M2 close (Plan Amendment 3 §3)
 2. **gradle copy task replacing jniLibs symlink** (currently absolute symlink to `target/aarch64-linux-android/debug/`, fragile on CI/clean-checkout — M2 ergonomics fix)
 3. **D1.5-hybrid M2 implementation** (M2 main work: warpui::platform::android backend + 4 hand-written areas — see Plan §6 M2)
-5. **android-activity / winit M2 reorganization** (warpui/Cargo.toml explicit android-activity dep currently redundant per Codex S02 review; fold into D1.5-hybrid restructuring)
-6. **Notification customization** (current notification is generic "Warp terminal"; M2 should add session count, command preview, tap → MainActivity intent)
-7. **Clippy lint cleanup** (`cargo clippy -p warp-mobile-android-host --target aarch64-linux-android -- -D warnings` flags 7 style issues — uninlined format args, let_unit_value on init_logger result; non-blocking for M1 functional milestone, M2 should clean up before scope expansion)
+4. **android-activity / winit M2 reorganization** (warpui/Cargo.toml explicit android-activity dep currently redundant per Codex S02 review; fold into D1.5-hybrid restructuring)
+5. **Notification customization** (current notification is generic "Warp terminal"; M2 should add session count, command preview, tap → MainActivity intent)
+6. **Clippy lint cleanup** (`cargo clippy -p warp-mobile-android-host --target aarch64-linux-android -- -D warnings` flags 7 style issues — uninlined format args, let_unit_value on init_logger result; non-blocking for M1 functional milestone, M2 should clean up before scope expansion)
 
 ---
 
-## 6. M1 Verdict (filled in once all stories PASS)
+## 6. M1 Verdict
 
-## Verdict: **CONDITIONAL GO** ✅
+### Verdict: **CONDITIONAL GO** ✅
 
 **9/10 stories formally PASS** (S01-S09); S10 (this doc) is the final close-out artifact awaiting Codex review dispatch.
 
@@ -134,16 +134,16 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 This section maps each prd.json M1-S0[1-9] acceptance criterion to its supporting evidence (per M1-S10 AC#2 requirement: "Each acceptance criterion in this prd.json has a one-line citation in the ledger").
 
 ### M1-S01 (commit `2ccc0f7`)
-- AC1 Amendment 3 block above existing Amendment 2 → `ralplan-warp-on-mobile.md:Amendment-3` block at top of file
-- AC2 cites M0 Task #8 evidence (S8 p95=326ms FAIL, Adreno 6xx+ <30ms PASS) → `ralplan-warp-on-mobile.md:Amendment-3-§Evidence`
-- AC3 §6 M2 line 354 (S8 30fps fallback) removed/rewritten → diff in `2ccc0f7`
-- AC4 §7 Risk register S8-as-baseline entries updated → diff in `2ccc0f7`
-- AC5 git log shows commit on main starting "plan: Amendment 3" → `2ccc0f7`
+- AC1 Amendment 3 block above existing Amendment 2 → `.omc/plans/ralplan-warp-on-mobile.md` first Amendment 3 header (top of amendments section)
+- AC2 cites M0 Task #8 evidence (S8 p95=326ms FAIL, Adreno 6xx+ <30ms PASS) → `.omc/plans/ralplan-warp-on-mobile.md` Amendment 3 §Evidence subsection
+- AC3 §6 M2 line 354 (S8 30fps fallback) removed/rewritten → `git show 2ccc0f7 -- .omc/plans/ralplan-warp-on-mobile.md` diff drops S8 fallback
+- AC4 §7 Risk register S8-as-baseline entries updated → `git show 2ccc0f7 -- .omc/plans/ralplan-warp-on-mobile.md` Risk register table updated to API 31+
+- AC5 git log shows commit on main starting "plan: Amendment 3" → `git log --oneline | grep "plan: Amendment 3"` matches `2ccc0f7`
 
 ### M1-S02 (commit `afc74ec` on warp-src `warp-mobile/m0-facade`)
-- AC1 warp-src/crates/warpui/Cargo.toml has android target_os block + android-activity native-activity feature → diff in `afc74ec`
-- AC2 cargo ndk -t arm64-v8a check -p warpui no longer reports E0282 → verified in commit message of `afc74ec`
-- AC3 committed on warp-mobile/m0-facade and pushed to fork ImL1s/warp → fork remote present, branch pushed
+- AC1 warp-src/crates/warpui/Cargo.toml has android target_os block + android-activity native-activity feature → `warp-src/crates/warpui/Cargo.toml` `[target.'cfg(target_os = "android")'.dependencies]` block
+- AC2 cargo ndk -t arm64-v8a check -p warpui no longer reports E0282 → `git show afc74ec` commit message records E0282 resolution
+- AC3 committed on warp-mobile/m0-facade and pushed to fork ImL1s/warp → `git -C warp-src branch -a | grep warp-mobile/m0-facade` shows local + fork remote
 
 ### M1-S03 (commits `10989b6` + `5b1424e`)
 - AC1 Cargo.toml deps + crate-type cdylib → `crates/android-host/Cargo.toml`
@@ -190,21 +190,21 @@ This section maps each prd.json M1-S0[1-9] acceptance criterion to its supportin
 
 ### M1-S09 (commit `81ec72a`)
 - AC1 Spawn bash PTY, idle 30 min on S24 Ultra → `M1-S09-result.json:8` `"duration_min": 30`
-- AC2 No crashes, no Service termination → `M1-S09-result.json:13` t30 `"alive": 1`, PID 24008 constant per `M1-S09-result.json:21` `"pid_throughout": 24008`
-- AC3 No PhantomProcessKiller events on warp app → `M1-S09-result.json:13` t30 `"warp_app_anomalies": 0` across all 4 checkpoints (lines 9-13)
-- AC4 Notification still present at t=30 → `M1-S09-result.json:13` t30 `"notification_visible": 1` (mapped to isForeground=true via dumpsys activity services)
-- AC5 PTY responsive: pwd in <500ms → `M1-S09-result.json:14` `"pwd_response_ms": 4`
+- AC2 No crashes, no Service termination → `M1-S09-result.json:12` t30 `"alive": 1`, PID 24008 constant per `M1-S09-result.json:15` `"pid_throughout": 24008`
+- AC3 No PhantomProcessKiller events on warp app → `M1-S09-result.json:12` t30 `"warp_app_anomalies": 0` across all 4 checkpoints (lines 9-12)
+- AC4 Notification still present at t=30 → `M1-S09-result.json:12` t30 `"notification_visible": 1` (mapped to isForeground=true via dumpsys activity services)
+- AC5 PTY responsive: pwd in <500ms → `M1-S09-result.json:13` `"pwd_response_ms": 4`
 - AC6 Artifact M1-stress-test.md with raw logcat snippets at t=0/10/20/30 → `.omc/m1-artifacts/M1-stress-test.md` "Interval Snapshots" section
 
 ### M1-S10 (this doc)
 - AC1 .omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories → `M1-go-no-go.md` §1 ledger (10 rows, lines 14-23)
 - AC2 Each prd.json acceptance criterion has one-line citation → `M1-go-no-go.md` §7 (this section, ~50 ACs with file:line refs)
 - AC3 M1 verdict GO/CONDITIONAL GO/NO-GO with rationale → `M1-go-no-go.md` §6 (CONDITIONAL GO, lines 113-128)
-- AC4 Carry-overs for M2 listed → `M1-go-no-go.md` §5 (7 carry-overs at lines 102-108)
+- AC4 Carry-overs for M2 listed → `M1-go-no-go.md` §5 (6 carry-overs, lines 102-107)
 - AC5 Codex review dispatched + PASS verdict received → Codex round-1 REVISE at 04-25-55-060Z → round-2 REVISE at 04-31-32-544Z → round-3 review pending after this commit
 
 ---
 
 *撰寫人：team-lead@warp-mobile-m1 (M0 close-out same governance)*
-*Closed at commit `7513445` + this revision (round-2 fixes)*
-*下一步：dispatch Codex round-3 review of M1-S10 close-out doc; on PASS mark prd.json M1-S10.passes:true and proceed to M2.*
+*Closed at commit `ad3d0cc` + this revision (round-3 fixes)*
+*下一步：dispatch Codex round-4 review of M1-S10 close-out doc; on PASS mark prd.json M1-S10.passes:true and proceed to M2.*
