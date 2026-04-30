@@ -124,8 +124,8 @@
     {
       "id": "M3-S07",
       "title": "Block model extract + DCS event aggregation (Plan Amendment 5; M3 Acceptance #3)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 PASS @ warp-src d943f1c + main 2d73979 (M3 Acceptance #3 met on S24U)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Per Plan Amendment 5: extract app::terminal::model::block + blocks into facade::app_terminal::model::block + blocks (continuing M3-S03-v2 extraction pattern). Block struct fields: start_time / command / exit_code / output_range — verify upstream app::terminal::model::Block struct shape.",
