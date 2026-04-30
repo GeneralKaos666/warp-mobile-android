@@ -108,8 +108,8 @@
     {
       "id": "M3-S06",
       "title": "Bootstrap zsh_body.sh ship as APK asset + readable from PTY context (Plan Amendment 5 + zsh deferral)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-2 PASS @ 544e8bf (atomic extraction + Gate 4b PTY-context exercise)",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "Per Plan Amendment 5 + M3-S03-v2 archeology: zsh_body.sh ALREADY exists upstream at warp-src/app/assets/bundled/bootstrap/zsh_body.sh (lines 80, 254, 301 emit hex JSON DCS hooks). M3-S06 = SHIP existing asset, NOT write new hooks.",
