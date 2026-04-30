@@ -6,81 +6,134 @@ plugins {
 // ---------------------------------------------------------------------------
 // Rust / cargo-ndk integration
 //
-// Approach: plain Gradle Copy task — no third-party plugin required.
+// Approach: plain Gradle Copy task + explicit fail-fast verifier.
 //
-// Rationale (M2-S02, 2026-04-30):
+// Rationale (M2-S02, 2026-04-30, round-2 per Codex review):
 //   • The absolute symlink that used to sit in jniLibs/ pointed to the
 //     project-owner's machine (/Users/iml1s/...) and broke every other checkout.
-//   • willir/cargo-ndk-android-gradle is unmaintained (last release 2021,
-//     Maven Central v0.3.4).  The gemwallet fork (v0.5.2) has no public README.
-//   • For a single ABI (arm64-v8a) + single crate, a Gradle Copy task wired
-//     directly into the assemble lifecycle is the lightest idiomatic solution
-//     (ref: https://docs.gradle.org/current/userguide/more_about_tasks.html,
-//      https://developer.android.com/build/building-cmdline).
+//   • Active Rust/Android Gradle plugin alternatives exist as of 2026
+//     (e.g., net.mullvad.rust-android dated 2026-04-20). Plain Gradle is
+//     chosen here because for a single ABI (arm64-v8a) + single crate +
+//     2 build types, raw Gradle is simpler — no plugin version pin to track,
+//     no opaque DSL extensions, all config in one file.
+//     Refs: https://docs.gradle.org/current/userguide/more_about_tasks.html,
+//           https://developer.android.com/build/building-cmdline
+//   • Gradle `Copy` does NOT fail when source files are missing — it logs
+//     NO-SOURCE and BUILD SUCCEEDS, silently producing an APK without the
+//     intended .so or (worse) packaging a stale .so left over from a
+//     previous build of a different variant. This was caught by Codex
+//     round-1 review where ``:app:assembleRelease`` packaged a stale debug
+//     build with `with debug_info, not stripped`. Fix: explicit verifier
+//     task per variant that throws GradleException on missing source.
 //
 // How it works:
 //   1. rustTargetDir resolves to <repo-root>/target  (two levels up from here).
-//   2. copyRustLibsDebug   copies …/aarch64-linux-android/debug/lib*.so
-//   3. copyRustLibsRelease copies …/aarch64-linux-android/release/lib*.so
-//   Both tasks write into src/main/jniLibs/arm64-v8a/ which is already a
-//   standard AGP jniLibs source directory.  The directory + its *.so contents
-//   are gitignored (see root .gitignore).
+//   2. buildRust{Debug,Release} invoke cargo-ndk if cargo binary exists.
+//   3. verifyRustLib{Debug,Release} fail-fast if expected .so absent.
+//   4. copyRustLibs{Debug,Release} stage the .so into jniLibs/.
+//   Tasks write into src/main/jniLibs/arm64-v8a/ which is already a standard
+//   AGP jniLibs source directory. The directory + its *.so contents are
+//   gitignored (see root .gitignore).
 //
-// Pre-requisite for a clean checkout:
+// Pre-requisite for a clean checkout (if cargo not auto-invoked here):
 //   PATH=$HOME/.cargo/bin:$PATH \
-//   ANDROID_NDK_ROOT=<ndk-path> \
 //   cargo ndk -t arm64-v8a build [-r] -p warp-mobile-android-host
-//   (or let the tasks below drive cargo-ndk via exec if ANDROID_NDK_ROOT is set)
+//   (cargo-ndk auto-detects NDK via ANDROID_HOME or ANDROID_NDK_ROOT — either
+//    one is sufficient.)
 // ---------------------------------------------------------------------------
 
 // rootProject is android/ — the Cargo workspace root is one level up
-def repoRoot      = rootProject.file("..")
-def rustTargetDir = new File(repoRoot, "target")
-def jniLibsDir    = file("src/main/jniLibs/arm64-v8a")
+def repoRoot         = rootProject.file("..")
+def rustTargetDir    = new File(repoRoot, "target")
+// Per-variant output dirs avoid Gradle 8 strict-mode "two tasks write to the
+// same dir" validation errors (Codex round-2 finding). AGP picks up these
+// intermediates via per-variant jniLibs.srcDirs declared in `android { ... }`.
+def jniLibsDirDebug   = file("build/intermediates/rust-jnilibs/debug/jniLibs/arm64-v8a")
+def jniLibsDirRelease = file("build/intermediates/rust-jnilibs/release/jniLibs/arm64-v8a")
 
-// Optional: automatically invoke cargo-ndk when ANDROID_NDK_ROOT is set.
-// If the env var is absent the task is a no-op copy (assumes .so already built).
-def ndkRoot   = System.getenv("ANDROID_NDK_ROOT") ?: ""
-def cargoPath = "${System.getenv('HOME')}/.cargo/bin/cargo"
+// Locate cargo on PATH first (rustup, homebrew, system rust all supported);
+// fall back to the rustup default install location.
+def cargoFromPath = ["sh", "-lc", "command -v cargo || true"].execute().text.trim()
+def cargoPath     = cargoFromPath ?: "${System.getenv('HOME')}/.cargo/bin/cargo"
+
+// cargo-ndk locates the NDK via either ANDROID_HOME (SDK auto-detect) or
+// ANDROID_NDK_ROOT. Either suffices; we don't gate on ANDROID_NDK_ROOT alone.
+def hasCargoNdk = new File(cargoPath).exists() &&
+                  (System.getenv("ANDROID_NDK_ROOT") || System.getenv("ANDROID_HOME"))
 
 task buildRustDebug(type: Exec) {
     description = "Invoke cargo ndk to build the debug .so for arm64-v8a."
-    onlyIf { ndkRoot != "" && new File(cargoPath).exists() }
+    onlyIf { hasCargoNdk }
     workingDir repoRoot
-    environment "ANDROID_NDK_ROOT", ndkRoot
     commandLine cargoPath, "ndk", "-t", "arm64-v8a", "build",
                 "-p", "warp-mobile-android-host"
-    // Tolerate a missing cargo-ndk binary so that CI can pre-build and
-    // pass only the copy step.
+    // If cargo-ndk auto-build is skipped, the verifier below catches missing
+    // .so artifacts so CI pre-build paths still fail-fast.
     ignoreExitValue = false
 }
 
 task buildRustRelease(type: Exec) {
     description = "Invoke cargo ndk to build the release .so for arm64-v8a."
-    onlyIf { ndkRoot != "" && new File(cargoPath).exists() }
+    onlyIf { hasCargoNdk }
     workingDir repoRoot
-    environment "ANDROID_NDK_ROOT", ndkRoot
     commandLine cargoPath, "ndk", "-t", "arm64-v8a", "build", "--release",
                 "-p", "warp-mobile-android-host"
     ignoreExitValue = false
 }
 
-task copyRustLibsDebug(type: Copy) {
-    description = "Copy arm64-v8a debug .so into jniLibs before assembleDebug."
+// Fail-fast verifiers — Gradle Copy tasks silently produce NO-SOURCE on
+// missing sources, which leads to APKs without the .so or with stale .so
+// from a different variant. These verifiers throw clear GradleException
+// before the Copy task runs.
+task verifyRustLibDebug {
+    description = "Fail-fast if debug .so is missing — Copy alone won't catch this."
     dependsOn buildRustDebug
+    doLast {
+        def soPath = new File("${rustTargetDir}/aarch64-linux-android/debug/libwarp_mobile_android_host.so")
+        if (!soPath.exists()) {
+            throw new GradleException(
+                "Missing native library: ${soPath.absolutePath}\n" +
+                "Build it first via:\n" +
+                "  PATH=\$HOME/.cargo/bin:\$PATH cargo ndk -t arm64-v8a build -p warp-mobile-android-host\n" +
+                "Or set ANDROID_HOME or ANDROID_NDK_ROOT so this Gradle task can drive cargo-ndk itself."
+            )
+        }
+    }
+}
+
+task verifyRustLibRelease {
+    description = "Fail-fast if release .so is missing — prevents shipping a stale debug variant."
+    dependsOn buildRustRelease
+    doLast {
+        def soPath = new File("${rustTargetDir}/aarch64-linux-android/release/libwarp_mobile_android_host.so")
+        if (!soPath.exists()) {
+            throw new GradleException(
+                "Missing native library: ${soPath.absolutePath}\n" +
+                "Build it first via:\n" +
+                "  PATH=\$HOME/.cargo/bin:\$PATH cargo ndk -t arm64-v8a build --release -p warp-mobile-android-host\n" +
+                "Or set ANDROID_HOME or ANDROID_NDK_ROOT so this Gradle task can drive cargo-ndk itself.\n" +
+                "(Codex round-1 caught a stale debug .so being packaged into release APK.)"
+            )
+        }
+    }
+}
+
+task copyRustLibsDebug(type: Copy) {
+    description = "Copy arm64-v8a debug .so into per-variant jniLibs intermediate."
+    dependsOn verifyRustLibDebug
     from("${rustTargetDir}/aarch64-linux-android/debug") {
         include "libwarp_mobile_android_host.so"
     }
-    into jniLibsDir
+    into jniLibsDirDebug
 }
 
 task copyRustLibsRelease(type: Copy) {
-    description = "Copy arm64-v8a release .so into jniLibs before assembleRelease."
-    dependsOn buildRustRelease
+    description = "Copy arm64-v8a release .so into per-variant jniLibs intermediate."
+    dependsOn verifyRustLibRelease
     from("${rustTargetDir}/aarch64-linux-android/release") {
         include "libwarp_mobile_android_host.so"
     }
-    into jniLibsDir
+    into jniLibsDirRelease
 }
 
 android {
@@ -94,6 +147,18 @@ android {
         targetSdk 36
         versionCode 1
         versionName "0.1.0-m1"
+    }
+
+    // Each variant picks up its own copy-task output dir; this is what makes
+    // Gradle 8 strict task-graph happy (two tasks no longer write to the same
+    // output location).
+    sourceSets {
+        debug {
+            jniLibs.srcDirs += file("build/intermediates/rust-jnilibs/debug/jniLibs")
+        }
+        release {
+            jniLibs.srcDirs += file("build/intermediates/rust-jnilibs/release/jniLibs")
+        }
     }
 
     packaging {
@@ -114,16 +179,25 @@ android {
 // Wire copy tasks into the assemble lifecycle after the android block is
 // evaluated (tasks are created by AGP during afterEvaluate).
 //
-// Gradle 8 strict task-graph validation requires the *direct consumer* of the
-// jniLibs directory (mergeDebugJniLibFolders / mergeReleaseJniLibFolders) to
-// declare the dependency — wiring via assembleDebug alone is not sufficient.
+// IMPORTANT (Codex round-2 finding): AGP skips mergeReleaseJniLibFolders when
+// jniLibs/ source dir is empty at task-graph time. So wiring solely to
+// merge*JniLibFolders is insufficient — assembleRelease can succeed with no
+// native libs. We wire to package*  (always present) AND merge*JniLibFolders
+// (the proper consumer when present). Belt-and-suspenders.
+//
 // Ref: https://docs.gradle.org/8.6/userguide/validation_problems.html#implicit_dependency
+//      https://developer.android.com/build/jniLibs (AGP source set semantics)
 afterEvaluate {
-    tasks.named("mergeDebugJniLibFolders").configure   { dependsOn copyRustLibsDebug }
-    tasks.named("mergeReleaseJniLibFolders").configure { dependsOn copyRustLibsRelease }
-    // Also wire assembleDebug/Release for completeness (belt-and-suspenders).
-    tasks.named("assembleDebug").configure   { dependsOn copyRustLibsDebug }
-    tasks.named("assembleRelease").configure { dependsOn copyRustLibsRelease }
+    // Merge tasks are the canonical jniLibs consumer when AGP generates them.
+    tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease }
+    // Package tasks are universal — they're the safety net that ensures the
+    // copy happens even when AGP optimizes mergeJniLibFolders away.
+    tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease }
+    // Assemble tasks are the user-facing entry points — third layer.
+    tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease }
 }
 
 dependencies {
