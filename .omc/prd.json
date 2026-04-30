@@ -30,8 +30,8 @@
     {
       "id": "M2-S01",
       "title": "M2 kickoff doc + Plan section update",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 CODEX_PASS at afa17ad; single round-2 blocker resolved. No new factual errors introduced; M2 kickoff doc internally consistent with M0 Vulkan 100-cycle results and E1 trigger spec.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         ".omc/m2-artifacts/M2-kickoff-confirmed.md exists documenting M2a/M2b split, 4 hand-written areas, entry criteria satisfied (M0 Vulkan + M1 PTY+FGS), exit criteria from Plan §6 M2",
@@ -43,8 +43,8 @@
     {
       "id": "M2-S02",
       "title": "Gradle copy task replacing jniLibs symlink",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "android/app/src/main/jniLibs/arm64-v8a/libwarp_mobile_android_host.so absolute symlink removed and added to .gitignore if not already",
