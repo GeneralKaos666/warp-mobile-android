@@ -6,12 +6,12 @@
     "pinyin_ime_present": false,
     "default_ime": "com.samsung.android.honeyboard/.service.HoneyBoardService"
   },
-  "attach_ts_ms": 128224972,
+  "attach_ts_ms": 129473661,
   "detach_ts_ms": null,
   "latin_chars_received": 5,
   "pinyin_composing_seen": 5,
   "pinyin_committed_text": "你好",
-  "ime_event_count": 12,
+  "ime_event_count": 14,
   "ime_state_machine_transitions": {
     "sub_test_2_latin_hello": {
       "latin_commit_count": 5,
@@ -42,20 +42,48 @@
       "expected_empty_finish_count": 1,
       "expected_composing_finish_count": 0,
       "pass": true
+    },
+    "sub_test_6_gboard_finish_then_commit": {
+      "composing_update_count": 1,
+      "composing_commit_count": 1,
+      "composing_finish_count": 0,
+      "empty_finish_count": 0,
+      "latin_commit_count": 0,
+      "composing_update_texts": [
+        "nihao"
+      ],
+      "composing_commit_texts": [
+        "你好"
+      ],
+      "expected_update_count": 1,
+      "expected_commit_count": 1,
+      "expected_committed_text": "你好",
+      "expected_no_finish": true,
+      "expected_no_latin_commit": true,
+      "pass": true
+    },
+    "ic_call_count_assertion": {
+      "commit_text_actual": 7,
+      "commit_text_expected": 7,
+      "set_composing_text_actual": 6,
+      "set_composing_text_expected": 6,
+      "finish_composing_text_actual": 2,
+      "finish_composing_text_expected": 2,
+      "pass": true
     }
   },
   "cumulative": {
     "latin_commit": 5,
-    "composing_update": 5,
-    "composing_commit": 1,
+    "composing_update": 6,
+    "composing_commit": 2,
     "composing_finish": 0,
     "empty_finish": 1,
-    "events_total": 12
+    "events_total": 14
   },
   "ic_kotlin_calls": {
-    "commitText": 6,
-    "setComposingText": 5,
-    "finishComposingText": 1
+    "commitText": 7,
+    "setComposingText": 6,
+    "finishComposingText": 2
   },
   "method": "simulation_broadcasts_via_ImeSimulationReceiver",
   "manual_verification_steps": [
@@ -73,6 +101,8 @@
     "pinyin_committed_pass": true,
     "no_double_commit_pass": true,
     "empty_finish_seen_pass": true,
+    "gboard_finish_then_commit_classify_pass": true,
+    "ic_call_count_match_pass": true,
     "overall_pass": true
   }
 }

@@ -54,6 +54,14 @@
 #   12   focus is NOT dev.warp.mobile
 #   13   mInputRestricted=true
 #   14   surfaceDestroyed_ts after surfaceCreated_ts before steady run
+#   15   ImeSimulationReceiver fell back to direct JNI (M2-S10 round-2 — the
+#        WarpInputView lost focus or InputConnection was null; the simulation
+#        bypassed the production WarpInputConnection.* path and is therefore
+#        invalid as proof of the IME glue).
+#   16   Kotlin IC.* call-count assertion failure (M2-S10 round-2 — observed
+#        IC.commitText / IC.setComposingText / IC.finishComposingText counts
+#        in logcat do NOT match the expected per-sub-test counts; means a
+#        receiver dispatch bug or a missed UI-thread post).
 #   31   IME state machine assertion failure (latin counts off, etc.)
 #
 # Web-search refs (2026-04-30):
@@ -280,7 +288,24 @@ ime_broadcast dev.warp.mobile.IME_FINISH_COMPOSING_TEXT
 sleep 0.3
 
 echo "" >&2
-echo "=== Sub-test 6: capture cumulative state machine stats ===" >&2
+echo "=== Sub-test 6 — round-2 NEW: Gboard real risky order setComposing → finish → commit ===" >&2
+# Codex round-1 device repro on R5CX10VFFBA found the real Gboard ordering on
+# Pinyin candidate-pick is `setComposingText → finishComposingText →
+# commitText` — finish arrives BETWEEN setComposing and the candidate commit.
+# Naive eager-flush misclassifies the candidate as latin_commit. The deferred
+# state machine must classify the commit as composing_commit via the
+# pending_finish defer buffer.
+ime_broadcast dev.warp.mobile.IME_RESET
+sleep 0.3
+NIHAO_B64=$(ime_b64 "nihao")
+ime_broadcast dev.warp.mobile.IME_SET_COMPOSING_TEXT --es text_b64 "$NIHAO_B64" --ei cursor 1
+ime_broadcast dev.warp.mobile.IME_FINISH_COMPOSING_TEXT
+NI_HAO_B64=$(ime_b64 "你好")
+ime_broadcast dev.warp.mobile.IME_COMMIT_TEXT --es text_b64 "$NI_HAO_B64" --ei cursor 1
+sleep 0.5
+
+echo "" >&2
+echo "=== Sub-test 7: capture cumulative state machine stats ===" >&2
 # imeStats() output is logged by the receiver dispatcher path AND we can
 # query directly via a separate broadcast that logs it. Simpler path: just
 # read the last sequence of ime_event lines and let the parser compute totals
@@ -290,13 +315,31 @@ echo "=== Sub-test 6: capture cumulative state machine stats ===" >&2
 LOGCAT_FILE=$(mktemp /tmp/m2-s10-logcat.XXXXXX)
 "${ADB[@]}" logcat -d -v time \
     "WarpRender:I" \
+    "WarpIme:W" \
     "WarpIme:I" \
     "WarpVulkan:V" \
     "warp-android-host:V" \
     "*:S" > "$LOGCAT_FILE"
 
-echo "=== logcat tail (last 60 lines) ===" >&2
-tail -60 "$LOGCAT_FILE" >&2
+echo "=== logcat tail (last 80 lines) ===" >&2
+tail -80 "$LOGCAT_FILE" >&2
+
+# Round-2 blocker #2: fail hard if ImeSimulationReceiver fell back to direct
+# JNI (i.e. the WarpInputView lost focus or InputConnection was null). That
+# bypasses the production code path and the simulation is invalid as proof.
+FALLBACK_LINES=$(grep -E "falling back to direct JNI|MainActivity not foreground" "$LOGCAT_FILE" || true)
+if [[ -n "$FALLBACK_LINES" ]]; then
+    echo "" >&2
+    echo "ERROR: ImeSimulationReceiver fell back to direct JNI — production" >&2
+    echo "       WarpInputConnection.* code path was BYPASSED. The simulation" >&2
+    echo "       is therefore invalid as proof of M2-S10 acceptance criteria." >&2
+    echo "" >&2
+    echo "$FALLBACK_LINES" >&2
+    echo "" >&2
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 15
+fi
+echo "=== no fallback-to-direct-JNI detected (production IC path exercised) ===" >&2
 
 # Probe last imeStats by triggering one more reset-free no-op event so the
 # Rust target logs total counters at the next call. Actually the cleanest is
@@ -384,18 +427,22 @@ for ev in events:
 if cur:
     windows.append(cur)
 
-# We expect 2 windows after the 2 resets:
+# We expect 3 windows after the 3 resets:
 # Window A: 5 latin_commit events (Latin 'hello')
-# Window B: 5 composing_update + 1 composing_commit + 1 empty_finish (Pinyin)
-# (sub-test 1 reset has no events; sub-test 3 reset also has no events.
-# Window indexing depends on whether sub-test 1's reset happened pre any
-# events, which it does. So window A is sub-test 2, window B is sub-test 4+5.)
+# Window B: 5 composing_update + 1 composing_commit + 1 empty_finish
+#          (Pinyin in-place compose-then-commit + Gboard empty-finish-after)
+# Window C: 1 composing_update + 1 composing_commit (round-2 NEW —
+#          Gboard real risky order setComposing → finish → commit; the
+#          finish defers via pending_finish, the commit reclassifies as
+#          composing_commit, NOT latin_commit; no composing_finish emitted).
+# Window indexing: each IME_RESET clears events_total, splitting windows.
 
 def kind_count(window, kind):
     return sum(1 for e in window if e['kind'] == kind)
 
 window_a = windows[0] if len(windows) >= 1 else []
 window_b = windows[1] if len(windows) >= 2 else []
+window_c = windows[2] if len(windows) >= 3 else []
 
 latin_a = kind_count(window_a, 'latin_commit')
 update_b = kind_count(window_b, 'composing_update')
@@ -408,6 +455,15 @@ update_b_texts = [e['text'].strip('"') for e in window_b if e['kind'] == 'compos
 # Verify: composing_commit emits text "你好"
 commit_b_texts = [e['text'].strip('"') for e in window_b if e['kind'] == 'composing_commit']
 
+# Round-2 NEW window C: corrected Gboard order setComposing → finish → commit.
+update_c = kind_count(window_c, 'composing_update')
+commit_c = kind_count(window_c, 'composing_commit')
+finish_c = kind_count(window_c, 'composing_finish')
+empty_c = kind_count(window_c, 'empty_finish')
+latin_c = kind_count(window_c, 'latin_commit')
+update_c_texts = [e['text'].strip('"') for e in window_c if e['kind'] == 'composing_update']
+commit_c_texts = [e['text'].strip('"') for e in window_c if e['kind'] == 'composing_commit']
+
 # Acceptance gates (per AC schema):
 ac_latin_5 = (latin_a >= 5)  # >= because we may have stray ic_commits
 ac_pinyin_compose = (update_b >= 5)
@@ -416,9 +472,23 @@ ac_pinyin_committed = (
 )
 ac_no_double_commit = (finish_b == 0)
 ac_empty_finish_seen = (empty_b >= 1)
+
+# Round-2 NEW gate: corrected Gboard order — exactly 1 ComposingUpdate +
+# exactly 1 ComposingCommit "你好". MUST NOT classify as latin_commit, MUST
+# NOT emit composing_finish or empty_finish in this window.
+ac_round2_classify = (
+    update_c == 1
+    and commit_c == 1
+    and any('你好' in t or '\\u4f60\\u597d' in t for t in commit_c_texts)
+    and finish_c == 0
+    and empty_c == 0
+    and latin_c == 0
+)
+
 ac_overall = (
     ac_latin_5 and ac_pinyin_compose and ac_pinyin_committed
     and ac_no_double_commit and ac_empty_finish_seen
+    and ac_round2_classify
 )
 
 # Total counts across all events (cumulative diagnostic).
@@ -433,6 +503,34 @@ total_events = sum(len(w) for w in windows)
 ic_commit_count = sum(1 for c in ic_calls if c['kind'] == 'commitText')
 ic_set_count = sum(1 for c in ic_calls if c['kind'] == 'setComposingText')
 ic_finish_count = sum(1 for c in ic_calls if c['kind'] == 'finishComposingText')
+
+# Round-2 blocker #2: assert EXACT IC.* call counts match the broadcasts the
+# driver issued. Mismatch = receiver dispatch bug, missed UI-thread post, or
+# the broadcast didn't actually reach the production WarpInputConnection (it
+# may have e.g. fallen back to direct JNI which we already detected, but this
+# catches the silent case where the IC method returned false / lost focus
+# mid-test).
+#
+# Driver issues:
+#   Sub-test 2 Latin "hello"          : 5 commitText, 0 setComposing, 0 finish
+#   Sub-test 4 Pinyin compose+commit  : 5 setComposing + 1 commitText
+#   Sub-test 5 empty finish           : 1 finish
+#   Sub-test 6 Gboard correct order   : 1 setComposing + 1 finish + 1 commitText
+# Cumulative (across all sub-tests):
+#   commitText        = 5 + 1 + 1 = 7
+#   setComposingText  = 5 + 1     = 6
+#   finishComposingText = 1 + 1   = 2
+ic_expected_commit = 7
+ic_expected_set = 6
+ic_expected_finish = 2
+
+ic_count_match = (
+    ic_commit_count == ic_expected_commit
+    and ic_set_count == ic_expected_set
+    and ic_finish_count == ic_expected_finish
+)
+# Update overall gate: also require IC counts to match.
+ac_overall = ac_overall and ic_count_match
 
 # State-machine transitions tracked for the result-json field.
 ime_state_machine_transitions = {
@@ -457,6 +555,36 @@ ime_state_machine_transitions = {
         'expected_empty_finish_count': 1,
         'expected_composing_finish_count': 0,
         'pass': ac_empty_finish_seen and ac_no_double_commit,
+    },
+    # Round-2 NEW: real Gboard risky order setComposing → finish → commit.
+    # The pending_finish defer buffer reclassifies the candidate-pick commit
+    # as ComposingCommit (NOT LatinCommit, NOT a stray composing_finish).
+    'sub_test_6_gboard_finish_then_commit': {
+        'composing_update_count': update_c,
+        'composing_commit_count': commit_c,
+        'composing_finish_count': finish_c,
+        'empty_finish_count': empty_c,
+        'latin_commit_count': latin_c,
+        'composing_update_texts': update_c_texts,
+        'composing_commit_texts': commit_c_texts,
+        'expected_update_count': 1,
+        'expected_commit_count': 1,
+        'expected_committed_text': '你好',
+        'expected_no_finish': True,
+        'expected_no_latin_commit': True,
+        'pass': ac_round2_classify,
+    },
+    # Round-2 blocker #2: exact IC.* call-count assertion (receiver
+    # actually dispatched through the production WarpInputConnection.* path
+    # the expected number of times).
+    'ic_call_count_assertion': {
+        'commit_text_actual': ic_commit_count,
+        'commit_text_expected': ic_expected_commit,
+        'set_composing_text_actual': ic_set_count,
+        'set_composing_text_expected': ic_expected_set,
+        'finish_composing_text_actual': ic_finish_count,
+        'finish_composing_text_expected': ic_expected_finish,
+        'pass': ic_count_match,
     },
 }
 
@@ -517,6 +645,8 @@ result = {
         'pinyin_committed_pass': ac_pinyin_committed,
         'no_double_commit_pass': ac_no_double_commit,
         'empty_finish_seen_pass': ac_empty_finish_seen,
+        'gboard_finish_then_commit_classify_pass': ac_round2_classify,
+        'ic_call_count_match_pass': ic_count_match,
         'overall_pass': ac_overall,
     },
 }
@@ -550,13 +680,33 @@ print(f"  composing_commit:           {total_commit}")
 print(f"  composing_finish:           {total_finish}")
 print(f"  empty_finish:               {total_empty}")
 print(f"")
-print(f"Kotlin IC.* call counts:      commit={ic_commit_count} setComposing={ic_set_count} finish={ic_finish_count}")
+print(f"Sub-test 6 (Gboard real order setComposing→finish→commit) round-2 NEW:")
+print(f"  composing_update_count:     {update_c} (expected 1)")
+print(f"  composing_commit_count:     {commit_c} (expected 1, text '你好')")
+print(f"  composing_commit_texts:     {commit_c_texts}")
+print(f"  composing_finish_count:     {finish_c} (expected 0)")
+print(f"  empty_finish_count:         {empty_c} (expected 0)")
+print(f"  latin_commit_count:         {latin_c} (expected 0 — must NOT misclassify)")
+print(f"  reclassify_pass:            {'PASS' if ac_round2_classify else 'FAIL'}")
+print(f"")
+print(f"Kotlin IC.* call counts:      commit={ic_commit_count} (expected {ic_expected_commit}) setComposing={ic_set_count} (expected {ic_expected_set}) finish={ic_finish_count} (expected {ic_expected_finish})")
+print(f"  ic_count_match_pass:        {'PASS' if ic_count_match else 'FAIL'}")
 print(f"")
 print(f"GATE: overall_pass={ac_overall}")
 print(f"")
 print(f"# result written to {out_json}", file=sys.stderr)
 
-exit_code = 0 if ac_overall else 31
+# Exit-code mapping:
+#   0   PASS
+#   16  IC count mismatch (only — round-2 blocker #2 specific)
+#   31  state-machine assertion failure (covers all other gates including
+#       round-2 blocker #1 reclassification)
+if ac_overall:
+    exit_code = 0
+elif not ic_count_match and ac_latin_5 and ac_pinyin_compose and ac_pinyin_committed and ac_no_double_commit and ac_empty_finish_seen and ac_round2_classify:
+    exit_code = 16
+else:
+    exit_code = 31
 sys.exit(exit_code)
 PYEOF
 PARSE_RC=$?
