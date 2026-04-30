@@ -110,6 +110,7 @@
             <intent-filter>
                 <action android:name="dev.warp.mobile.INPUT_TOUCH_DOWN" />
                 <action android:name="dev.warp.mobile.INPUT_TOUCH_UP" />
+                <action android:name="dev.warp.mobile.INPUT_TOUCH_CANCEL" />
                 <action android:name="dev.warp.mobile.INPUT_TAP" />
                 <action android:name="dev.warp.mobile.INPUT_LONG_PRESS" />
                 <action android:name="dev.warp.mobile.INPUT_SCROLL" />

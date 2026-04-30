@@ -40,6 +40,10 @@ import android.util.Log
  *       -p dev.warp.mobile \
  *       --ef x 540.0 --ef y 1170.0
  *
+ *   adb shell am broadcast -a dev.warp.mobile.INPUT_TOUCH_CANCEL \
+ *       -p dev.warp.mobile \
+ *       --ef x 540.0 --ef y 1170.0
+ *
  *   adb shell am broadcast -a dev.warp.mobile.INPUT_RESET \
  *       -p dev.warp.mobile
  *
@@ -74,6 +78,7 @@ class TouchSimulationReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_INPUT_TOUCH_DOWN -> handleTouchDown(intent)
             ACTION_INPUT_TOUCH_UP -> handleTouchUp(intent)
+            ACTION_INPUT_TOUCH_CANCEL -> handleTouchCancel(intent)
             ACTION_INPUT_TAP -> handleTap(intent)
             ACTION_INPUT_LONG_PRESS -> handleLongPress(intent)
             ACTION_INPUT_SCROLL -> handleScroll(intent)
@@ -94,6 +99,13 @@ class TouchSimulationReceiver : BroadcastReceiver() {
         val y = intent.getFloatExtra(EXTRA_Y, 0f)
         Log.i(TAG, "INPUT_TOUCH_UP x=$x y=$y")
         NativeBridge.inputTouchUp(x, y)
+    }
+
+    private fun handleTouchCancel(intent: Intent) {
+        val x = intent.getFloatExtra(EXTRA_X, 0f)
+        val y = intent.getFloatExtra(EXTRA_Y, 0f)
+        Log.i(TAG, "INPUT_TOUCH_CANCEL x=$x y=$y")
+        NativeBridge.inputTouchCancel(x, y)
     }
 
     private fun handleTap(intent: Intent) {
@@ -131,6 +143,7 @@ class TouchSimulationReceiver : BroadcastReceiver() {
 
         const val ACTION_INPUT_TOUCH_DOWN = "dev.warp.mobile.INPUT_TOUCH_DOWN"
         const val ACTION_INPUT_TOUCH_UP = "dev.warp.mobile.INPUT_TOUCH_UP"
+        const val ACTION_INPUT_TOUCH_CANCEL = "dev.warp.mobile.INPUT_TOUCH_CANCEL"
         const val ACTION_INPUT_TAP = "dev.warp.mobile.INPUT_TAP"
         const val ACTION_INPUT_LONG_PRESS = "dev.warp.mobile.INPUT_LONG_PRESS"
         const val ACTION_INPUT_SCROLL = "dev.warp.mobile.INPUT_SCROLL"

@@ -47,7 +47,7 @@ import android.view.inputmethod.InputConnection
  *   1. Emit raw `ACTION_DOWN` / `ACTION_UP` → `NativeBridge.inputTouchDown/Up`.
  *   2. Feed the event to a `GestureDetector` for tap/long-press detection.
  *   3. Feed the event to `VelocityTracker` so scroll events carry instantaneous
- *      velocity.
+ *      velocity (positive vy = finger moves DOWNWARD in screen coordinates).
  *
  * **Why WarpInputView gets touch, not SurfaceView**: SurfaceView is on a
  * separate Z-layer (window-manager-hosted surface). Touch dispatch walks the
@@ -142,12 +142,14 @@ class WarpInputView @JvmOverloads constructor(
             val vy: Float
             val vt = velocityTracker
             if (vt != null) {
-                // NOTE: do NOT call vt.addMovement(e2) here — onTouchEvent already
-                // fed e2 to the tracker in its ACTION_MOVE branch before forwarding
-                // to gestureDetector. Adding it again with the same timestamp skews
-                // the computed velocity. Just query what was already accumulated.
+                // NOTE: do NOT call vt.addMovement(e2) here — onTouchEvent fed
+                // e2 to the tracker in its ACTION_MOVE branch BEFORE calling
+                // gestureDetector.onTouchEvent, so the velocity is already current.
+                // Adding it again with the same timestamp would skew the result.
                 vt.computeCurrentVelocity(1000)
-                // Units: pixels per second (default). Positive = moving right/down.
+                // Units: pixels per second (screen coordinates).
+                // Positive vx = finger moves rightward; positive vy = DOWNWARD.
+                // (Y axis grows downward on Android — downward swipe yields vy > 0.)
                 vx = vt.xVelocity
                 vy = vt.yVelocity
             } else {
@@ -185,28 +187,33 @@ class WarpInputView @JvmOverloads constructor(
     /**
      * M2-S11: touch event handler.
      *
-     * Routes raw ACTION_DOWN / ACTION_UP to Rust JNI immediately (low latency),
-     * and feeds every event through the GestureDetector for higher-level gesture
-     * recognition (tap, long-press, scroll).
+     * Routes raw ACTION_DOWN / ACTION_UP / ACTION_CANCEL to Rust JNI
+     * immediately (low latency), and feeds every event through the
+     * GestureDetector for higher-level gesture recognition (tap, long-press,
+     * scroll).
+     *
+     * VelocityTracker is fed for ACTION_DOWN and ACTION_MOVE BEFORE the event
+     * is forwarded to gestureDetector, so that any onScroll callback triggered
+     * by gestureDetector.onTouchEvent sees up-to-date velocity immediately.
      *
      * We always return `true` so the View consumes the event and Android does
      * not propagate it further down the view tree.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Feed GestureDetector first (needs the raw event).
-        gestureDetector.onTouchEvent(event)
-
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 Log.i(TAG, "touch_down x=${event.x} y=${event.y}")
-                // Acquire a fresh VelocityTracker for this touch sequence.
+                // Acquire a fresh VelocityTracker and feed DOWN before
+                // forwarding to gestureDetector so velocity state is current.
                 velocityTracker?.recycle()
                 velocityTracker = VelocityTracker.obtain()
                 velocityTracker!!.addMovement(event)
                 NativeBridge.inputTouchDown(event.x, event.y)
             }
             MotionEvent.ACTION_MOVE -> {
-                // Feed VelocityTracker so onScroll can query instantaneous velocity.
+                // Feed VelocityTracker BEFORE gestureDetector so that any
+                // onScroll callback triggered inside gestureDetector.onTouchEvent
+                // sees the current velocity when it calls vt.computeCurrentVelocity.
                 velocityTracker?.addMovement(event)
             }
             MotionEvent.ACTION_UP -> {
@@ -216,14 +223,20 @@ class WarpInputView @JvmOverloads constructor(
                 velocityTracker = null
             }
             MotionEvent.ACTION_CANCEL -> {
-                Log.d(TAG, "touch_cancel")
+                // Emit TouchCancel so Rust state machine closes the open down
+                // sequence — without this, Rust would believe the finger is
+                // still down after a parent View intercepts the event stream.
+                Log.d(TAG, "touch_cancel x=${event.x} y=${event.y}")
+                NativeBridge.inputTouchCancel(event.x, event.y)
                 velocityTracker?.recycle()
                 velocityTracker = null
             }
         }
-        // Returning true is required for GestureDetector to detect scroll and
-        // long-press: if we return false on ACTION_DOWN the detector won't
-        // receive subsequent ACTION_MOVE events.
+        // Forward to GestureDetector AFTER VelocityTracker updates above.
+        // Returning true is required so GestureDetector receives subsequent
+        // ACTION_MOVE / ACTION_UP events (if false on ACTION_DOWN, the detector
+        // won't track scroll and long-press).
+        gestureDetector.onTouchEvent(event)
         return true
     }
 

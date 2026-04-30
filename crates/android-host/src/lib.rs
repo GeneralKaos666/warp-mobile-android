@@ -659,6 +659,25 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputTouchUp(
     input::touch_up(x, y);
 }
 
+/// M2-S11: Java `WarpInputView.onTouchEvent ACTION_CANCEL` → Rust state.
+///
+/// Emits `InputEvent::TouchCancel` to close the open touch-down sequence when
+/// Android cancels the gesture (e.g. a parent View intercepts the event stream,
+/// or the window loses focus). Without this, Rust state believes the finger is
+/// still down after an intercepted DOWN.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputTouchCancel(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+) {
+    init_logger();
+    input::touch_cancel(x, y);
+}
+
 /// M2-S11: Java `GestureDetector.onSingleTapConfirmed` → Rust state.
 #[cfg(target_os = "android")]
 #[allow(non_snake_case)]

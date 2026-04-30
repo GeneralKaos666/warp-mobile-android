@@ -1,7 +1,7 @@
 {
   "story": "M2-S11",
   "device_serial": "R5CX10VFFBA",
-  "attach_ts_ms": 133901681,
+  "attach_ts_ms": 136252620,
   "detach_ts_ms": null,
   "sub_test_1_real_tap": {
     "method": "adb_shell_input_tap",
@@ -27,14 +27,16 @@
     ],
     "down_within_2px": true,
     "up_within_2px": true,
-    "kt_view_path_confirmed": false,
+    "kt_view_path_confirmed": true,
     "pass": true
   },
   "sub_test_2_scroll_velocity": {
     "method": "simulation_broadcast_INPUT_SCROLL",
-    "scroll_events_received": 23,
-    "last_vy": -5000.0,
-    "nonzero_velocity": true,
+    "gate_window": "simulation_only_logcat (logcat cleared before real swipe)",
+    "scroll_events_sim_received": 1,
+    "last_vy_sim": -1200.0,
+    "nonzero_velocity_sim": true,
+    "sign_convention": "positive_vy_finger_moves_down_android_screen_coords",
     "pass": true
   },
   "sub_test_3_long_press": {
@@ -42,12 +44,35 @@
     "long_press_events_received": 1,
     "pass": true
   },
-  "method_note": "Sub-test 1 uses real adb shell input tap (OS MotionEvent path through WarpInputView.onTouchEvent). Sub-tests 2+3 use simulation broadcasts (TouchSimulationReceiver → NativeBridge JNI directly) because adb swipe velocity and long-press duration are non-deterministic on Samsung One UI.",
+  "sub_test_b_action_cancel": {
+    "method": "simulation_INPUT_TOUCH_DOWN_then_INPUT_TOUCH_CANCEL",
+    "touch_down_received": true,
+    "touch_cancel_received": true,
+    "cancel_events": [
+      {
+        "x": 540.0,
+        "y": 1170.0
+      }
+    ],
+    "pass": true
+  },
+  "sub_test_c_sign_convention": {
+    "method": "simulation_INPUT_SCROLL_vy_pos800",
+    "expected_vy_gt_0": true,
+    "scroll_events_received": 1,
+    "last_vy": 800.0,
+    "positive_vy_confirmed": true,
+    "sign_convention": "positive_vy_finger_moves_down_android_screen_coords",
+    "pass": true
+  },
+  "method_note": "Sub-test 1 uses real adb shell input tap (OS MotionEvent path through WarpInputView.onTouchEvent). Sub-tests 2+3+B+C use simulation broadcasts (TouchSimulationReceiver → NativeBridge JNI directly) because adb swipe velocity and long-press duration are non-deterministic on Samsung One UI. Issue #2 fix (round-4): sub-test 2 gate evaluated against simulation-only logcat (captured before adb logcat -c + real swipe), preventing false-pass. Issue #4 fix (round-4): sub-test B confirms TouchCancel emitted on cancel. Issue #5 fix (round-4): sub-test C confirms positive vy = finger down.",
   "acceptance_gate": {
     "tap_received": true,
-    "scroll_received": true,
-    "scroll_nonzero_velocity": true,
+    "scroll_sim_received": true,
+    "scroll_sim_nonzero_velocity": true,
     "long_press_received": true,
+    "cancel_received": true,
+    "sign_positive_vy": true,
     "overall_pass": true
   }
 }

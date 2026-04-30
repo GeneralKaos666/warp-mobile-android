@@ -46,6 +46,12 @@ pub enum InputEvent {
     TouchDown { x: f32, y: f32 },
     /// Raw ACTION_UP — finger lifts from screen.
     TouchUp { x: f32, y: f32 },
+    /// Raw ACTION_CANCEL — gesture was cancelled by the system (e.g. a parent
+    /// View intercepted the event stream, or the window lost focus). Restores
+    /// Rust state-machine integrity: a prior `TouchDown` without a matching
+    /// `TouchUp` leaves downstream consumers believing the finger is still
+    /// down; emitting `TouchCancel` closes the open sequence.
+    TouchCancel { x: f32, y: f32 },
     /// GestureDetector `onSingleTapConfirmed` — confirmed single tap
     /// (not the start of a double-tap).
     Tap { x: f32, y: f32 },
@@ -53,9 +59,15 @@ pub enum InputEvent {
     /// long-press timeout (~500 ms). Equivalent to right-click / context-menu.
     LongPress { x: f32, y: f32 },
     /// GestureDetector `onScroll` with VelocityTracker — drag scroll with
-    /// instantaneous velocity in pixels/s. `dx`/`dy` are the distance moved
-    /// since the previous scroll event (positive dy = finger moved down =
-    /// content scrolls up).
+    /// instantaneous velocity in pixels/s.
+    ///
+    /// `vx`/`vy` use Android screen coordinates from `VelocityTracker`:
+    ///   - Positive vx = finger moves rightward; negative = leftward.
+    ///   - Positive vy = finger moves DOWNWARD; negative = upward.
+    ///   (Y axis grows downward on Android, so a downward swipe yields vy > 0.)
+    ///
+    /// Terminal scroll convention is TBD M3 (likely INVERTED — swipe up
+    /// scrolls terminal content down). DO NOT assume convention here.
     Scroll {
         x: f32,
         y: f32,
@@ -64,8 +76,10 @@ pub enum InputEvent {
         /// Pixels scrolled since last scroll event (Y axis).
         dy: f32,
         /// Instantaneous X velocity in px/s from VelocityTracker.
+        /// Positive = finger moves rightward.
         vx: f32,
         /// Instantaneous Y velocity in px/s from VelocityTracker.
+        /// Positive = finger moves DOWNWARD (screen coords).
         vy: f32,
     },
 }
@@ -76,6 +90,7 @@ impl InputEvent {
         match self {
             InputEvent::TouchDown { .. } => "touch_down",
             InputEvent::TouchUp { .. } => "touch_up",
+            InputEvent::TouchCancel { .. } => "touch_cancel",
             InputEvent::Tap { .. } => "tap",
             InputEvent::LongPress { .. } => "long_press",
             InputEvent::Scroll { .. } => "scroll",
@@ -86,6 +101,7 @@ impl InputEvent {
         match self {
             InputEvent::TouchDown { x, .. } => *x,
             InputEvent::TouchUp { x, .. } => *x,
+            InputEvent::TouchCancel { x, .. } => *x,
             InputEvent::Tap { x, .. } => *x,
             InputEvent::LongPress { x, .. } => *x,
             InputEvent::Scroll { x, .. } => *x,
@@ -96,6 +112,7 @@ impl InputEvent {
         match self {
             InputEvent::TouchDown { y, .. } => *y,
             InputEvent::TouchUp { y, .. } => *y,
+            InputEvent::TouchCancel { y, .. } => *y,
             InputEvent::Tap { y, .. } => *y,
             InputEvent::LongPress { y, .. } => *y,
             InputEvent::Scroll { y, .. } => *y,
@@ -124,6 +141,7 @@ impl InputEvent {
 pub struct InputStats {
     pub touch_down_count: u64,
     pub touch_up_count: u64,
+    pub touch_cancel_count: u64,
     pub tap_count: u64,
     pub long_press_count: u64,
     pub scroll_count: u64,
@@ -136,10 +154,11 @@ pub struct InputStats {
     pub last_up_x: f32,
     /// y coordinate of last received touch_up event.
     pub last_up_y: f32,
-    /// vy of last received scroll event (negative = upward scroll from
-    /// downward swipe).
+    /// vy of last received scroll event.
+    /// Positive = finger moved DOWNWARD (Android screen coordinates).
     pub last_scroll_vy: f32,
     /// vx of last received scroll event.
+    /// Positive = finger moved rightward (Android screen coordinates).
     pub last_scroll_vx: f32,
 }
 
@@ -149,6 +168,7 @@ pub struct AndroidInput {
     events: Vec<InputEvent>,
     touch_down_count: u64,
     touch_up_count: u64,
+    touch_cancel_count: u64,
     tap_count: u64,
     long_press_count: u64,
     scroll_count: u64,
@@ -167,6 +187,7 @@ impl AndroidInput {
             events: Vec::with_capacity(32),
             touch_down_count: 0,
             touch_up_count: 0,
+            touch_cancel_count: 0,
             tap_count: 0,
             long_press_count: 0,
             scroll_count: 0,
@@ -192,6 +213,13 @@ impl AndroidInput {
         self.last_up_x = x;
         self.last_up_y = y;
         self.push(InputEvent::TouchUp { x, y });
+    }
+
+    /// Emitted on Android `ACTION_CANCEL` — restores state-machine integrity
+    /// for a `TouchDown` that has no matching `TouchUp`.
+    pub fn touch_cancel(&mut self, x: f32, y: f32) {
+        self.touch_cancel_count += 1;
+        self.push(InputEvent::TouchCancel { x, y });
     }
 
     pub fn tap(&mut self, x: f32, y: f32) {
@@ -223,6 +251,7 @@ impl AndroidInput {
         InputStats {
             touch_down_count: self.touch_down_count,
             touch_up_count: self.touch_up_count,
+            touch_cancel_count: self.touch_cancel_count,
             tap_count: self.tap_count,
             long_press_count: self.long_press_count,
             scroll_count: self.scroll_count,
@@ -284,6 +313,14 @@ pub fn touch_down(x: f32, y: f32) {
 pub fn touch_up(x: f32, y: f32) {
     if let Ok(mut g) = global_input().lock() {
         g.touch_up(x, y);
+    }
+}
+
+/// Raw ACTION_CANCEL — gesture cancelled by the system. Closes the open
+/// touch-down sequence so Rust state does not believe finger is still down.
+pub fn touch_cancel(x: f32, y: f32) {
+    if let Ok(mut g) = global_input().lock() {
+        g.touch_cancel(x, y);
     }
 }
 
@@ -409,6 +446,30 @@ mod tests {
         let after = stats_string();
         assert!(after.contains("touch_down=0,"), "after reset: {}", after);
         assert!(after.contains("touch_up=0,"), "after reset: {}", after);
+    }
+
+    #[test]
+    fn cancel_after_down_emits_touch_cancel() {
+        // Simulates the Android ACTION_CANCEL path: a gesture starts with
+        // ACTION_DOWN but is cancelled before ACTION_UP (e.g. a parent View
+        // intercepts the event stream). The state machine must emit a
+        // TouchCancel event so downstream consumers know the finger sequence
+        // is closed — without it they would believe the finger is still down.
+        let mut input = AndroidInput::new();
+        input.touch_down(540.0, 1170.0);
+        input.touch_cancel(540.0, 1170.0);
+        let events = input.drain_events();
+        assert_eq!(events.len(), 2, "expected TouchDown + TouchCancel");
+        assert!(matches!(events[0], InputEvent::TouchDown { .. }));
+        assert!(
+            matches!(events[1], InputEvent::TouchCancel { x, y } if (x - 540.0).abs() < 0.1 && (y - 1170.0).abs() < 0.1),
+            "second event must be TouchCancel at (540, 1170), got {:?}", events[1]
+        );
+        let stats = input.stats();
+        assert_eq!(stats.touch_down_count, 1);
+        assert_eq!(stats.touch_cancel_count, 1);
+        assert_eq!(stats.touch_up_count, 0, "no UP should be recorded for a cancel");
+        assert_eq!(stats.events_emitted, 2);
     }
 
     #[test]

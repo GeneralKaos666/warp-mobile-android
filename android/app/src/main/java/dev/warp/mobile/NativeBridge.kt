@@ -220,6 +220,14 @@ object NativeBridge {
     external fun inputTouchUp(x: Float, y: Float)
 
     /**
+     * Raw ACTION_CANCEL: gesture cancelled by the system (e.g. a parent View
+     * intercepted the event stream, or the window lost focus). Emits
+     * [InputEvent::TouchCancel] to close the open down sequence so Rust state
+     * does not believe the finger is still down.
+     */
+    external fun inputTouchCancel(x: Float, y: Float)
+
+    /**
      * GestureDetector `onSingleTapConfirmed`: confirmed single tap (fires
      * ~300 ms after ACTION_UP, after double-tap window expires).
      */
@@ -239,8 +247,12 @@ object NativeBridge {
      * @param dx Distance scrolled on X axis since last scroll event (px).
      * @param dy Distance scrolled on Y axis since last scroll event (px).
      * @param vx Instantaneous X velocity from VelocityTracker (px/s).
+     *           Positive vx = finger moves rightward; negative = leftward.
      * @param vy Instantaneous Y velocity from VelocityTracker (px/s).
-     *           Negative vy = finger moved down (content scrolls up).
+     *           Positive vy = finger moves DOWNWARD; negative = upward.
+     *           (VelocityTracker uses Android screen coordinates: Y axis grows
+     *           downward, so a downward swipe yields vy > 0.)
+     *           Terminal scroll convention TBD M3 (likely INVERTED).
      */
     external fun inputScroll(x: Float, y: Float, dx: Float, dy: Float, vx: Float, vy: Float)
 
