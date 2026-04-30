@@ -107,15 +107,17 @@
     },
     {
       "id": "M3-S06",
-      "title": "Bootstrap zsh_body.sh DCS hook ship + APK asset integration",
+      "title": "Bootstrap zsh_body.sh ship as APK asset + readable from PTY context (Plan Amendment 5 + zsh deferral)",
       "passes": false,
       "verifiedBy": null,
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
-        "warp-src/app/assets/bundled/bootstrap/zsh_body.sh updated with warp DCS hook (precmd hook emits start_time/command boundary; preexec hook emits exit_code) — verify upstream warp pattern via M0 archeology",
-        "android/app/src/main/assets/zsh_body.sh shipped via Gradle copy task or asset pack (similar to M2-S02 jniLibs Gradle pattern)",
-        "M1 PTY spawn path can source the DCS hook: bash -c 'export ZDOTDIR=...; zsh' or similar — verify via test-pty-reattach.sh extension",
-        "Verification: APK packaged with zsh_body.sh asset; PTY spawn loads hook; `whoami` produces DCS sequences in PTY output (logcat grep for ESC P $ d)",
+        "Per Plan Amendment 5 + M3-S03-v2 archeology: zsh_body.sh ALREADY exists upstream at warp-src/app/assets/bundled/bootstrap/zsh_body.sh (lines 80, 254, 301 emit hex JSON DCS hooks). M3-S06 = SHIP existing asset, NOT write new hooks.",
+        "Asset packaging: copy warp-src/app/assets/bundled/bootstrap/zsh_body.sh to android/app/src/main/assets/warp/zsh_body.sh via Gradle copy task (similar pattern to M2-S02 jniLibs Gradle copy). APK packaging includes the asset.",
+        "Runtime accessibility: APK asset readable from PTY context via AssetManager.open(\"warp/zsh_body.sh\") + write to /data/data/dev.warp.mobile/files/warp/zsh_body.sh on first launch (or AssetFileDescriptor pattern). Add JNI export Java_dev_warp_mobile_NativeBridge_extractWarpAssets if needed.",
+        "Hook execution constraint (DEFERRED to M5 Termux Runtime): S24 Ultra has only /system/bin/sh (mksh) — no zsh available. zsh_body.sh requires zsh's precmd/preexec mechanism. M3-S06 ships the asset and verifies it's loadable but does NOT verify hook execution end-to-end. Hook execution gate moves to M5 when Termux brings zsh.",
+        "Verification: APK contains assets/warp/zsh_body.sh (verify via `unzip -l app-debug.apk | grep zsh_body.sh`); first-launch extracts to /data/data/dev.warp.mobile/files/warp/zsh_body.sh (verify via adb shell ls); shell-out script in PTY can `cat` the file (verify via logcat showing some bytes from the file content).",
+        "Web search docs cited (Android AssetManager API; Termux package availability for zsh; AGPL asset bundling compliance).",
         "Codex review dispatched and PASS verdict received"
       ]
     },
