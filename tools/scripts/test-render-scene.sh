@@ -66,6 +66,26 @@ echo "=== installing APK (with -g to grant runtime permissions) ===" >&2
 # Defensive grant: if install -g already granted these, this is a no-op.
 "${ADB[@]}" shell pm grant "$PACKAGE" android.permission.POST_NOTIFICATIONS 2>&1 >&2 || true
 
+# Round-3 (Codex blocker 2): explicit POST_NOTIFICATIONS=granted assertion.
+# pm grant exit-code is unreliable (returns 0 on some no-op cases even when
+# permission stays denied). Codex round-2 reproduced focus theft after
+# revoking the grant — the previous wait-for-surfaceCreated_ts heuristic did
+# not catch it because surfaceCreated still fired *behind* the dialog.
+# Robust check: dumpsys package then grep for granted=true on API 33+.
+SDK_VERSION=$("${ADB[@]}" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || print 0)
+if [[ "${SDK_VERSION}" -ge 33 ]]; then
+    PERM_DUMP=$("${ADB[@]}" shell dumpsys package "$PACKAGE" 2>/dev/null | grep -A1 "POST_NOTIFICATIONS" || true)
+    if ! echo "$PERM_DUMP" | grep -q "granted=true"; then
+        echo "ERROR: POST_NOTIFICATIONS not granted=true after install -g + pm grant." >&2
+        echo "       This means GrantPermissionsActivity will steal focus from" >&2
+        echo "       SurfaceView and the M2-S04 capture will be invalid." >&2
+        echo "       dumpsys output:" >&2
+        echo "$PERM_DUMP" >&2
+        exit 4
+    fi
+    echo "=== POST_NOTIFICATIONS granted=true confirmed (API ${SDK_VERSION}) ===" >&2
+fi
+
 echo "=== clearing logcat ===" >&2
 "${ADB[@]}" logcat -c
 
@@ -78,6 +98,19 @@ sleep 0.5
 echo "=== launching $PACKAGE/$ACTIVITY ===" >&2
 "${ADB[@]}" shell am start -n "$PACKAGE/$ACTIVITY" 2>&1 | tail -2 >&2
 START_TS=$(date +%s)
+sleep 1
+
+# Round-3 (Codex blocker 2): explicit focus check post-launch. If a permission
+# dialog or other system overlay stole focus, fail fast with the actual focus
+# window so we can diagnose. surfaceCreated_ts can fire BEHIND the dialog, so
+# the prior wait-only heuristic produced false positives.
+FOCUS_LINE=$("${ADB[@]}" shell dumpsys window 2>/dev/null | grep "mCurrentFocus" | head -1 || true)
+if echo "$FOCUS_LINE" | grep -qE "GrantPermissionsActivity|PermissionController"; then
+    echo "ERROR: focus stolen by permission UI: ${FOCUS_LINE}" >&2
+    echo "       The capture would not be valid (SurfaceView is not foreground)." >&2
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 5
+fi
 
 # Round-2 (Codex blocker 3): fail-fast sanity check — wait up to 10 seconds
 # for MainActivity to log `surfaceCreated_ts=`. If it doesn't appear, the
@@ -264,10 +297,17 @@ with open(out_json, 'w') as f:
     json.dump(result, f, indent=2)
 
 if not validation_layer_loaded:
-    print("ERROR: validation layer not active — your debug build is silently "
+    print("FAIL: validation layer not active — your debug build is silently "
           "skipping the M2-S04 hard gate. Ensure libVkLayer_khronos_validation.so "
           "is packaged in jniLibs (run android/gradlew :app:fetchValidationLayer "
           "or rebuild :app:assembleDebug after the layer .so is in place).",
+          file=sys.stderr)
+if warn_count > 0 or err_count > 0:
+    print(f"FAIL: validation layer reported {warn_count} W + {err_count} E "
+          f"lines (validation_clean=false). Review sample_lines in result.json.",
+          file=sys.stderr)
+if not fps_60_pass:
+    print(f"FAIL: peak fps in 1s window {peak_fps_window} < 60 (performance gate).",
           file=sys.stderr)
 
 print(f"# device={serial} frames={len(frames)} peak_fps_1s={peak_fps_window} "
@@ -291,10 +331,18 @@ print(f"validation_warn_count:     {warn_count}")
 print(f"validation_err_count:      {err_count}")
 print(f"GATE:                      fps_60_pass={fps_60_pass} validation_clean={validation_clean}")
 
-# Round-2 (Codex blocker 4c): exit non-zero if the validation layer wasn't
-# loaded so this test cannot silently produce a false-positive PASS.
+# Round-3 (Codex round-2 blocker 3): exit non-zero on ANY gate failure, not
+# just the validation-layer-loaded check. Round-2 only failed when the layer
+# was absent — a real validation W/E or an FPS regression would still exit 0
+# and the result.json would silently report overall_pass=false to nobody.
+exit_code = 0
 if not validation_layer_loaded:
-    sys.exit(3)
+    exit_code = max(exit_code, 3)   # blocker 4c (round-1)
+if not validation_clean:
+    exit_code = max(exit_code, 4)   # blocker 3 (round-2)
+if not fps_60_pass:
+    exit_code = max(exit_code, 5)   # blocker 3 (round-2)
+sys.exit(exit_code)
 PYEOF
 PARSE_RC=$?
 

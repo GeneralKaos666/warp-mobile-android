@@ -168,8 +168,42 @@ def validationLayerUrl     = "https://github.com/KhronosGroup/Vulkan-ValidationL
 // Allow override (e.g. CI mirror or an offline copy) via env var.
 def validationLayerOverride = System.getenv("ANDROID_VALIDATION_LAYER_SO")
 
+// Round-3 Codex blocker 1: pin SHA-256 of the upstream archive AND the
+// extracted arm64-v8a .so. Verified against the locally-staged .so on
+// 2026-04-30 from Khronos vulkan-sdk-1.4.341.0 release. Any tampering of
+// the archive (network MITM, mirror substitution) or the staged .so (local
+// corruption / external override) will be caught at fetch and verify time.
+def validationLayerArchiveSha256 = "b47aa5c4a65d9787ef051276587f50cfd70dcd822a8c1b7d4d4a92e28e993459"
+def validationLayerSoSha256      = "a11e2d33f8473fdc50cde07d50c330c23de88223a2c5f566ccabe62f0ffe2308"
+
+def computeSha256 = { File f ->
+    def md = java.security.MessageDigest.getInstance("SHA-256")
+    f.withInputStream { input ->
+        byte[] buf = new byte[8192]
+        int n
+        while ((n = input.read(buf)) >= 0) md.update(buf, 0, n)
+    }
+    return md.digest().collect { String.format("%02x", it) }.join("")
+}
+
+def assertSha256 = { File f, String expected, String label ->
+    def actual = computeSha256(f)
+    if (actual != expected) {
+        throw new GradleException(
+            "${label} SHA-256 mismatch:\n" +
+            "  file:     ${f.absolutePath}\n" +
+            "  expected: ${expected}\n" +
+            "  actual:   ${actual}\n" +
+            "Either the upstream release was re-tagged, the local .so was tampered/corrupted, " +
+            "or the SHA pin is stale. If you intentionally upgraded validationLayerVersion, " +
+            "update validationLayerArchiveSha256 and validationLayerSoSha256 at the top of " +
+            "android/app/build.gradle (Round-3 Codex blocker 1)."
+        )
+    }
+}
+
 task fetchValidationLayer {
-    description = "Fetch VK_LAYER_KHRONOS_validation arm64-v8a .so for debug builds (Codex round-2 blocker 4a)."
+    description = "Fetch VK_LAYER_KHRONOS_validation arm64-v8a .so for debug builds (Codex round-2 blocker 4a + round-3 blocker 1: SHA-256 pinning)."
     outputs.file(validationLayerSrcPath)
     onlyIf { !validationLayerSrcPath.exists() }
     doLast {
@@ -181,9 +215,13 @@ task fetchValidationLayer {
                     "ANDROID_VALIDATION_LAYER_SO points to non-existent file: ${src.absolutePath}"
                 )
             }
+            // Round-3: even override path must match the pinned SHA — a hostile
+            // env var could otherwise smuggle in a malicious .so.
+            assertSha256(src, validationLayerSoSha256, "ANDROID_VALIDATION_LAYER_SO override")
             validationLayerSrcDir.mkdirs()
             ant.copy(file: src, tofile: validationLayerSrcPath)
-            logger.lifecycle("fetchValidationLayer: copied from override ${src.absolutePath}")
+            assertSha256(validationLayerSrcPath, validationLayerSoSha256, "staged validation layer .so (post-override-copy)")
+            logger.lifecycle("fetchValidationLayer: copied from override ${src.absolutePath} (SHA-256 verified)")
             return
         }
         // 1. Download the official Khronos release archive (idempotent).
@@ -194,6 +232,9 @@ task fetchValidationLayer {
                 validationLayerArchive.withOutputStream { it << input }
             }
         }
+        // Round-3: verify archive SHA-256 immediately after download (catches
+        // MITM and mirror substitution before we even open the zip).
+        assertSha256(validationLayerArchive, validationLayerArchiveSha256, "downloaded Khronos archive")
         // 2. Extract just the arm64-v8a layer .so.
         copy {
             from zipTree(validationLayerArchive)
@@ -211,15 +252,20 @@ task fetchValidationLayer {
                 "fetchValidationLayer: archive did not contain arm64-v8a/libVkLayer_khronos_validation.so"
             )
         }
+        // Round-3: verify extracted .so SHA-256 (catches archive-internal tampering).
+        assertSha256(extracted, validationLayerSoSha256, "extracted validation layer .so")
         // 3. Stage into the debug variant's jniLibs source tree (gitignored).
         validationLayerSrcDir.mkdirs()
         ant.copy(file: extracted, tofile: validationLayerSrcPath)
-        logger.lifecycle("fetchValidationLayer: staged ${validationLayerSrcPath.absolutePath}")
+        // Round-3: verify staged copy SHA-256 (catches copy-time corruption /
+        // race conditions / external interference).
+        assertSha256(validationLayerSrcPath, validationLayerSoSha256, "staged validation layer .so (post-extract-copy)")
+        logger.lifecycle("fetchValidationLayer: staged ${validationLayerSrcPath.absolutePath} (SHA-256 verified)")
     }
 }
 
 task verifyValidationLayer {
-    description = "Fail-fast if the Vulkan validation layer .so isn't present in the debug variant's jniLibs."
+    description = "Fail-fast if the Vulkan validation layer .so is missing or tampered (existence + SHA-256)."
     dependsOn fetchValidationLayer
     doLast {
         if (!validationLayerSrcPath.exists()) {
@@ -231,6 +277,11 @@ task verifyValidationLayer {
                 "Round-2 Codex blocker 4a: this .so is required for the M2-S04 acceptance gate."
             )
         }
+        // Round-3 Codex blocker 1: SHA-256 verify on every assemble — catches
+        // tampering between fetchValidationLayer (which is `onlyIf !exists`)
+        // and the actual debug assemble. A stale or substituted .so on disk
+        // would otherwise pass the existence-only check.
+        assertSha256(validationLayerSrcPath, validationLayerSoSha256, "staged validation layer .so (verify-time)")
     }
 }
 
