@@ -266,4 +266,29 @@ object NativeBridge {
 
     /** Reset input state (clear counters + event queue). Driver uses between sub-tests. */
     external fun inputReset()
+
+    // ── WindowInsets render area (M2-S12) ───────────────────────────────────
+    //
+    // Called from `ViewCompat.setOnApplyWindowInsetsListener` in MainActivity
+    // whenever the system reports new inset values (IME up/down, system bars
+    // hide/show, rotation). For M2-S12 the Rust side logs and stores the
+    // effective viewport so M3 grid rendering can avoid overlapping the IME
+    // panel or status bar.
+    //
+    // Units: physical pixels (same as the Surface / ANativeWindow dimensions).
+
+    /**
+     * Inform the Rust render path of the current effective render insets.
+     *
+     * @param top    Status-bar inset (px) — reserved for system bars at top.
+     * @param left   Left system-bar inset (px) — usually 0 in portrait.
+     * @param right  Right system-bar inset (px) — usually 0 in portrait.
+     * @param bottom IME-panel height (px) when keyboard is visible; or
+     *               navigation-bar height when in non-fullscreen mode.
+     *               Callers pass `max(ime.bottom, sysBars.bottom)` so the
+     *               effective bottom is always the larger of the two (e.g.
+     *               in full-screen mode with IME up, there is no nav bar
+     *               but IME still encroaches from the bottom).
+     */
+    external fun setRenderInsets(top: Int, left: Int, right: Int, bottom: Int)
 }

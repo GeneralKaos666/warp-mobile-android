@@ -19,6 +19,10 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * MainActivity hosts a SurfaceView that backs the Vulkan swapchain (M2-S04).
@@ -155,6 +159,15 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // user backgrounds us. Fixes M2-S05 round-2 manual unlock loop.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        // M2-S12: edge-to-edge — app draws content under system bars.
+        // We read insets via ViewCompat.setOnApplyWindowInsetsListener to
+        // reserve the bottom region for the IME panel and top for the
+        // status bar. Android 15+ enforces edge-to-edge for targetSdk 35+;
+        // applying it explicitly here ensures consistent behavior across
+        // API 31-36 (Plan Amendment 3 minSdk 31).
+        // Ref: https://developer.android.com/develop/ui/views/layout/edge-to-edge
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         // POST_NOTIFICATIONS for FGS (M1 carry-over, unchanged).
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
@@ -207,6 +220,60 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // ImeSimulationReceiver can route driver broadcasts through the
         // real WarpInputConnection.
         activeWarpInputView = warpInputView
+
+        // M2-S12: WindowInsets listener. Listens on the root FrameLayout
+        // so we receive *every* inset change — IME up/down, system bars
+        // show/hide (including the fullscreen-toggle below), and rotation.
+        //
+        // Why root layout vs SurfaceView/WarpInputView: ViewCompat.setOn-
+        // ApplyWindowInsetsListener on SurfaceView is unreliable — the
+        // SurfaceView surface is on a separate Z-layer and the framework
+        // may not propagate window insets to it. The root FrameLayout is a
+        // normal View and always receives inset dispatches first per
+        // WindowInsets traversal rules (parent → child).
+        //
+        // IME bottom vs system-bars bottom: we pass max(ime.bottom,
+        // sysBars.bottom) so the Rust side always gets the effective bottom
+        // reservation. In fullscreen mode sysBars.bottom=0 (nav bar hidden)
+        // and ime.bottom reflects only the keyboard height; in non-fullscreen
+        // normal mode sysBars.bottom is the nav-bar height and ime.bottom is
+        // 0 when the keyboard is hidden — both collapse to the right value.
+        //
+        // Refs (M2-S12, 2026-04-30):
+        //   https://developer.android.com/reference/androidx/core/view/WindowInsetsCompat
+        //   https://developer.android.com/develop/ui/views/layout/edge-to-edge
+        //   https://developer.android.com/reference/androidx/core/view/ViewCompat#setOnApplyWindowInsetsListener(android.view.View,androidx.core.view.OnApplyWindowInsetsListener)
+        //   https://developer.android.com/develop/ui/views/layout/insets/handle-ime-keyboard-visibility
+        ViewCompat.setOnApplyWindowInsetsListener(frame) { _, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // bottom = max of IME height and nav-bar height (whichever is larger).
+            val effectiveBottom = maxOf(ime.bottom, sysBars.bottom)
+            Log.i(
+                TAG,
+                "window_insets ime.bottom=${ime.bottom} " +
+                    "sysBars={top=${sysBars.top} l=${sysBars.left} r=${sysBars.right} b=${sysBars.bottom}} " +
+                    "effectiveBottom=$effectiveBottom"
+            )
+            NativeBridge.setRenderInsets(sysBars.top, sysBars.left, sysBars.right, effectiveBottom)
+            insets
+        }
+
+        // M2-S12: fullscreen mode — hide nav bar + status bar.
+        // Triggered by --ez fullscreen true on launch intent. In fullscreen
+        // mode BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE brings them back
+        // temporarily on an inward swipe from the edge, then auto-hides.
+        //
+        // Refs (M2-S12, 2026-04-30):
+        //   https://developer.android.com/reference/androidx/core/view/WindowInsetsControllerCompat
+        //   https://developer.android.com/develop/ui/views/layout/immersive
+        if (intent.getBooleanExtra("fullscreen", false)) {
+            val controller = WindowInsetsControllerCompat(window, frame)
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            Log.i(TAG, "fullscreen mode applied: systemBars hidden, transient-swipe behavior set")
+        }
 
         Log.i(TAG, "MainActivity ready ping=${NativeBridge.ping()} input_focus=${warpInputView!!.isFocused}")
 

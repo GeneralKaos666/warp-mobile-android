@@ -756,6 +756,56 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputReset(
     input::reset();
 }
 
+// ── M2-S12: WindowInsets render area ────────────────────────────────────────
+//
+// Called from `ViewCompat.setOnApplyWindowInsetsListener` in MainActivity
+// whenever system insets change (IME up/down, system bars show/hide, rotation).
+// For M2-S12 we store + log; M3 grid rendering will consume the effective
+// viewport to avoid overlap with the IME panel or status bar.
+
+/// Process-global render insets in physical pixels.
+/// Updated atomically from the UI thread (single-writer via main thread).
+static RENDER_INSETS_TOP: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
+static RENDER_INSETS_LEFT: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
+static RENDER_INSETS_RIGHT: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
+static RENDER_INSETS_BOTTOM: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
+
+/// M2-S12: store the current effective render insets reported from
+/// `ViewCompat.setOnApplyWindowInsetsListener` in MainActivity.
+///
+/// Insets are in physical pixels (same coordinate space as ANativeWindow).
+/// `bottom` is `max(ime.bottom, sysBars.bottom)` from the Kotlin side so
+/// it represents whichever reservation is larger (keyboard or nav bar).
+///
+/// For M2-S12 this is a store + log only. M3 will read these atomics when
+/// computing the effective render viewport for the block grid.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_setRenderInsets(
+    _env: JNIEnv,
+    _class: JClass,
+    top: jni::sys::jint,
+    left: jni::sys::jint,
+    right: jni::sys::jint,
+    bottom: jni::sys::jint,
+) {
+    use std::sync::atomic::Ordering;
+    init_logger();
+    RENDER_INSETS_TOP.store(top, Ordering::Relaxed);
+    RENDER_INSETS_LEFT.store(left, Ordering::Relaxed);
+    RENDER_INSETS_RIGHT.store(right, Ordering::Relaxed);
+    RENDER_INSETS_BOTTOM.store(bottom, Ordering::Relaxed);
+    log::info!(
+        target: "WarpRender",
+        "render_insets top={} left={} right={} bottom={}",
+        top, left, right, bottom
+    );
+}
+
 // ── Logger ──────────────────────────────────────────────────────────────────
 
 #[cfg(target_os = "android")]
