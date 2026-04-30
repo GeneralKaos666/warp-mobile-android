@@ -148,7 +148,7 @@ per `.omc/m2-kickoff.md` §Death-pit awareness + `.omc/plans/ralplan-warp-on-mob
 
 **描述**：`warpui::platform::android::Window::draw_frame` 必須將 wgpu/Vulkan surface lifecycle 映射到 Android `SurfaceHolder.Callback` events，而不在 mid-frame 時丟失 rendering state。`onSurfaceCreated` → `onSurfaceChanged` → `onSurfaceDestroyed` 事件順序在不同 OEM 上有差異（Samsung One UI vs AOSP）。
 
-**緩解**：從 M0 spike `spikes/vulkan-surface-recreate/` 擴展（已驗證 100-cycle p95 < 200ms on S24 Ultra、S21+、Pixel 9 Pro）。S09 story 強制跑 100 rotations 作驗收。VK_ERROR_OUT_OF_DATE_KHR 處理必須 explicit（Amendment 2 hardened acceptance）。
+**緩解**：從 M0 spike `spikes/vulkan-surface-recreate/` 擴展。M0 100-cycle p95 結果：S24 Ultra (Adreno 750) 18ms PASS；S21+ (Adreno 660) 28ms PASS；S8 (Mali-G71) 326ms **FAIL**。E1 retreat trigger（`M0-tension3-decision.md` Question E）規定「2+ of 3 devices fail 才觸發」，實際 1/3 fail 故 NOT activated；S8 已從 device matrix dropped (Plan Amendment 3 minSdk 26→31)。S09 story 強制跑 100 rotations 在當前支援的 Adreno 6xx+ device class 上驗收。VK_ERROR_OUT_OF_DATE_KHR 處理必須 explicit（Amendment 2 hardened acceptance）。
 
 **跳脫口**：若 3 天內無法穩定 recreate path，直接 `finishAndRemoveTask()` + restart Activity on surfaceDestroyed（M0 spike有記錄此模式）。
 
