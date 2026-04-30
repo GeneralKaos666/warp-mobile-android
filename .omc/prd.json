@@ -28,8 +28,8 @@
     {
       "id": "M3-S01",
       "title": "M3 kickoff doc + Plan section update + M2-S13 deferral note",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-5 PASS @ 59d8c4b",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         ".omc/m3-artifacts/M3-kickoff-confirmed.md exists per M2-kickoff-confirmed.md template documenting M3 Layer 2b integration scope, 5 ralplan §6 M3 acceptance criteria with quantified gates, entry criteria satisfied (M2 closed CONDITIONAL GO at 0506c35; warpui::platform::android backend ready; PTY plumbing from M1 ready)",
