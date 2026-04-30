@@ -57,7 +57,7 @@ M3 入場條件確認：
 | Serial | 機型 | SoC / GPU | API | 角色 |
 |---|---|---|---|---|
 | `R5CX10VFFBA` | Galaxy S24 Ultra | Snapdragon 8 Gen 3 / Adreno 750 | API 36 | **Primary flagship — M3 P0 gate device** |
-| `RFCNC0WNT9H` | Galaxy S21+ | Snapdragon 888 / Adreno 660 | API 31 | Supplementary flagship — available; not mandated |
+| `RFCNC0WNT9H` | Galaxy S21+ | Snapdragon 888 / Adreno 660 | API 31 | Mid-tier — optional/deferred; available, not mandated (per prd.json:23 "deferred to post-M3 polish; flagship-only for M3") |
 | `RFCY71LAFYE` | Galaxy S25 | Snapdragon 8 Elite / Adreno 750 | API 36 | Secondary flagship — used in M2-S04 codex repro |
 | `25c027b4...` | Samsung Note 9 | Snapdragon 845 / Adreno 630 | SDK 29 | **Below minSdk 31 baseline — NOT used** |
 
@@ -80,10 +80,10 @@ M3 目標用一句話：**PTY stream (M1) → terminal model (warp_terminal + fa
 | 工作域 | ralplan §6 M3 table row | 主要 file/path | Phase |
 |---|---|---|---|
 | 1. Facade real impl | Row #1 — `Session::spawn/write/read` + AppContext/FeatureFlag/SSH shims | `warp-src/crates/warp_terminal_mobile_facade/src/{lib,terminal,blocks,ai}.rs` (existing M0 scaffold) + new `{app_context,feature_flag,ssh_noop}.rs` | Foundation (S02) |
-| 2. cfg-gate app::terminal::* | Row #2 — desktop-only path gates at app crate edges | `app/src/terminal/model/session.rs`, `app/src/terminal/mod.rs`, `app/Cargo.toml`, `app/build.rs` | Foundation (S03) |
+| 2. cfg-gate app::terminal::* | Row #2 — desktop-only path gates at app crate edges | `warp-src/app/src/terminal/model/session.rs`, `warp-src/app/src/terminal/mod.rs`, `warp-src/app/Cargo.toml`, `warp-src/app/build.rs` | Foundation (S03) |
 | 3. Facade → warpui wiring | Row #3 — `render.rs` adapter: PTY bytes → model cells → `Window::push_frame` | `warp-src/crates/warp_terminal_mobile_facade/src/render.rs` (NEW in M3-S04) | Foundation (S04) |
-| 4. DCS hook parser | Row #4 — ESC P $ d ... 0x9c parser; **already exists in upstream warp** at `app/src/terminal/model/ansi/dcs_hooks.rs` (4 anchor refs: lines 1, 14, 407, 487; dispatch at `ansi/mod.rs:771`) | M3-S05 = extract / route through facade, NOT discover from scratch | DCS+Block (S05) |
-| 5. zsh_body.sh DCS hook | Row #4 — modified bootstrap script ships in APK assets | `app/assets/bundled/bootstrap/zsh_body.sh` | DCS+Block (S06) |
+| 4. DCS hook parser | Row #4 — ESC P $ d ... 0x9c parser; **already exists in upstream warp** at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (4 anchor refs: lines 1, 14, 407, 487; dispatch at `warp-src/app/src/terminal/model/ansi/mod.rs:771`) | M3-S05 = extract / route through facade, NOT discover from scratch | DCS+Block (S05) |
+| 5. zsh_body.sh DCS hook | Row #4 — modified bootstrap script **already exists** at `warp-src/app/assets/bundled/bootstrap/zsh_body.sh` (lines 80, 254, 301 emit hex JSON DCS) | M3-S06 = ship existing asset, NOT write new | DCS+Block (S06) |
 | 6. Block model | Row #4 extension — `Block` struct aggregation | `warp_terminal` side (verify struct location) | DCS+Block (S07) |
 
 ### Layer 2b 架構邊界
@@ -202,15 +202,15 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §Pre-mortem + M3 scope analysis:
 
 **緩解**：Pin upstream Warp HEAD in `warp-src/` at a stable commit before M3-S11. Cherry-pick is a dry-run for M3-S11 (no permanent merge); the result is diagnostic, not prescriptive.
 
-### 死坑 #3 — Block detection brittleness: warp DCS hook format undocumented/unstable
+### 死坑 #3 — DCS extraction & cfg-gating risk (NOT format-undocumented; codex round-1 archeology confirmed parser exists)
 
-**描述 (UPDATED post codex round-1 archeology)**：DCS hook parser **already exists upstream** at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (codex M0-archeology re-check confirmed: lines 1, 14, 407, 487; dispatch at `ansi/mod.rs:771`). `zsh_body.sh` already emits hex JSON DCS hooks at lines 80, 254, 301. **M3-S05 reframed**: extract + route the existing parser through `warp_terminal_mobile_facade`, NOT discover the format from scratch. **M3-S06 reframed**: ship existing `zsh_body.sh` asset, NOT write new hooks. Death-pit downgraded from "format undocumented" to "extraction & cfg-gating risk". If the existing parser has tight coupling to `app::terminal::model::*` desktop-only paths, executor must:
+**描述 (UPDATED post codex round-1 archeology)**：DCS hook parser **already exists upstream** at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (codex M0-archeology re-check confirmed: lines 1, 14, 407, 487; dispatch at `warp-src/app/src/terminal/model/ansi/mod.rs:771`). `warp-src/app/assets/bundled/bootstrap/zsh_body.sh` already emits hex JSON DCS hooks at lines 80, 254, 301. **M3-S05 reframed**: extract + route the existing parser through `warp_terminal_mobile_facade`, NOT discover the format from scratch. **M3-S06 reframed**: ship existing `zsh_body.sh` asset, NOT write new hooks. Death-pit downgraded from "format undocumented" to "extraction & cfg-gating risk". The existing parser likely has tight coupling to `app::terminal::model::*` desktop-only paths, so executor must:
 1. Dump raw bytes from a live Warp desktop session producing DCS output
 2. Reverse-engineer the payload structure from byte inspection
 3. Verify against any available `warp_terminal` internal constants
 
 **量化預警**：
-- Existing parser at `app/src/terminal/model/ansi/dcs_hooks.rs` has tight `app::*` desktop-only deps → wrap behind facade or carve out with cfg-gates (consistent with S03 strategy)
+- Existing parser at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` has tight `app::*` desktop-only deps → wrap behind facade or carve out with cfg-gates (consistent with S03 strategy)
 - If payload format has changed across upstream versions → pin to the specific warp-src commit hash where format was established
 
 **緩解**：
@@ -298,20 +298,18 @@ crates/android-host/                          (Rust workspace member, cdylib JNI
     ├── ime.rs                               M2-S10 duplicate of warp-src ime.rs (M3-S11 unification target)
     └── input.rs                             M2-S11 duplicate of warp-src input.rs (M3-S11 unification target)
 
-crates/warp_terminal_mobile_facade/          (M0 scaffold, M3-S02 fleshes out real impl)
-├── Cargo.toml                               (placeholder in M0; real deps added in S02)
-└── src/
-    └── lib.rs                               (placeholder in M0 — Session stub, builds host-side)
-    ← S02 adds: app_context.rs, feature_flag.rs, ssh_noop.rs, render.rs (S04)
-
 warp-src/                                    (gitignored; ImL1s/warp:warp-mobile/m0-facade @ d7616e5)
 └── crates/
-    ├── warp_terminal/src/                   (clean Layer 2a — NOT modified by M3 except DCS parser additive work S05)
-    ├── warpui/src/platform/android/         (M2 complete: 8 modules, 4 major-rewrite areas verified)
+    ├── warp_terminal/src/                   (clean Layer 2a — NOT modified by M3; DCS parser is in app/ not here)
+    ├── warpui/src/platform/android/         (M2 complete: 9 modules, 4 major-rewrite areas verified)
     │   ├── mod.rs / window.rs / dispatch.rs / vulkan.rs (render_scene:window.rs:313 / capture:window.rs:325)
-    │   ├── ime.rs / input.rs / font.rs (ASystemFontIterator:font.rs:169) / text_layout.rs / static_grid.rs
-    └── warp_terminal_mobile_facade/         (M0 scaffold — S02 real impl lands here)
-        └── Cargo.toml + src/lib.rs (placeholder)
+    │   └── ime.rs / input.rs / font.rs (ASystemFontIterator:font.rs:169) / text_layout.rs / static_grid.rs
+    ├── warp_terminal_mobile_facade/         (M0 scaffold — already has 4 .rs files; M3-S02 extracts/wires)
+    │   └── src/{lib,terminal,blocks,ai}.rs  (existing M0 stub state)
+    └── app/                                 (Layer 2b — DCS parser + zsh hooks ALREADY HERE)
+        ├── src/terminal/model/ansi/dcs_hooks.rs   (M3-S05 extract/route through facade)
+        ├── src/terminal/model/ansi/mod.rs:771     (DCS dispatch; S05 reuse)
+        └── assets/bundled/bootstrap/zsh_body.sh   (M3-S06 ship existing — already emits hex JSON DCS at lines 80, 254, 301)
 
 tools/scripts/                               (all take <serial> as first arg)
 ├── [M1] test-pty-{reattach,resize}.sh; test-fgs-clean-kill.sh; test-30min-idle-stress.sh
@@ -323,15 +321,18 @@ tools/scripts/                               (all take <serial> as first arg)
 ### 9.2 M3 主要新增 (S02-S11 完成後預期)
 
 ```
-crates/warp_terminal_mobile_facade/src/
-├── lib.rs              (real Session::spawn/write/read API — S02)
-├── app_context.rs      (AppContext mobile shim — S02)
-├── feature_flag.rs     (FeatureFlag shim: terminal=true, ai=false, blocks=true — S02)
-├── ssh_noop.rs         (SSH provider returning Unsupported — S02)
-└── render.rs           (PTY bytes → model → Window::push_frame adapter — S04)
+warp-src/crates/warp_terminal_mobile_facade/src/
+├── lib.rs              (M0 placeholder → real Session::spawn/write/read API — S02)
+├── terminal.rs         (M0 stub — S02 may extend or supersede)
+├── blocks.rs           (M0 stub — S07 Block model integration)
+├── ai.rs               (M0 stub — S02 may neutralize for mobile)
+├── app_context.rs      (NEW S02 — AppContext mobile shim)
+├── feature_flag.rs     (NEW S02 — FeatureFlag shim: terminal=true, ai=false, blocks=true)
+├── ssh_noop.rs         (NEW S02 — SSH provider returning Unsupported)
+└── render.rs           (NEW S04 — PTY bytes → model → Window::push_frame adapter)
 
-warp-src/crates/warp_terminal/src/
-└── dcs.rs              (DCS sequence parser — S05; verify file exists vs grep for actual location)
+warp-src/app/src/terminal/model/ansi/
+└── dcs_hooks.rs        (EXISTING upstream — S05 extract/route through facade; DO NOT create new warp_terminal/src/dcs.rs)
 
 warp-src/app/assets/bundled/bootstrap/
 └── zsh_body.sh         (modified with DCS precmd/preexec hooks — S06)
