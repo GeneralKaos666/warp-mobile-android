@@ -34,6 +34,18 @@
 //!   <https://developer.android.com/ndk/reference/group/a-native-window#anativewindow_fromsurface>
 //! - VK_ERROR_OUT_OF_DATE_KHR handling pattern from ash examples + Vulkan
 //!   spec swapchain VUID-vkAcquireNextImageKHR-semaphore-01779.
+//!
+//! ## M2-S05 web-search references (frame capture):
+//! - SaschaWillems Vulkan screenshot example (canonical readback flow):
+//!   <https://github.com/SaschaWillems/Vulkan/blob/master/examples/screenshot/screenshot.cpp>
+//! - Khronos Vulkan-Docs synchronization examples (image-layout transitions):
+//!   <https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples>
+//! - vkCmdCopyImageToBuffer + host-coherent staging buffer pattern:
+//!   <https://docs.vulkan.org/guide/latest/synchronization_examples.html>
+//! - ARM mobile best-practice on swapchain TRANSFER_SRC usage:
+//!   <https://github.com/ARM-software/vulkan_best_practice_for_mobile_developers/blob/master/docs/faq.md>
+//! - png crate (pure-Rust PNG encoder, used over `image` to keep ABI lean):
+//!   <https://github.com/image-rs/image-png>
 
 #![cfg(target_os = "android")]
 
@@ -61,6 +73,12 @@ struct VulkanSurface {
     render_pass: vk::RenderPass,
     framebuffers: Vec<vk::Framebuffer>,
     image_views: Vec<vk::ImageView>,
+    /// M2-S05: handles to the swapchain images (parallel to `image_views`).
+    /// Owned by `VkSwapchainKHR` — freed implicitly on swapchain destroy.
+    swapchain_images: Vec<vk::Image>,
+    /// M2-S05: whether swapchain images were created with TRANSFER_SRC usage.
+    /// Driven from `caps.supported_usage_flags`; false → capture path soft-fails.
+    swapchain_supports_transfer_src: bool,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
     graphics_queue: vk::Queue,
@@ -274,6 +292,8 @@ unsafe fn create_swapchain_and_dependents(
         vk::RenderPass,
         Vec<vk::ImageView>,
         Vec<vk::Framebuffer>,
+        Vec<vk::Image>, // M2-S05: raw swapchain images
+        bool,           // M2-S05: TRANSFER_SRC enabled flag
         vk::CommandPool,
         Vec<vk::CommandBuffer>,
     ),
@@ -337,6 +357,27 @@ unsafe fn create_swapchain_and_dependents(
         "composite_alpha selected: {:?} (supported_mask=0x{:x})",
         composite_alpha, caps.supported_composite_alpha.as_raw());
 
+    // M2-S05: enable TRANSFER_SRC on swapchain images so `vkCmdCopyImageToBuffer`
+    // can read directly from a presentable image. Spec REQUIRES the driver to
+    // advertise this in `caps.supported_usage_flags` for non-fullscreen
+    // surfaces, but we MUST query and conditionally enable to avoid
+    // VUID-VkSwapchainCreateInfoKHR-imageUsage-01427 on drivers that don't.
+    // Refs:
+    //   <https://github.com/SaschaWillems/Vulkan/blob/master/examples/screenshot/screenshot.cpp>
+    //   <https://github.com/ARM-software/vulkan_best_practice_for_mobile_developers/blob/master/docs/faq.md>
+    let mut image_usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
+    if caps
+        .supported_usage_flags
+        .contains(vk::ImageUsageFlags::TRANSFER_SRC)
+    {
+        image_usage |= vk::ImageUsageFlags::TRANSFER_SRC;
+    } else {
+        log::warn!(target: "WarpVulkan",
+            "swapchain TRANSFER_SRC NOT advertised; capture path will soft-fail \
+             (supported_usage_flags=0x{:x})",
+            caps.supported_usage_flags.as_raw());
+    }
+
     let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
         .surface(surface)
         .min_image_count(image_count)
@@ -344,7 +385,7 @@ unsafe fn create_swapchain_and_dependents(
         .image_color_space(format.color_space)
         .image_extent(extent)
         .image_array_layers(1)
-        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        .image_usage(image_usage)
         .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
         .pre_transform(caps.current_transform)
         .composite_alpha(composite_alpha)
@@ -429,6 +470,8 @@ unsafe fn create_swapchain_and_dependents(
         .command_buffer_count(framebuffers.len() as u32);
     let command_buffers = device.allocate_command_buffers(&alloc_info)?;
 
+    let swapchain_supports_transfer_src = image_usage.contains(vk::ImageUsageFlags::TRANSFER_SRC);
+
     Ok((
         swapchain,
         format.format,
@@ -436,6 +479,8 @@ unsafe fn create_swapchain_and_dependents(
         render_pass,
         image_views,
         framebuffers,
+        images,
+        swapchain_supports_transfer_src,
         command_pool,
         command_buffers,
     ))
@@ -510,6 +555,8 @@ fn init_surface(
         render_pass,
         image_views,
         framebuffers,
+        swapchain_images,
+        swapchain_supports_transfer_src,
         command_pool,
         command_buffers,
     ) = unsafe {
@@ -546,6 +593,8 @@ fn init_surface(
         render_pass,
         framebuffers,
         image_views,
+        swapchain_images,
+        swapchain_supports_transfer_src,
         command_pool,
         command_buffers,
         graphics_queue,
@@ -579,6 +628,8 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
         render_pass,
         image_views,
         framebuffers,
+        swapchain_images,
+        swapchain_supports_transfer_src,
         command_pool,
         command_buffers,
     ) = create_swapchain_and_dependents(
@@ -598,6 +649,8 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     s.render_pass = render_pass;
     s.image_views = image_views;
     s.framebuffers = framebuffers;
+    s.swapchain_images = swapchain_images;
+    s.swapchain_supports_transfer_src = swapchain_supports_transfer_src;
     s.command_pool = command_pool;
     s.command_buffers = command_buffers;
 
@@ -734,6 +787,411 @@ unsafe fn record_and_present_clear(
         Ok(FrameOutcome::PresentedSuboptimal)
     } else {
         Ok(FrameOutcome::Presented)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// M2-S05: frame capture (vkCmdCopyImageToBuffer + PNG encode)
+//
+// Mirrors the canonical impl in
+//   warp-src/crates/warpui/src/platform/android/vulkan.rs
+// Both follow the SaschaWillems screenshot.cpp readback pattern.
+// ---------------------------------------------------------------------------
+
+/// Metadata returned by a successful capture.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CaptureMetadata {
+    pub width: u32,
+    pub height: u32,
+    pub mean_r: u8,
+    pub mean_g: u8,
+    pub mean_b: u8,
+    pub png_bytes_written: u64,
+    pub bgra_swizzled: bool,
+}
+
+fn find_memory_type(
+    instance: &ash::Instance,
+    phys_device: vk::PhysicalDevice,
+    memory_type_bits: u32,
+    properties: vk::MemoryPropertyFlags,
+) -> Option<u32> {
+    // SAFETY: phys_device is owned by `instance`.
+    let mem_props = unsafe { instance.get_physical_device_memory_properties(phys_device) };
+    for i in 0..mem_props.memory_type_count {
+        let suitable = (memory_type_bits & (1 << i)) != 0;
+        let supported = mem_props.memory_types[i as usize]
+            .property_flags
+            .contains(properties);
+        if suitable && supported {
+            return Some(i);
+        }
+    }
+    None
+}
+
+// The inner variant fields are intentionally read only via Debug formatting
+// in error logs; the dead_code lint can't see through {:?} usage.
+#[allow(dead_code)]
+#[derive(Debug)]
+enum CaptureError {
+    Vk(vk::Result),
+    Io(std::io::Error),
+    Png(png::EncodingError),
+    Encode(String),
+}
+
+impl From<vk::Result> for CaptureError {
+    fn from(e: vk::Result) -> Self {
+        CaptureError::Vk(e)
+    }
+}
+impl From<std::io::Error> for CaptureError {
+    fn from(e: std::io::Error) -> Self {
+        CaptureError::Io(e)
+    }
+}
+impl From<png::EncodingError> for CaptureError {
+    fn from(e: png::EncodingError) -> Self {
+        CaptureError::Png(e)
+    }
+}
+
+/// Capture pipeline — see canonical impl in warpui's vulkan.rs for the full
+/// pipeline doc + web-search refs.
+#[allow(clippy::too_many_lines)]
+unsafe fn record_and_capture(
+    s: &mut VulkanSurface,
+    clear_rgba: [f32; 4],
+    out_path: &std::path::Path,
+) -> Result<CaptureMetadata, CaptureError> {
+    let device = &s.device;
+    let extent = s.extent;
+    let buffer_size: vk::DeviceSize = (extent.width as u64) * (extent.height as u64) * 4;
+
+    let (image_index, _suboptimal) = match s.swapchain_loader.acquire_next_image(
+        s.swapchain,
+        u64::MAX,
+        s.image_available,
+        vk::Fence::null(),
+    ) {
+        Ok(pair) => pair,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            log::warn!(target: "WarpVulkan", "capture: acquire returned OUT_OF_DATE");
+            return Err(CaptureError::Vk(vk::Result::ERROR_OUT_OF_DATE_KHR));
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let target_image = s.swapchain_images[image_index as usize];
+
+    // Staging buffer — host-coherent so we don't need vkInvalidateMappedMemoryRanges.
+    let buffer_info = vk::BufferCreateInfo::default()
+        .size(buffer_size)
+        .usage(vk::BufferUsageFlags::TRANSFER_DST)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let staging_buffer = device.create_buffer(&buffer_info, None)?;
+
+    let mem_req = device.get_buffer_memory_requirements(staging_buffer);
+    let mem_type = find_memory_type(
+        &s.instance,
+        s.phys_device,
+        mem_req.memory_type_bits,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )
+    .ok_or_else(|| {
+        device.destroy_buffer(staging_buffer, None);
+        CaptureError::Encode("no HOST_VISIBLE | HOST_COHERENT memory type".into())
+    })?;
+
+    let alloc_info = vk::MemoryAllocateInfo::default()
+        .allocation_size(mem_req.size)
+        .memory_type_index(mem_type);
+    let staging_memory = match device.allocate_memory(&alloc_info, None) {
+        Ok(m) => m,
+        Err(e) => {
+            device.destroy_buffer(staging_buffer, None);
+            return Err(e.into());
+        }
+    };
+    if let Err(e) = device.bind_buffer_memory(staging_buffer, staging_memory, 0) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+
+    let cmd_buf = s.command_buffers[image_index as usize];
+    let begin_info = vk::CommandBufferBeginInfo::default()
+        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    if let Err(e) = device.begin_command_buffer(cmd_buf, &begin_info) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+
+    // Render-pass clear so the image carries the magenta color.
+    let clear_values = [vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: clear_rgba,
+        },
+    }];
+    let rp_begin = vk::RenderPassBeginInfo::default()
+        .render_pass(s.render_pass)
+        .framebuffer(s.framebuffers[image_index as usize])
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D::default(),
+            extent: s.extent,
+        })
+        .clear_values(&clear_values);
+    device.cmd_begin_render_pass(cmd_buf, &rp_begin, vk::SubpassContents::INLINE);
+    device.cmd_end_render_pass(cmd_buf);
+
+    // PRESENT_SRC_KHR → TRANSFER_SRC_OPTIMAL.
+    let to_transfer_src = vk::ImageMemoryBarrier::default()
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+        .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .image(target_image)
+        .subresource_range(
+            vk::ImageSubresourceRange::default()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1),
+        );
+    device.cmd_pipeline_barrier(
+        cmd_buf,
+        vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::DependencyFlags::empty(),
+        &[],
+        &[],
+        &[to_transfer_src],
+    );
+
+    // Copy image → buffer.
+    let region = vk::BufferImageCopy::default()
+        .buffer_offset(0)
+        .buffer_row_length(0)
+        .buffer_image_height(0)
+        .image_subresource(
+            vk::ImageSubresourceLayers::default()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .mip_level(0)
+                .base_array_layer(0)
+                .layer_count(1),
+        )
+        .image_offset(vk::Offset3D::default())
+        .image_extent(vk::Extent3D {
+            width: extent.width,
+            height: extent.height,
+            depth: 1,
+        });
+    device.cmd_copy_image_to_buffer(
+        cmd_buf,
+        target_image,
+        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        staging_buffer,
+        &[region],
+    );
+
+    // TRANSFER_SRC_OPTIMAL → PRESENT_SRC_KHR.
+    let to_present_src = vk::ImageMemoryBarrier::default()
+        .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+        .dst_access_mask(vk::AccessFlags::empty())
+        .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .image(target_image)
+        .subresource_range(
+            vk::ImageSubresourceRange::default()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1),
+        );
+    device.cmd_pipeline_barrier(
+        cmd_buf,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+        vk::DependencyFlags::empty(),
+        &[],
+        &[],
+        &[to_present_src],
+    );
+
+    if let Err(e) = device.end_command_buffer(cmd_buf) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+
+    // Wait on image_available (signaled by acquire) but do NOT signal
+    // render_finished — we don't present this frame, so the semaphore would
+    // otherwise stay signaled-but-unwaited and trip the validation layer
+    // on the next normal render path's wait. (See canonical impl for the
+    // VUID-vkQueueSubmit-pSignalSemaphores semaphore-reuse rationale.)
+    let wait_semaphores = [s.image_available];
+    let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+    let cmd_bufs = [cmd_buf];
+    let submit_info = vk::SubmitInfo::default()
+        .wait_semaphores(&wait_semaphores)
+        .wait_dst_stage_mask(&wait_stages)
+        .command_buffers(&cmd_bufs);
+    if let Err(e) = device.queue_submit(s.graphics_queue, &[submit_info], s.fence) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+    if let Err(e) = device.queue_wait_idle(s.graphics_queue) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+    let _ = device.reset_fences(&[s.fence]);
+    let _ = device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty());
+
+    // Map memory + extract pixels.
+    let raw_ptr = match device.map_memory(
+        staging_memory,
+        0,
+        buffer_size,
+        vk::MemoryMapFlags::empty(),
+    ) {
+        Ok(p) => p as *const u8,
+        Err(e) => {
+            device.free_memory(staging_memory, None);
+            device.destroy_buffer(staging_buffer, None);
+            return Err(e.into());
+        }
+    };
+    let pixels: &[u8] = std::slice::from_raw_parts(raw_ptr, buffer_size as usize);
+
+    let bgra_swizzled = matches!(
+        s.surface_format,
+        vk::Format::B8G8R8A8_UNORM | vk::Format::B8G8R8A8_SRGB
+    );
+
+    let mut rgba = Vec::with_capacity(buffer_size as usize);
+    if bgra_swizzled {
+        for chunk in pixels.chunks_exact(4) {
+            rgba.push(chunk[2]);
+            rgba.push(chunk[1]);
+            rgba.push(chunk[0]);
+            rgba.push(chunk[3]);
+        }
+    } else {
+        rgba.extend_from_slice(pixels);
+    }
+
+    device.unmap_memory(staging_memory);
+
+    let (mut sum_r, mut sum_g, mut sum_b): (u64, u64, u64) = (0, 0, 0);
+    let pixel_count = (extent.width as u64) * (extent.height as u64);
+    for chunk in rgba.chunks_exact(4) {
+        sum_r += chunk[0] as u64;
+        sum_g += chunk[1] as u64;
+        sum_b += chunk[2] as u64;
+    }
+    let mean_r = (sum_r / pixel_count.max(1)) as u8;
+    let mean_g = (sum_g / pixel_count.max(1)) as u8;
+    let mean_b = (sum_b / pixel_count.max(1)) as u8;
+
+    if let Some(parent) = out_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = match std::fs::File::create(out_path) {
+        Ok(f) => f,
+        Err(e) => {
+            device.free_memory(staging_memory, None);
+            device.destroy_buffer(staging_buffer, None);
+            return Err(e.into());
+        }
+    };
+    let writer = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, extent.width, extent.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = match encoder.write_header() {
+        Ok(w) => w,
+        Err(e) => {
+            device.free_memory(staging_memory, None);
+            device.destroy_buffer(staging_buffer, None);
+            return Err(e.into());
+        }
+    };
+    if let Err(e) = writer.write_image_data(&rgba) {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+    if let Err(e) = writer.finish() {
+        device.free_memory(staging_memory, None);
+        device.destroy_buffer(staging_buffer, None);
+        return Err(e.into());
+    }
+
+    let png_bytes_written = std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0);
+
+    device.free_memory(staging_memory, None);
+    device.destroy_buffer(staging_buffer, None);
+
+    Ok(CaptureMetadata {
+        width: extent.width,
+        height: extent.height,
+        mean_r,
+        mean_g,
+        mean_b,
+        png_bytes_written,
+        bgra_swizzled,
+    })
+}
+
+/// Public capture entry — JNI calls this from `renderCaptureFrame`.
+///
+/// Returns `Some(meta)` on success or `None` if no surface attached / capture
+/// path failed (see logcat WarpVulkan tag for diagnosis).
+pub(crate) fn capture_to_png(
+    clear_rgba: [f32; 4],
+    out_path: &std::path::Path,
+) -> Option<CaptureMetadata> {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        log::error!(target: "WarpVulkan", "capture_to_png: no surface attached");
+        return None;
+    };
+    if !s.swapchain_supports_transfer_src {
+        log::error!(target: "WarpVulkan",
+            "capture_to_png: swapchain does not advertise TRANSFER_SRC; cannot read back");
+        return None;
+    }
+    match unsafe { record_and_capture(s, clear_rgba, out_path) } {
+        Ok(meta) => {
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            log::info!(target: "WarpVulkan",
+                "capture_ok frame={} ts={} dims={}x{} bytes={} mean_rgb={},{},{} bgra_swizzled={}",
+                n, uptime_millis(), meta.width, meta.height,
+                meta.png_bytes_written, meta.mean_r, meta.mean_g, meta.mean_b,
+                meta.bgra_swizzled);
+            Some(meta)
+        }
+        Err(e) => {
+            log::error!(target: "WarpVulkan", "capture_to_png failed: {:?}", e);
+            None
+        }
     }
 }
 

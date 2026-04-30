@@ -12,6 +12,12 @@
         <receiver
             android:name=".PtyBroadcastReceiver"
             tools:remove="android:permission" />
+        <!-- M2-S05: same pattern as PtyBroadcastReceiver — strip the
+             PTY_CONTROL signature requirement so `adb shell am broadcast`
+             can deliver CAPTURE_FRAME during device-driver tests. -->
+        <receiver
+            android:name=".CaptureFrameReceiver"
+            tools:remove="android:permission" />
         <!-- Export service in debug so `adb shell am start-foreground-service` works -->
         <service
             android:name=".WarpTerminalService"

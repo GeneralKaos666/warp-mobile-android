@@ -50,6 +50,13 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         }
     }
 
+    // M2-S05: the CAPTURE_FRAME broadcast is handled by the manifest-registered
+    // [CaptureFrameReceiver] — runtime-registered receivers don't reliably
+    // match `am broadcast` from `shell` UID on Android 14+. The receiver
+    // calls into [NativeBridge.renderCaptureFrame] directly, which serializes
+    // against the Choreographer per-vsync `renderClearFrame` calls via the
+    // swapchain mutex inside the Rust crate.
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

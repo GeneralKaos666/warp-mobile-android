@@ -1,0 +1,60 @@
+{
+  "story": "M2-S05",
+  "device_serial": "RFCY71LAFYE",
+  "png_path_local": "/tmp/m2-s05-capture.png",
+  "png_file_size_bytes": 57447,
+  "capture": {
+    "frame_num": 358,
+    "ts_ms": 1184985264,
+    "width": 1080,
+    "height": 2340,
+    "bytes_logged": 57447,
+    "mean_r": 255,
+    "mean_g": 0,
+    "mean_b": 255,
+    "bgra_swizzled": false
+  },
+  "pil_verify": {
+    "dims": [
+      1080,
+      2340
+    ],
+    "mode": "RGBA",
+    "mean": {
+      "r": 255.0,
+      "g": 0.0,
+      "b": 255.0,
+      "a": 255.0
+    },
+    "error": null
+  },
+  "validation_layer": {
+    "clean": true,
+    "layer_loaded": true,
+    "warn_count": 0,
+    "err_count": 0,
+    "sample_lines": [
+      {
+        "severity": "D",
+        "line": "04-30 16:36:02.643 D/warp-android-host(21963): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10406.bin for reading (it may not exist yet)"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 16:36:02.646 D/warp-android-host(21963): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10406.bin for writing"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 16:36:02.651 D/warp-android-host(21963): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10406.bin for reading (it may not exist yet)"
+      }
+    ]
+  },
+  "acceptance_gate": {
+    "capture_ok_seen": true,
+    "dims_match": true,
+    "not_black": true,
+    "magenta_ok": true,
+    "file_size_ok": true,
+    "validation_clean_pass": true,
+    "overall_pass": true
+  }
+}

@@ -46,4 +46,25 @@ object NativeBridge {
 
     /** Cumulative frame count since the last attach. */
     external fun renderFramesPresented(): Long
+
+    /**
+     * M2-S05: capture a single frame as PNG at `path`.
+     *
+     * Renders one clear-color frame (RGBA in [0.0, 1.0]), copies the swapchain
+     * image to a host-coherent staging buffer via `vkCmdCopyImageToBuffer`,
+     * swizzles BGRA→RGBA if needed, encodes a PNG, and writes it to disk.
+     *
+     * Returns `true` on success. The Rust side logs `capture_ok frame=<n>
+     * ts=<ms> dims=<W>x<H> bytes=<n> mean_rgb=<r>,<g>,<b>` which the device
+     * driver greps for.
+     *
+     * Synchronous — blocks until `vkQueueWaitIdle` completes.
+     */
+    external fun renderCaptureFrame(
+        path: String,
+        r: Float,
+        g: Float,
+        b: Float,
+        a: Float
+    ): Boolean
 }

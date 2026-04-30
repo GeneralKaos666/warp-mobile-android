@@ -280,6 +280,44 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderFramesPresented(
     vulkan::frames_presented() as jlong
 }
 
+/// M2-S05: capture a single frame as PNG to the given file path.
+///
+/// Renders one magenta clear frame, copies the swapchain image to a host-coherent
+/// staging buffer via `vkCmdCopyImageToBuffer`, swizzles BGRA→RGBA if needed,
+/// and encodes a PNG via the `png` crate.
+///
+/// Returns `true` on success. Logs a `capture_ok` line with frame number,
+/// dimensions, mean RGB, and bytes written; the test driver greps for this.
+///
+/// Synchronous — blocks the calling thread until `vkQueueWaitIdle` completes.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderCaptureFrame(
+    mut env: JNIEnv,
+    _class: JClass,
+    path: JString,
+    r: jfloat,
+    g: jfloat,
+    b: jfloat,
+    a: jfloat,
+) -> jboolean {
+    init_logger();
+    let path_str: String = match env.get_string(&path) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(target: "warp-android-host",
+                "renderCaptureFrame: could not extract path JString: {:?}", e);
+            return JNI_FALSE;
+        }
+    };
+    let out_path = std::path::PathBuf::from(&path_str);
+    match vulkan::capture_to_png([r, g, b, a], &out_path) {
+        Some(_) => JNI_TRUE,
+        None => JNI_FALSE,
+    }
+}
+
 // On non-Android Unix targets (host-side cargo test) the Vulkan symbols are
 // gated out — JNI bindings are only meaningful on Android.
 

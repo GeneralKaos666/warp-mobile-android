@@ -27,3 +27,9 @@ ndk-sys = "0.6"
 # pattern. The harness here is the production runtime path until M3 unifies
 # the workspaces.
 ash = "0.38"
+# M2-S05: PNG encoding for `request_frame_capture`. Pure-Rust, no system deps,
+# cross-compiles cleanly to aarch64-linux-android. Chosen over `image` because
+# image's default features pull in JPEG/GIF/etc. decoders we don't need; the
+# `png` crate is image's underlying PNG codec anyway.
+# Ref: <https://github.com/image-rs/image-png>
+png = { version = "0.17", default-features = false }

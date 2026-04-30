@@ -53,6 +53,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- M2-S05: frame-capture trigger receiver. Manifest-registered so
+             `adb shell am broadcast` from shell UID can deliver to it
+             (runtime-registered receivers don't reliably match on Android
+             14+ when reached from another UID). The action is gated behind
+             the same PTY_CONTROL signature permission as the PTY ops since
+             this is a debug-only test hook — production capture path will
+             go through warpui's renderer in M2-S08+. -->
+        <receiver
+            android:name=".CaptureFrameReceiver"
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.CAPTURE_FRAME" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
