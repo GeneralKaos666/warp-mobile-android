@@ -92,9 +92,14 @@ take_snapshot() {
     local alive=0
     [[ -s "$ps_file" ]] && alive=1
 
+    # Use isForeground=true from dumpsys activity services as the primary
+    # FGS-alive check. Samsung One UI suppresses notification drawer display
+    # (importance=NONE) so the dumpsys notification --noredact grep returns 0
+    # even when the FGS framework state is correct. isForeground reflects
+    # actual ServiceRecord state regardless of vendor display policy.
     local notif=0
-    adb_cmd shell dumpsys notification --noredact 2>/dev/null \
-        | grep -q "Warp terminal" && notif=1 || true
+    adb_cmd shell dumpsys activity services "$PKG/.WarpTerminalService" 2>/dev/null \
+        | grep -q "isForeground=true" && notif=1 || true
 
     local anomalies=0
     anomalies=$(adb_cmd logcat -d 2>/dev/null \
@@ -173,6 +178,8 @@ FINAL_ANOMALIES=$(wc -l < "$ANOMALY_FILE" | tr -d ' ')
 # ── overall pass/fail ────────────────────────────────────────────────────────
 PASS="true"
 [[ "$SNAP_t30_ALIVE" -eq 0 ]] && PASS="false"
+# notif now reflects isForeground=true (Samsung-aware); FGS state correctness
+# is required for M1 acceptance criterion 1, drawer display is not.
 [[ "$SNAP_t30_NOTIF" -eq 0 ]] && PASS="false"
 [[ "$FINAL_ANOMALIES" -gt 0 ]] && PASS="false"
 # pwd latency: -1 means no response; >= 500 is also a fail (PRD says <500ms)
