@@ -152,8 +152,8 @@
     {
       "id": "M2-S09",
       "title": "Activity recreate swapchain p95 less than 200ms (M2a Acceptance #2)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-2 CODEX_PASS at main e0e3afc + b0a5865 (regex fix). M2a Acceptance #2 gate CLEARED. 100-cycle Activity recreate stress on Galaxy S24 Ultra R5CX10VFFBA: codex's own rerun produced 93/200 valid pairs (Samsung Launcher reclaimed focus around cycle 47, non-deterministic), p95=155ms (gate <200ms; 22% margin), max=171ms (gate <300ms; 43% margin), validation clean (W=0/E=0). MainActivity production fix during bring-up: skip spurious follow-up surfaceChanged re-attach when dims unchanged (was costing ~80ms per rotation, directly causing p95 to exceed gate). Round-1 codex blocker: PID-boundary filter regex r'\\((\\d+)\\)' missed padded logcat PID like '( 8089)' — fixed in b0a5865 to r'\\(\\s*(\\d+)\\)'. Codex round-2 verified parser correctly handles padded/unpadded + drops cross-PID pairs. M2a story sequence (S01..S09): all 9 stories CODEX_PASS at: M2-S01 round-3, M2-S02 round-2, M2-S03 round-1, M2-S04 round-4 (death-pit #1, 8 cumulative blockers), M2-S05 round-3 (6 cumulative blockers), M2-S06 round-1, M2-S07 round-1 (M2a-font sub-gate), M2-S08 round-1 (M2a Acceptance #1, 11k glyph instances/frame at p95=9ms), M2-S09 round-2 (M2a Acceptance #2). Total cumulative codex blockers caught + fixed across M2a: 21+. Honest disclosure: 93/200 sample size due to Launcher focus loss; M0 spike's 18ms baseline is NOT comparable (50-line clear-only with configChanges defeating Activity recreate); 150ms is realistic flagship Activity recreate baseline.",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Activity.recreate() loop driven via adb shell wm rotation 100 cycles, swapchain re-acquires within 200ms p95",
