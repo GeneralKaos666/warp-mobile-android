@@ -1,0 +1,21 @@
+05-01 04:45:55.120  2814  5495 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 04:45:55.123  2814  5495 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 04:45:55.127 13678 13678 I WarpTerminal: TERM_INJECT_RAW cmd_id=sgr_test bytes=35 first=0x1b
+05-01 04:45:55.127 13678 13678 D warp-android-host: warp_mobile_android_host::terminal_model: sgr_color codes=[31] fg=0xCC0000FF bg=0x000000FF attrs=0x00
+05-01 04:45:55.127 13678 13678 D warp-android-host: warp_mobile_android_host::terminal_model: sgr_color codes=[32] fg=0x4E9A06FF bg=0x000000FF attrs=0x00
+05-01 04:45:55.127 13678 13678 D warp-android-host: warp_mobile_android_host::terminal_model: sgr_color codes=[34] fg=0x3465A4FF bg=0x000000FF attrs=0x00
+05-01 04:45:55.127 13678 13678 D warp-android-host: warp_mobile_android_host::terminal_model: sgr_color codes=[0] fg=0xFFFFFFFF bg=0x000000FF attrs=0x00
+05-01 04:45:55.127 13678 13678 I WarpTerminal: TERM_INJECT_RAW ingested=35
+05-01 04:45:55.127 13678 13678 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=4,dcs_hook_count=0,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00
+05-01 04:45:56.299  2814  5495 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 04:45:56.299  2814  5495 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 04:45:56.302 13678 13678 I WarpTerminal: TERM_INJECT_RAW cmd_id=dcs_test bytes=115 first=0x1b
+05-01 04:45:56.302 13678 13678 I warp-android-host: warp_mobile_android_host::terminal_model: dcs_hook seq=1 body_len=55 json="{\"hook\":\"Preexec\",\"value\":{\"command\":\"ls -la /system\"}}"
+05-01 04:45:56.302 13678 13678 I WarpTerminal: TERM_INJECT_RAW ingested=115
+05-01 04:45:56.302 13678 13678 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=4,dcs_hook_count=1,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00
+05-01 04:45:57.465  2814  5495 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 04:45:57.467  2814  5495 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_INJECT_RAW flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 04:45:57.469 13678 13678 I WarpTerminal: TERM_INJECT_RAW cmd_id=cmdfin_test bytes=165 first=0x1b
+05-01 04:45:57.470 13678 13678 I warp-android-host: warp_mobile_android_host::terminal_model: dcs_hook seq=2 body_len=80 json="{\"hook\":\"CommandFinished\",\"value\":{\"exit_code\":0,\"next_block_id\":\"precmd-42-1\"}}"
+05-01 04:45:57.470 13678 13678 I WarpTerminal: TERM_INJECT_RAW ingested=165
+05-01 04:45:57.470 13678 13678 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=4,dcs_hook_count=2,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00

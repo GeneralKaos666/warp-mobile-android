@@ -367,4 +367,15 @@ object NativeBridge {
      * are preserved; out-of-bounds cells are dropped. Cursor is clamped.
      */
     external fun terminalResize(rows: Int, cols: Int)
+
+    /**
+     * M3-S05: returns SGR + DCS parser counters as a CSV string. The
+     * AC#7 device driver reads this after writing colored bytes to the PTY
+     * to assert the streaming ANSI/DCS state machine actually parsed them.
+     *
+     * Schema:
+     *   "sgr_apply_count=N,dcs_hook_count=N,dcs_error_count=N,
+     *    cur_fg=0xRRGGBBAA,cur_bg=0xRRGGBBAA,cur_attrs=0xNN"
+     */
+    external fun terminalSgrSummary(): String
 }

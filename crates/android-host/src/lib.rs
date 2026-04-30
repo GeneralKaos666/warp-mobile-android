@@ -986,6 +986,30 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalModelStats(
         .into_raw()
 }
 
+/// M3-S05: returns SGR/DCS parser counters as a CSV string. Used by the
+/// device-side AC#7 driver to verify that ANSI color sequences and DCS
+/// frames were actually parsed (rather than getting silently dropped).
+///
+/// Schema:
+///   `sgr_apply_count=N,dcs_hook_count=N,dcs_error_count=N,cur_fg=0xRRGGBBAA,cur_bg=0xRRGGBBAA,cur_attrs=0xNN`
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalSgrSummary(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let model = terminal_model::global_model();
+    let (sgr, hooks, errs) = model.parser_stats();
+    let (fg, bg, attrs) = model.current_attrs();
+    let s = format!(
+        "sgr_apply_count={},dcs_hook_count={},dcs_error_count={},cur_fg=0x{:08X},cur_bg=0x{:08X},cur_attrs=0x{:02X}",
+        sgr, hooks, errs, fg, bg, attrs
+    );
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
 /// M3-S04: resize the terminal model. Called from the Java side when the
 /// surface dimensions change (e.g. rotation, IME show/hide). The grid is
 /// reshaped; existing in-bounds cells are preserved.

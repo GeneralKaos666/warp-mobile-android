@@ -30,6 +30,11 @@
         <receiver
             android:name=".TouchSimulationReceiver"
             tools:remove="android:permission" />
+        <!-- M3-S05: same pattern — strip PTY_CONTROL so adb shell broadcasts
+             can deliver TERM_INJECT_RAW for ANSI/DCS streaming-parser tests. -->
+        <receiver
+            android:name=".TerminalSimulationReceiver"
+            tools:remove="android:permission" />
         <!-- Export service in debug so `adb shell am start-foreground-service` works -->
         <service
             android:name=".WarpTerminalService"

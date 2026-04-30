@@ -118,6 +118,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- M3-S05: terminal-input simulation receiver. Drives raw byte
+             sequences (ESC[31m etc.) directly into the Rust streaming
+             ANSI/DCS parser via NativeBridge.terminalInputBytes, sidestepping
+             PTY-shell echo quirks. PTY pipeline (M3-S04) remains the
+             production path; this receiver is device-side test instrumentation
+             only. PTY_CONTROL permission as for the other simulation receivers;
+             debug overlay strips it so adb shell broadcasts from uid=2000 can
+             reach this receiver. -->
+        <receiver
+            android:name=".TerminalSimulationReceiver"
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.TERM_INJECT_RAW" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

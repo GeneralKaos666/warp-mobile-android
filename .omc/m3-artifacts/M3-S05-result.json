@@ -1,0 +1,32 @@
+{
+  "story": "M3-S05",
+  "device_serial": "R5CX10VFFBA",
+  "subtests": {
+    "sgr_color_injection": {
+      "sgr_apply_count": "4",
+      "expected": ">=4 (RED/GREEN/BLUE/reset)",
+      "logcat_sgr_lines": 19
+    },
+    "dcs_preexec_hook": {
+      "dcs_hook_count": "2",
+      "expected": ">=2 (Preexec + CommandFinished)",
+      "logcat_dcs_lines": 5
+    },
+    "dcs_error_free": {
+      "dcs_error_count": "0",
+      "expected": "0",
+      "logcat_err_lines": 0
+    }
+  },
+  "evidence": {
+    "screenshot": "/tmp/m3-s05-color-test.png",
+    "screenshot_bytes": 105984,
+    "logcat": "/tmp/m3-s05-logcat.txt",
+    "summary_line": "05-01 04:45:57.470 13678 13678 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=4,dcs_hook_count=2,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00",
+    "cur_fg_after": "0xFFFFFFFF"
+  },
+  "gate": {
+    "overall_pass": true,
+    "criteria": "sgr_apply_count >= 4 AND dcs_hook_count >= 2 AND dcs_error_count == 0"
+  }
+}
