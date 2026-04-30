@@ -109,3 +109,6 @@ TODO.local.md
 secrets/
 *.secret
 .omc/project-memory.json
+
+# Claude Code per-project state
+.claude/
