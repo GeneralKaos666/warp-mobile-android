@@ -139,6 +139,101 @@ task copyRustLibsRelease(type: Copy) {
     into jniLibsDirRelease
 }
 
+// ---------------------------------------------------------------------------
+// Vulkan validation layer fetch (Round-2, Codex blocker 4a)
+//
+// Background: the M2-S04 acceptance gate requires VK_LAYER_KHRONOS_validation
+// to be active during the steady run. NDK 25+ removed the bundled validation
+// layers from `${ANDROID_NDK_ROOT}/sources/third_party/vulkan/...` (gone by
+// NDK 28.x — empty under sources/third_party), so we fetch them from the
+// official Khronos release tarball and stage them into the debug variant's
+// jniLibs source tree at build time.
+//
+// Source: https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases
+// Pinned version: vulkan-sdk-1.4.341.0 (2026-02-02), arm64-v8a only.
+//
+// Reproducibility:
+//   - the destination dir (android/app/src/debug/jniLibs/arm64-v8a/) is
+//     gitignored so the binary itself never enters the repo
+//   - the fetch is idempotent: skips if the .so already exists
+//   - the verifier (assembleDebug pre-flight) FAILs the build if the .so
+//     cannot be fetched/found — keeps the M2-S04 gate honest on fresh clones
+// ---------------------------------------------------------------------------
+def validationLayerVersion = "1.4.341.0"
+def validationLayerArchive = file("build/intermediates/vk-validation-layers/android-binaries-${validationLayerVersion}.zip")
+def validationLayerExtract = file("build/intermediates/vk-validation-layers/extracted")
+def validationLayerSrcDir  = file("src/debug/jniLibs/arm64-v8a")
+def validationLayerSrcPath = new File(validationLayerSrcDir, "libVkLayer_khronos_validation.so")
+def validationLayerUrl     = "https://github.com/KhronosGroup/Vulkan-ValidationLayers/releases/download/vulkan-sdk-${validationLayerVersion}/android-binaries-${validationLayerVersion}.zip"
+// Allow override (e.g. CI mirror or an offline copy) via env var.
+def validationLayerOverride = System.getenv("ANDROID_VALIDATION_LAYER_SO")
+
+task fetchValidationLayer {
+    description = "Fetch VK_LAYER_KHRONOS_validation arm64-v8a .so for debug builds (Codex round-2 blocker 4a)."
+    outputs.file(validationLayerSrcPath)
+    onlyIf { !validationLayerSrcPath.exists() }
+    doLast {
+        // 0. Honor an explicit override if the caller already has a copy.
+        if (validationLayerOverride) {
+            def src = file(validationLayerOverride)
+            if (!src.exists()) {
+                throw new GradleException(
+                    "ANDROID_VALIDATION_LAYER_SO points to non-existent file: ${src.absolutePath}"
+                )
+            }
+            validationLayerSrcDir.mkdirs()
+            ant.copy(file: src, tofile: validationLayerSrcPath)
+            logger.lifecycle("fetchValidationLayer: copied from override ${src.absolutePath}")
+            return
+        }
+        // 1. Download the official Khronos release archive (idempotent).
+        if (!validationLayerArchive.exists()) {
+            validationLayerArchive.parentFile.mkdirs()
+            logger.lifecycle("fetchValidationLayer: downloading ${validationLayerUrl}")
+            new java.net.URL(validationLayerUrl).withInputStream { input ->
+                validationLayerArchive.withOutputStream { it << input }
+            }
+        }
+        // 2. Extract just the arm64-v8a layer .so.
+        copy {
+            from zipTree(validationLayerArchive)
+            include "**/arm64-v8a/libVkLayer_khronos_validation.so"
+            // strip nested dirs so the .so lands at the root of extract dir.
+            eachFile { fcd ->
+                fcd.path = fcd.name
+            }
+            includeEmptyDirs = false
+            into validationLayerExtract
+        }
+        def extracted = new File(validationLayerExtract, "libVkLayer_khronos_validation.so")
+        if (!extracted.exists()) {
+            throw new GradleException(
+                "fetchValidationLayer: archive did not contain arm64-v8a/libVkLayer_khronos_validation.so"
+            )
+        }
+        // 3. Stage into the debug variant's jniLibs source tree (gitignored).
+        validationLayerSrcDir.mkdirs()
+        ant.copy(file: extracted, tofile: validationLayerSrcPath)
+        logger.lifecycle("fetchValidationLayer: staged ${validationLayerSrcPath.absolutePath}")
+    }
+}
+
+task verifyValidationLayer {
+    description = "Fail-fast if the Vulkan validation layer .so isn't present in the debug variant's jniLibs."
+    dependsOn fetchValidationLayer
+    doLast {
+        if (!validationLayerSrcPath.exists()) {
+            throw new GradleException(
+                "Missing Vulkan validation layer: ${validationLayerSrcPath.absolutePath}\n" +
+                "Run:\n" +
+                "  cd android && ./gradlew :app:fetchValidationLayer\n" +
+                "Or set ANDROID_VALIDATION_LAYER_SO to a local copy.\n" +
+                "Round-2 Codex blocker 4a: this .so is required for the M2-S04 acceptance gate."
+            )
+        }
+    }
+}
+
 android {
     namespace 'dev.warp.mobile'
     compileSdk 36
@@ -192,14 +287,14 @@ android {
 //      https://developer.android.com/build/jniLibs (AGP source set semantics)
 afterEvaluate {
     // Merge tasks are the canonical jniLibs consumer when AGP generates them.
-    tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
     tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease }
     // Package tasks are universal — they're the safety net that ensures the
     // copy happens even when AGP optimizes mergeJniLibFolders away.
-    tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
     tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease }
     // Assemble tasks are the user-facing entry points — third layer.
-    tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug }
+    tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug, verifyValidationLayer }
     tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease }
 }
 

@@ -22,6 +22,10 @@ release/
 # Cargo-ndk .so outputs copied into jniLibs at build time — never commit binaries
 android/app/src/main/jniLibs/arm64-v8a/*.so
 
+# Vulkan validation layer fetched by Gradle :app:fetchValidationLayer at build time — never commit binary
+# (M2-S04 round-2, Codex blocker 4a). Source: KhronosGroup/Vulkan-ValidationLayers GitHub releases.
+android/app/src/debug/jniLibs/arm64-v8a/*.so
+
 # Android Studio
 .idea/
 *.iws

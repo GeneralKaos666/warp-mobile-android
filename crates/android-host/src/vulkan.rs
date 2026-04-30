@@ -140,8 +140,17 @@ fn create_vulkan_instance(entry: &ash::Entry) -> Result<ash::Instance, vk::Resul
             log::info!(target: "WarpVulkan", "VK_LAYER_KHRONOS_validation enabled");
             vec![khronos_val.as_ptr() as *const u8]
         } else {
-            log::warn!(target: "WarpVulkan", "VK_LAYER_KHRONOS_validation not available — running without");
-            vec![]
+            // Round-2 (Codex blocker 4b): in debug builds, validation layer is
+            // a HARD M2-S04 acceptance gate. Silently warning + continuing led
+            // to a false-positive PASS where the test driver saw zero
+            // validation lines and reported `validation_clean=true` regardless.
+            // Production (release) builds skip the layer entirely (above
+            // VALIDATION_LAYERS check).
+            log::error!(target: "WarpVulkan",
+                "VK_LAYER_KHRONOS_validation NOT available — debug build packaging is broken");
+            panic!("VK_LAYER_KHRONOS_validation layer required in debug builds; \
+                    ensure libVkLayer_khronos_validation.so is packaged in jniLibs \
+                    (run android/gradlew :app:fetchValidationLayer or set ANDROID_VALIDATION_LAYER_SO)");
         }
     } else {
         vec![]
@@ -599,18 +608,49 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     Ok(())
 }
 
+/// Outcome of one frame's record-submit-present cycle.
+///
+/// Round-2 fix (Codex blockers 1+2): in ash 0.38, `acquire_next_image` and
+/// `queue_present` return `Ok((idx, suboptimal))` and `Ok(suboptimal)` — the
+/// suboptimal bool is NOT folded into `Err(SUBOPTIMAL_KHR)`. Plan Amendment 2
+/// SUBOPTIMAL_KHR handling requires us to extract that bool and recreate the
+/// swapchain BEFORE the next frame.
+///
+/// Refs:
+///   <https://docs.rs/ash/latest/ash/khr/swapchain/struct.Device.html>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrameOutcome {
+    /// Present succeeded; swapchain still optimal — keep going.
+    Presented,
+    /// Present succeeded BUT swapchain is suboptimal (e.g. orientation changed
+    /// mid-frame). Recreate before the next frame.
+    PresentedSuboptimal,
+    /// Present or acquire returned OUT_OF_DATE; swapchain must be recreated.
+    OutOfDate,
+}
+
 unsafe fn record_and_present_clear(
     s: &mut VulkanSurface,
     clear_rgba: [f32; 4],
-) -> Result<(), vk::Result> {
+) -> Result<FrameOutcome, vk::Result> {
     let device = &s.device;
-    let acquire = s.swapchain_loader.acquire_next_image(
+
+    // ── Acquire ─────────────────────────────────────────────────────────────
+    // ash 0.38: returns Ok((u32, bool)) where the bool is `suboptimal`.
+    let (image_index, acquire_suboptimal) = match s.swapchain_loader.acquire_next_image(
         s.swapchain,
         u64::MAX,
         s.image_available,
         vk::Fence::null(),
-    );
-    let (image_index, _suboptimal) = acquire?;
+    ) {
+        Ok(pair) => pair,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            // No present happened — fence/cmd-pool are still clean from prior
+            // frame. Return early; caller will recreate.
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => return Err(e),
+    };
 
     let cmd_buf = s.command_buffers[image_index as usize];
     let begin_info = vk::CommandBufferBeginInfo::default()
@@ -634,6 +674,7 @@ unsafe fn record_and_present_clear(
     device.cmd_end_render_pass(cmd_buf);
     device.end_command_buffer(cmd_buf)?;
 
+    // ── Submit ──────────────────────────────────────────────────────────────
     let wait_semaphores = [s.image_available];
     let signal_semaphores = [s.render_finished];
     let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -645,20 +686,55 @@ unsafe fn record_and_present_clear(
         .signal_semaphores(&signal_semaphores);
     device.queue_submit(s.graphics_queue, &[submit_info], s.fence)?;
 
+    // ── Present ─────────────────────────────────────────────────────────────
+    // ash 0.38: queue_present returns Ok(suboptimal: bool) on success, or
+    // Err(ERROR_OUT_OF_DATE_KHR) on swapchain mismatch.
     let swapchains = [s.swapchain];
     let image_indices = [image_index];
     let present_info = vk::PresentInfoKHR::default()
         .wait_semaphores(&signal_semaphores)
         .swapchains(&swapchains)
         .image_indices(&image_indices);
-    s.swapchain_loader
-        .queue_present(s.graphics_queue, &present_info)?;
+    let present_result = s
+        .swapchain_loader
+        .queue_present(s.graphics_queue, &present_info);
 
+    // Round-2 fix (Codex blocker 2): on present-error path, the submit
+    // already occurred so the fence is signaled and the command pool is
+    // dirty. We MUST drain the queue + reset fence + reset command pool
+    // before returning, otherwise the next submit (post-recreate) reuses a
+    // signaled fence → undefined behavior.
+    let present_suboptimal = match present_result {
+        Ok(suboptimal) => suboptimal,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            // Drain + reset before recreate.
+            device.queue_wait_idle(s.graphics_queue)?;
+            device.reset_fences(&[s.fence])?;
+            device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => {
+            // Same cleanup as above so the next attempt has a clean state.
+            // Errors other than OUT_OF_DATE are unrecoverable for this frame
+            // but should not poison subsequent attempts.
+            let _ = device.queue_wait_idle(s.graphics_queue);
+            let _ = device.reset_fences(&[s.fence]);
+            let _ = device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty());
+            return Err(e);
+        }
+    };
+
+    // Successful present path — drain the queue, reset fence + pool for the
+    // next frame.
     device.queue_wait_idle(s.graphics_queue)?;
     device.reset_fences(&[s.fence])?;
     device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
 
-    Ok(())
+    if acquire_suboptimal || present_suboptimal {
+        Ok(FrameOutcome::PresentedSuboptimal)
+    } else {
+        Ok(FrameOutcome::Presented)
+    }
 }
 
 fn destroy_surface(s: VulkanSurface) {
@@ -756,7 +832,7 @@ pub(crate) fn submit_clear_frame(clear_rgba: [f32; 4]) -> bool {
         return false;
     };
     match unsafe { record_and_present_clear(s, clear_rgba) } {
-        Ok(()) => {
+        Ok(FrameOutcome::Presented) => {
             let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
                 *c += 1;
                 *c
@@ -768,7 +844,26 @@ pub(crate) fn submit_clear_frame(clear_rgba: [f32; 4]) -> bool {
             log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
             true
         }
-        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => {
+        Ok(FrameOutcome::PresentedSuboptimal) => {
+            // Round-2 (Codex blocker 1): swapchain reports suboptimal but the
+            // present succeeded. Count the frame, then schedule a recreate
+            // before the next acquire so the new orientation/scale takes
+            // effect cleanly on the next vsync.
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            let ts = uptime_millis();
+            log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
+            log::warn!(target: "WarpVulkan", "swapchain suboptimal — recreating before next frame");
+            if let Err(e) = unsafe { recreate_swapchain(s) } {
+                log::error!(target: "WarpVulkan", "recreate after suboptimal failed: {:?}", e);
+            }
+            true
+        }
+        Ok(FrameOutcome::OutOfDate) => {
             log::warn!(target: "WarpVulkan", "swapchain out-of-date — recreating");
             if let Err(e) = unsafe { recreate_swapchain(s) } {
                 log::error!(target: "WarpVulkan", "recreate failed: {:?}", e);

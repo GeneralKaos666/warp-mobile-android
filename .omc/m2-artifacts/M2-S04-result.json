@@ -2,36 +2,37 @@
   "story": "M2-S04",
   "device_serial": "RFCY71LAFYE",
   "capture_seconds": 60,
-  "frames_observed": 7418,
+  "frames_observed": 7374,
   "first_frame_num": 1,
-  "last_frame_num": 7418,
-  "first_ts_ms": 1180463481,
-  "last_ts_ms": 1180525311,
-  "attach_ts_ms": 1180463429,
+  "last_frame_num": 7374,
+  "first_ts_ms": 1181842847,
+  "last_ts_ms": 1181904264,
+  "attach_ts_ms": 1181842760,
   "detach_ts_ms": null,
   "frame_interval_ms": {
     "p50": 8,
     "p95": 9,
     "p99": 9,
-    "count": 7417
+    "count": 7373
   },
   "peak_fps_in_1s_window": 122,
   "validation_layer": {
     "clean": true,
+    "layer_loaded": true,
     "warn_count": 0,
     "err_count": 0,
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 15:20:44.064 D/warp-android-host( 6706): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10395.bin for reading (it may not exist yet)"
+        "line": "04-30 15:43:43.395 D/warp-android-host(11251): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10397.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 15:20:44.069 D/warp-android-host( 6706): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10395.bin for writing"
+        "line": "04-30 15:43:43.398 D/warp-android-host(11251): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10397.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 15:20:44.075 D/warp-android-host( 6706): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10395.bin for reading (it may not exist yet)"
+        "line": "04-30 15:43:43.402 D/warp-android-host(11251): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-10397.bin for reading (it may not exist yet)"
       }
     ]
   },

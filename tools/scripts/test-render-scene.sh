@@ -53,8 +53,18 @@ echo "=== device: $SERIAL ===" >&2
 echo "=== uninstall any prior debug install ===" >&2
 "${ADB[@]}" uninstall "$PACKAGE" 2>&1 | tail -1 >&2 || true
 
-echo "=== installing APK ===" >&2
-"${ADB[@]}" install -r "$APK" 2>&1 | tail -3 >&2
+echo "=== installing APK (with -g to grant runtime permissions) ===" >&2
+# Round-2 (Codex blocker 3): `-g` auto-grants runtime permissions on install.
+# Without it, on API 33+ MainActivity.onCreate calls
+# requestPermissions(POST_NOTIFICATIONS) which spawns GrantPermissionsActivity
+# and STEALS FOCUS from the SurfaceView. Codex round-1 reproduction on
+# RFCY71LAFYE got 83 frames vs claimed 7,418 — exactly because of this race.
+# Belt-and-suspenders: explicit pm grant after install too, in case `-g` fails
+# silently on some API levels.
+"${ADB[@]}" install -r -g "$APK" 2>&1 | tail -3 >&2
+
+# Defensive grant: if install -g already granted these, this is a no-op.
+"${ADB[@]}" shell pm grant "$PACKAGE" android.permission.POST_NOTIFICATIONS 2>&1 >&2 || true
 
 echo "=== clearing logcat ===" >&2
 "${ADB[@]}" logcat -c
@@ -68,7 +78,32 @@ sleep 0.5
 echo "=== launching $PACKAGE/$ACTIVITY ===" >&2
 "${ADB[@]}" shell am start -n "$PACKAGE/$ACTIVITY" 2>&1 | tail -2 >&2
 START_TS=$(date +%s)
-sleep 2
+
+# Round-2 (Codex blocker 3): fail-fast sanity check — wait up to 10 seconds
+# for MainActivity to log `surfaceCreated_ts=`. If it doesn't appear, the
+# activity never reached the SurfaceHolder.Callback, almost always because
+# something stole focus (permission dialog, secure-screen, lock, etc.).
+echo "=== waiting for surfaceCreated_ts (up to 10s) ===" >&2
+SURFACE_READY=0
+for i in $(seq 1 20); do
+    if "${ADB[@]}" logcat -d -s WarpRender:I 2>/dev/null \
+            | grep -q "surfaceCreated_ts="; then
+        SURFACE_READY=1
+        echo "=== SurfaceView ready after ${i}*0.5s ===" >&2
+        break
+    fi
+    sleep 0.5
+done
+if [[ $SURFACE_READY -ne 1 ]]; then
+    echo "ERROR: MainActivity never reached surfaceCreated_ts within 10s." >&2
+    echo "       Most common cause: a permission dialog stole focus." >&2
+    echo "       Check 'adb shell dumpsys window | grep mCurrentFocus' and" >&2
+    echo "       ensure POST_NOTIFICATIONS is granted (this script tried)." >&2
+    "${ADB[@]}" shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp" | head -5 >&2 || true
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 2
+fi
+sleep 1
 
 echo "=== capturing logcat for $CAPTURE_SECONDS seconds ===" >&2
 LOGCAT_FILE=$(mktemp /tmp/m2-s04-logcat.XXXXXX)
@@ -116,6 +151,14 @@ frames = []   # list of (frame_num, ts_ms)
 vkval_lines = []
 attach_ts = None
 detach_ts = None
+# Round-2 (Codex blocker 4c): require that the validation layer was actually
+# loaded during this run. Without this, an APK without the validation layer
+# would run with zero [VkVal] messages and the driver would happily report
+# `validation_clean=true` — the exact false-positive the round-1 reviewer
+# flagged. The Rust side logs "VK_LAYER_KHRONOS_validation enabled" when it
+# successfully enables the layer (see crates/android-host/src/vulkan.rs).
+validation_layer_loaded = False
+validation_marker_re = re.compile(r"VK_LAYER_KHRONOS_validation enabled")
 
 with open(logfile, encoding='utf-8', errors='replace') as f:
     for line in f:
@@ -127,6 +170,9 @@ with open(logfile, encoding='utf-8', errors='replace') as f:
             sev_match = vkval_sev_re.search(line)
             severity = sev_match.group(1) if sev_match else '?'
             vkval_lines.append({'severity': severity, 'line': line.rstrip()})
+            continue
+        if validation_marker_re.search(line):
+            validation_layer_loaded = True
             continue
         m = attach_re.search(line)
         if m:
@@ -169,7 +215,15 @@ p99 = pct(intervals, 0.99)
 # Validation cleanliness gate: any W/E lines fail the gate.
 warn_count = sum(1 for v in vkval_lines if v['severity'] == 'W')
 err_count  = sum(1 for v in vkval_lines if v['severity'] == 'E')
-validation_clean = warn_count == 0 and err_count == 0
+# Round-2 (Codex blocker 4c): require BOTH zero W/E lines AND that the layer
+# was actually loaded. An APK without the validation layer .so would pass the
+# old W/E-zero check trivially (no lines at all) — that was the false
+# positive Codex flagged.
+validation_clean = (
+    validation_layer_loaded
+    and warn_count == 0
+    and err_count == 0
+)
 
 # Acceptance: ≥60 frames in any 1-second window.
 fps_60_pass = peak_fps_window >= 60
@@ -194,6 +248,7 @@ result = {
     'peak_fps_in_1s_window': peak_fps_window,
     'validation_layer': {
         'clean': validation_clean,
+        'layer_loaded': validation_layer_loaded,
         'warn_count': warn_count,
         'err_count': err_count,
         'sample_lines': vkval_lines[:20],
@@ -208,8 +263,17 @@ result = {
 with open(out_json, 'w') as f:
     json.dump(result, f, indent=2)
 
+if not validation_layer_loaded:
+    print("ERROR: validation layer not active — your debug build is silently "
+          "skipping the M2-S04 hard gate. Ensure libVkLayer_khronos_validation.so "
+          "is packaged in jniLibs (run android/gradlew :app:fetchValidationLayer "
+          "or rebuild :app:assembleDebug after the layer .so is in place).",
+          file=sys.stderr)
+
 print(f"# device={serial} frames={len(frames)} peak_fps_1s={peak_fps_window} "
-      f"p50={p50}ms p95={p95}ms p99={p99}ms validation_clean={validation_clean} "
+      f"p50={p50}ms p95={p95}ms p99={p99}ms "
+      f"validation_layer_loaded={validation_layer_loaded} "
+      f"validation_clean={validation_clean} "
       f"fps_60_pass={fps_60_pass}", file=sys.stderr)
 print(f"# result written to {out_json}", file=sys.stderr)
 
@@ -222,9 +286,15 @@ print(f"peak_fps_in_1s_window:     {peak_fps_window}")
 print(f"frame_interval_p50_ms:     {p50}")
 print(f"frame_interval_p95_ms:     {p95}")
 print(f"frame_interval_p99_ms:     {p99}")
+print(f"validation_layer_loaded:   {validation_layer_loaded}")
 print(f"validation_warn_count:     {warn_count}")
 print(f"validation_err_count:      {err_count}")
 print(f"GATE:                      fps_60_pass={fps_60_pass} validation_clean={validation_clean}")
+
+# Round-2 (Codex blocker 4c): exit non-zero if the validation layer wasn't
+# loaded so this test cannot silently produce a false-positive PASS.
+if not validation_layer_loaded:
+    sys.exit(3)
 PYEOF
 PARSE_RC=$?
 
