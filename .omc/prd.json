@@ -75,8 +75,8 @@
     {
       "id": "M2-S04",
       "title": "render_scene minimal Vulkan submission via ash + ANativeWindow",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Death-pit #1 — 4-round Codex review with 8 cumulative blockers caught/fixed. Final CODEX_PASS at round-4 (commit 369ff50). Round 1 (worker 21111c8 warp-src + dfd6469 main): VK_SUBOPTIMAL_KHR ignored (ash 0.38 returns Ok(bool) not Err); queue_present cleanup ordering UB; driver POST_NOTIFICATIONS focus theft (codex repro got 83 frames vs claimed 7,418); validation layer .so untracked (fresh clone broken). Round 2 (worker abd71b9 warp-src + 492af6a/39283ca main): SHA-256 pin missing on validation layer fetch; permission grant assertion missing; exit codes only checked layer-absent. Round 3 (lead 815b8e2): SHA pin added at 4 verify points + computeSha256 helper; pm grant + dumpsys assertion + focus check; exit code matrix; tamper detection verified. Round 4 (lead 369ff50): exit code matrix collision (validation_clean=False bumped layer-absent from rc=3 to rc=4) decoupled; set +e/set -e wrap around Python parser to preserve cleanup. Device evidence: RFCY71LAFYE (Galaxy S25, Adreno 750, API 36) 60s capture 7,379 frames p50/p95/p99=8/9/9ms peak 122fps in 1s window; validation_layer.clean=true layer_loaded=true. Codex independently reproduced at 7,371 frames (within 0.1% variance).",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/vulkan.rs (per ralplan §6 M2 row #3) implements WindowContext::render_scene by initializing VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + minimal renderpass + present queue submission",
