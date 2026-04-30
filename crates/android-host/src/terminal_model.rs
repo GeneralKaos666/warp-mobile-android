@@ -146,6 +146,14 @@ enum AnsiState {
     DcsRaw(Vec<u8>),
     DcsAwaitMarker { seen_dollar: bool },
     DcsFinish7Bit { is_hex: bool, body: Vec<u8> },
+    /// Codex round-1 finding #3: non-warp DCS markers and cap-overflow
+    /// aborts route here. Consume bytes until ST without bumping
+    /// dcs_hook_count or dcs_error_count (cap-overflow callers bump
+    /// dcs_error_count BEFORE entering this state).
+    DcsIgnoreUntilST,
+    /// 7-bit ST handler for the ignore path — distinguished from
+    /// `DcsFinish7Bit` so we don't dispatch through `finish_dcs`.
+    DcsIgnoreFinish7Bit,
 }
 
 impl Default for AnsiState {
@@ -359,8 +367,19 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
             if (0x30..=0x3F).contains(&b) || (0x20..=0x2F).contains(&b) {
                 if buf.len() < CSI_BUF_CAP {
                     buf.push(b);
+                    AnsiState::Csi(buf)
+                } else {
+                    // Codex round-1 nit: CSI buf cap exceeded → abort.
+                    // Bumps dcs_error_count (parser_stats triple is
+                    // exposed via JNI; can't add csi_error_count without
+                    // breaking the ABI).
+                    state.dcs_error_count = state.dcs_error_count.saturating_add(1);
+                    log::warn!(
+                        target: "WarpTerminalModel",
+                        "CSI param buffer cap reached ({} bytes); aborting", CSI_BUF_CAP
+                    );
+                    AnsiState::Ground
                 }
-                AnsiState::Csi(buf)
             } else if (0x40..=0x7E).contains(&b) {
                 dispatch_csi(state, &buf, b);
                 AnsiState::Ground
@@ -377,7 +396,17 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
                 is_hex: false,
                 body: Vec::new(),
             },
-            _ => AnsiState::DcsRaw(Vec::new()),
+            // Codex round-1 finding #3: route unknown markers to a true
+            // ignore-until-ST state instead of DcsRaw, so dcs_hook_count
+            // and dcs_error_count both stay unchanged.
+            _ => {
+                log::trace!(
+                    target: "WarpTerminalModel",
+                    "non-warp DCS ignored (marker seen_dollar={} byte=0x{:02X})",
+                    seen_dollar, b
+                );
+                AnsiState::DcsIgnoreUntilST
+            }
         },
         AnsiState::DcsHex(mut buf) => match b {
             0x9c => {
@@ -388,8 +417,17 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
             b'0'..=b'9' | b'A'..=b'F' | b'a'..=b'f' => {
                 if buf.len() < DCS_BODY_CAP {
                     buf.push(b);
+                    AnsiState::DcsHex(buf)
+                } else {
+                    // Codex round-1 nit: cap overflow → abort.
+                    state.dcs_error_count = state.dcs_error_count.saturating_add(1);
+                    log::warn!(
+                        target: "WarpTerminalModel",
+                        "DCS hex body cap reached ({} bytes); aborting + ignoring until ST",
+                        DCS_BODY_CAP
+                    );
+                    AnsiState::DcsIgnoreUntilST
                 }
-                AnsiState::DcsHex(buf)
             }
             _ => {
                 state.dcs_error_count = state.dcs_error_count.saturating_add(1);
@@ -410,8 +448,17 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
             _ => {
                 if buf.len() < DCS_BODY_CAP {
                     buf.push(b);
+                    AnsiState::DcsRaw(buf)
+                } else {
+                    // Codex round-1 nit: cap overflow → abort.
+                    state.dcs_error_count = state.dcs_error_count.saturating_add(1);
+                    log::warn!(
+                        target: "WarpTerminalModel",
+                        "DCS raw body cap reached ({} bytes); aborting + ignoring until ST",
+                        DCS_BODY_CAP
+                    );
+                    AnsiState::DcsIgnoreUntilST
                 }
-                AnsiState::DcsRaw(buf)
             }
         },
         AnsiState::DcsFinish7Bit { is_hex, body } => match b {
@@ -427,6 +474,19 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
                 );
                 AnsiState::Ground
             }
+        },
+        AnsiState::DcsIgnoreUntilST => match b {
+            // 8-bit ST → return to Ground without touching counters.
+            0x9c => AnsiState::Ground,
+            // 7-bit ST opens with ESC; next byte must be '\\'.
+            0x1b => AnsiState::DcsIgnoreFinish7Bit,
+            // Discard everything else.
+            _ => AnsiState::DcsIgnoreUntilST,
+        },
+        AnsiState::DcsIgnoreFinish7Bit => match b {
+            b'\\' => AnsiState::Ground,
+            // Stay in ignore mode if the ESC wasn't a valid 7-bit ST.
+            _ => AnsiState::DcsIgnoreUntilST,
         },
     };
 }
@@ -564,41 +624,86 @@ fn apply_sgr(state: &mut TerminalState, params: &[u8]) {
             .collect()
     };
 
-    for &code in &codes {
+    let mut i = 0;
+    while i < codes.len() {
+        let code = codes[i];
         match code {
             0 => {
                 state.cur_fg = DEFAULT_FG;
                 state.cur_bg = DEFAULT_BG;
                 state.cur_attrs = 0;
+                i += 1;
             }
-            1 => state.cur_attrs |= ATTR_BOLD,
-            2 => state.cur_attrs |= ATTR_DIM,
-            3 => state.cur_attrs |= ATTR_ITALIC,
-            4 => state.cur_attrs |= ATTR_UNDERLINE,
-            7 => state.cur_attrs |= ATTR_REVERSE,
-            22 => state.cur_attrs &= !(ATTR_BOLD | ATTR_DIM),
-            23 => state.cur_attrs &= !ATTR_ITALIC,
-            24 => state.cur_attrs &= !ATTR_UNDERLINE,
-            27 => state.cur_attrs &= !ATTR_REVERSE,
+            1 => { state.cur_attrs |= ATTR_BOLD; i += 1; }
+            2 => { state.cur_attrs |= ATTR_DIM; i += 1; }
+            3 => { state.cur_attrs |= ATTR_ITALIC; i += 1; }
+            4 => { state.cur_attrs |= ATTR_UNDERLINE; i += 1; }
+            7 => { state.cur_attrs |= ATTR_REVERSE; i += 1; }
+            22 => { state.cur_attrs &= !(ATTR_BOLD | ATTR_DIM); i += 1; }
+            23 => { state.cur_attrs &= !ATTR_ITALIC; i += 1; }
+            24 => { state.cur_attrs &= !ATTR_UNDERLINE; i += 1; }
+            27 => { state.cur_attrs &= !ATTR_REVERSE; i += 1; }
             30..=37 => {
                 state.cur_fg = ANSI_STANDARD_COLORS[(code - 30) as usize];
+                i += 1;
             }
-            39 => state.cur_fg = DEFAULT_FG,
+            // Codex round-1 finding #2: extended-color escapes consume
+            // 5 codes (38;2;R;G;B) or 3 codes (38;5;N) so subsequent SGR
+            // codes are not corrupted by the operands. M3-S05 baseline
+            // doesn't apply truecolor/256-color (deferred to M3-S08
+            // dynamic palette).
+            38 | 48 => {
+                if i + 1 < codes.len() {
+                    match codes[i + 1] {
+                        2 => {
+                            log::trace!(
+                                target: "WarpTerminalModel",
+                                "truecolor SGR {};2;R;G;B ignored (M3-S05 baseline; M3-S08 dynamic palette)",
+                                code
+                            );
+                            i += 5;
+                        }
+                        5 => {
+                            log::trace!(
+                                target: "WarpTerminalModel",
+                                "256-color SGR {};5;N ignored (M3-S05 baseline; M3-S08 dynamic palette)",
+                                code
+                            );
+                            i += 3;
+                        }
+                        _ => {
+                            log::trace!(
+                                target: "WarpTerminalModel",
+                                "unknown extended SGR escape {};{} (consumed 38/48 only)",
+                                code, codes[i + 1]
+                            );
+                            i += 1;
+                        }
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            39 => { state.cur_fg = DEFAULT_FG; i += 1; }
             40..=47 => {
                 state.cur_bg = ANSI_STANDARD_COLORS[(code - 40) as usize];
+                i += 1;
             }
-            49 => state.cur_bg = DEFAULT_BG,
+            49 => { state.cur_bg = DEFAULT_BG; i += 1; }
             90..=97 => {
                 state.cur_fg = ANSI_BRIGHT_COLORS[(code - 90) as usize];
+                i += 1;
             }
             100..=107 => {
                 state.cur_bg = ANSI_BRIGHT_COLORS[(code - 100) as usize];
+                i += 1;
             }
             _ => {
                 log::trace!(
                     target: "WarpTerminalModel",
                     "SGR code {} not recognized in M3-S05 baseline", code
                 );
+                i += 1;
             }
         }
     }
@@ -870,5 +975,85 @@ mod tests {
         let m = TerminalModel::new(8, 16);
         m.ingest_pty_bytes(b"\x1b[5;3HX");
         assert_eq!(m.cell(4, 2).unwrap().glyph, 'X');
+    }
+
+    // ── M3-S05 round-2: codex finding mirror tests ─────────────────────
+
+    /// Mirror of facade test — codex round-1 finding #2: truecolor SGR
+    /// must not parse RGB operands as independent codes.
+    #[test]
+    fn sgr_truecolor_skips_rgb_operands() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(b"\x1b[38;2;255;128;0;1mX");
+        let cell = m.cell(0, 0).unwrap();
+        // Without the fix: `2` sets ATTR_DIM, `0` resets attrs (clearing
+        // the bold from the trailing `1`). With the fix: 38;2;R;G;B are
+        // consumed as operands, only the trailing `1` applies bold.
+        assert_eq!(cell.glyph, 'X');
+        assert_eq!(cell.fg, DEFAULT_FG, "truecolor must not apply to fg");
+        assert_eq!(cell.attrs & ATTR_BOLD, ATTR_BOLD, "trailing 1 must apply bold");
+        assert_eq!(cell.attrs & ATTR_DIM, 0, "operand 2 in 38;2 must NOT set dim");
+    }
+
+    /// Mirror of facade test — 256-color must skip the index operand.
+    #[test]
+    fn sgr_256color_skips_index_operand() {
+        let m = TerminalModel::new(2, 16);
+        // ESC[38;5;31;1m — 31 standalone is RED fg, but as the 256-color
+        // index it must not bleed into cur_fg.
+        m.ingest_pty_bytes(b"\x1b[38;5;31;1mY");
+        let cell = m.cell(0, 0).unwrap();
+        assert_eq!(cell.fg, DEFAULT_FG, "256-color index must not bleed into fg");
+        assert_eq!(cell.attrs & ATTR_BOLD, ATTR_BOLD, "trailing 1 must apply bold");
+    }
+
+    /// Mirror — codex round-1 finding #3: unknown DCS marker `$x` must
+    /// not bump `dcs_hook_count` or `dcs_error_count`.
+    #[test]
+    fn dcs_unknown_marker_ignored_without_counter_bumps() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(b"\x1bP$xnonsense\x9c");
+        let (sgr, hooks, errs) = m.parser_stats();
+        assert_eq!(sgr, 0);
+        assert_eq!(hooks, 0, "unknown marker must NOT bump dcs_hook_count");
+        assert_eq!(errs, 0, "unknown marker must NOT bump dcs_error_count");
+        // Parser back at Ground.
+        m.ingest_pty_bytes(b"after");
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
+        assert_eq!(m.cell(0, 4).unwrap().glyph, 'r');
+    }
+
+    /// Mirror — same ignore behavior for 7-bit ST.
+    #[test]
+    fn dcs_unknown_marker_ignored_with_7bit_st() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(b"\x1bP$xstuff\x1b\\done");
+        let (sgr, hooks, errs) = m.parser_stats();
+        assert_eq!(sgr, 0);
+        assert_eq!(hooks, 0);
+        assert_eq!(errs, 0);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'd');
+        assert_eq!(m.cell(0, 3).unwrap().glyph, 'e');
+    }
+
+    /// Mirror — codex round-1 nit: DCS body cap overflow must abort with
+    /// `dcs_error_count` bump and recover to Ground.
+    #[test]
+    fn dcs_hex_body_cap_overflow_aborts_and_recovers() {
+        let m = TerminalModel::new(2, 16);
+        let mut frame = Vec::new();
+        frame.extend_from_slice(b"\x1bP$d");
+        let payload_size = DCS_BODY_CAP + 6 * 1024;
+        frame.extend(std::iter::repeat(b'a').take(payload_size));
+        frame.push(0x9c);
+        m.ingest_pty_bytes(&frame);
+
+        let (_sgr, hooks, errs) = m.parser_stats();
+        assert_eq!(hooks, 0, "no hook should dispatch when cap is hit");
+        assert_eq!(errs, 1, "exactly one error recorded for cap overflow");
+
+        m.ingest_pty_bytes(b"after");
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
+        assert_eq!(m.cell(0, 4).unwrap().glyph, 'r');
     }
 }
