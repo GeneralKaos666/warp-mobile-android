@@ -88,11 +88,13 @@ Per ralplan death-pit ranking, M2 is **the #1 risk layer for the entire project*
 
 ---
 
-## Connected devices (per `~/.claude/projects/.../memory/reference_devices.md`)
+## Recommended test device classes
 
-- **Galaxy S24 Ultra (R5CX10VFFBA)** — primary flagship, Adreno 750, Android 15 / SDK 36
-- **Galaxy S21+ (RFCNC0WNT9H)** — secondary flagship, Adreno 660, Android 15 / SDK 35
-- ~~Galaxy S8~~ — below min matrix per Amendment 3 (SDK 28 < 31)
-- **Pixel 4a / Galaxy A52s** — TODO acquire for low-end Adreno 6xx coverage (M2 carry-over #1)
+Per Plan Amendment 3 (minSdk 31, Adreno 6xx+ baseline). Forward-looking; specific serials are user-private and live in `~/.claude/projects/.../memory/reference_devices.md`.
 
-All accessible via `/Users/iml1s/Library/Android/sdk/platform-tools/adb -s <serial>`.
+- **Primary flagship** (required) — Snapdragon 8 Gen 1+ / Adreno 730+ / API 33+. Examples: Galaxy S22-S24 series, Pixel 7+, OnePlus 11+. M1 verified on this class.
+- **Secondary flagship** (recommended) — Snapdragon 888 / Adreno 660 / API 31+. Examples: Galaxy S21+, Pixel 6, OnePlus 9. M0 Vulkan verified on this class.
+- **Low-end (M2 carry-over #1)** — Snapdragon 730G / 778G / Adreno 618-642L / API 31+. Examples: Pixel 4a, Galaxy A52s. **Required acquisition** before M2 close to satisfy Plan Amendment 3 §3 low-end coverage.
+- **Below-min** — anything below API 31 or Adreno 6xx (e.g., Mali-G71-era, Galaxy S8) is dropped per Amendment 3 (S8 100-cycle p95 = 326ms FAIL).
+
+All driver scripts under `tools/scripts/test-*.sh` take `<serial>` as first arg. Get yours from `adb devices`. Never hardcode serials in tracked code.

@@ -11,7 +11,7 @@
 - **Project**: Warp Terminal Android port + bundled Termux runtime
 - **GitHub**: https://github.com/ImL1s/warp-mobile-android (PRIVATE during M0–M2; turn public before v1 alpha per AGPL §6 source-disclosure)
 - **License**: AGPL-3.0-only (inherited from `warpdotdev/Warp@d0f045c`)
-- **Repo root**: `/Users/iml1s/Documents/mine/warp_termux/`
+- **Repo root**: `<repo-root>` (cwd of any session that opens this project — typically resolved via `git rev-parse --show-toplevel`)
 - **Account**: `ImL1s` (gh logged in)
 - **Email**: aa22396584@gmail.com
 - **User explicit identity**: ImL1s
@@ -76,9 +76,14 @@ L3 Termux Runtime+Packages  — fork termux-packages with new $PREFIX, bootstrap
 
 | Device | Serial | Model | Android | SDK | GPU |
 |---|---|---|---|---|---|
-| S24 Ultra | `R5CX10VFFBA` | SM-S9280 | 16 | 36 | Adreno 750 (Snapdragon 8 Gen 3) |
-| S21+ | `RFCNC0WNT9H` | SM-G9960 | 15 | 35 | Adreno 660 (Snapdragon 888) |
-| S8 | `ce0317133a9ad0190c` | SM-G950F | 9 | 28 | Mali-G71 |
+| Class | Example device | Android | SDK | GPU | Status |
+|---|---|---|---|---|---|
+| Primary flagship | Galaxy S24 Ultra (or equiv. Pixel 7+) | 16 | 36 | Adreno 730+ (Snapdragon 8 Gen 3+) | M1 fully verified |
+| Secondary flagship | Galaxy S21+ (or equiv. Pixel 6) | 15 | 35 | Adreno 660 (Snapdragon 888) | M0 Vulkan verified |
+| ~~Below-min~~ | ~~Galaxy S8 (Mali-G71)~~ | ~~9~~ | ~~28~~ | ~~Mali-G71~~ | Dropped per Amendment 3 (100-cycle p95=326ms FAIL) |
+| Low-end (acquire) | Pixel 4a / Galaxy A52s API 31 | 12+ | 31+ | Adreno 619-642L | M2 carry-over #1 |
+
+Specific test serials are user-private (not in this tracked doc). Each session resolves connected devices via `adb devices` and passes serial as first arg to `tools/scripts/test-*.sh <serial>`.
 
 Workers have adb access. Use these serials for any device test invocation.
 
@@ -132,7 +137,7 @@ Per `.omc/prd.json` (10 stories M1-S01..S10) — all `passes: true`:
 
 **M1 PTY plumbing chain Task#28 → #33 → #35**: closed with Codex Task #35 PASS at 03-32-36-215Z. Final state: `Arc<PtySession>` + `ptyAcquire/Release` JNI + `AtomicI32 master_fd` + ANR-safe `scope.launch` + signature-permission receiver + `tools:remove` debug overlay.
 
-**Lead direct execution of Task #32**: when worker-env didn't respond to status ping for 15+ min, lead took over device runs on S24 Ultra (R5CX10VFFBA). 5 driver bug-fix iterations during runs (&& shell quoting, t_expected anchoring on PTY_WRITE log, end-anchored token regex, broadcast→FGS direct path, anomaly regex tightening, `isForeground=true` proxy for Samsung-suppressed notification drawer).
+**Lead direct execution of Task #32**: when worker-env didn't respond to status ping for 15+ min, lead took over device runs on the primary flagship. 5 driver bug-fix iterations during runs (&& shell quoting, t_expected anchoring on PTY_WRITE log, end-anchored token regex, broadcast→FGS direct path, anomaly regex tightening, `isForeground=true` proxy for Samsung-suppressed notification drawer).
 
 **Path to full GO**: acquire Pixel 4a / Galaxy A52s API 31 and re-run S06/S07/S08/S09 on it before M2 close. Tracked as M2 carry-over #1.
 
@@ -326,7 +331,7 @@ CODEX ARTIFACTS:
 ## 14. Resume Checklist (run on session restart)
 
 1. Read this file fully.
-2. `cd /Users/iml1s/Documents/mine/warp_termux && git status && git log --oneline -5`
+2. `cd <repo-root> && git status && git log --oneline -5`
 3. `cat .omc/m0-artifacts/M0-tension3-decision.md` — confirm Tension 3 lead-resolved.
 4. Check active workers: `ps aux | grep gradle | grep -v grep` and `ls -t .omc/m0-artifacts/M0-*.md | head -3` to see latest worker output.
 5. Check Codex review queue: `ls -t .omc/artifacts/ask/codex-* 2>/dev/null | head -3`.

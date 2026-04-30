@@ -55,7 +55,12 @@ These were established by the user explicitly and apply project-wide:
 - **OMC orchestration runtime state** in `.omc/state/`: clear via `/oh-my-claudecode:cancel` when milestone closes.
 - **Codex review prompts**: write to `/tmp/codex-*.md` first, dispatch via `omc ask codex --prompt "$(< file)"`.
 - **Driver scripts use `am force-stop` not `am kill`** (Plan Amendment 4): `am kill` is no-op against running FGS per AOSP semantics.
-- **3 connected adb devices**: S24 Ultra `R5CX10VFFBA` (primary), S21+ `RFCNC0WNT9H` (secondary), S8 `ce0317133a9ad0190c` (below-min per Amendment 3).
+- **Recommended test device classes** (per Plan Amendment 3 minSdk 31, Adreno 6xx+ baseline):
+  - **Primary flagship** — Snapdragon 8 Gen 1+ / Adreno 730+ / API 33+ (e.g., Galaxy S24 Ultra, Pixel 7+)
+  - **Secondary flagship** — Snapdragon 888 / Adreno 660 / API 31+ (e.g., Galaxy S21+, Pixel 6)
+  - **Low-end (M2 carry-over)** — Snapdragon 730G/778G / Adreno 618-642L / API 31+ (e.g., Pixel 4a, Galaxy A52s)
+  - **Below-min** — anything below API 31 / Adreno 6xx (e.g., Mali-G71-era, Galaxy S8) is dropped per Amendment 3.
+  - Pass `<serial>` as first arg to all driver scripts (`tools/scripts/test-*.sh <serial>`); never hardcode serials.
 
 ## Available OMC tools (oh-my-claudecode plugin)
 
@@ -84,8 +89,8 @@ git log --oneline -10
 # Build sanity check
 cargo test -p warp-mobile-android-host                                    # → 3 passed
 
-# Connected devices
-adb devices                                                                # → R5CX10VFFBA + RFCNC0WNT9H + ce0317133a9ad0190c
+# Connected devices (your serials will differ)
+adb devices                                                                # → at least one API 31+ Adreno 6xx+ device for M2 work
 ```
 
 ## What you should NOT do

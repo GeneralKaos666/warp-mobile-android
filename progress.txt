@@ -106,7 +106,7 @@ Worker-env did not respond to status ping for 15+ min. APK was building locally 
 ### Lead direct execution
 1. cargo ndk -t arm64-v8a build → libwarp_mobile_android_host.so 17.4MB at 11:38
 2. ./gradlew :app:assembleDebug → app-debug.apk 13.9MB
-3. adb install on R5CX10VFFBA → Success
+3. adb install on primary flagship → Success
 4. Iterative driver fixes during run:
    - test-pty-reattach.sh: && quoting + PTY_WRITE log epoch anchor + token regex tightening (3 rounds: pass=false→pass=true delta_ms=36)
    - test-pty-resize.sh: broadcast→FGS direct + stty regex tightening (2 rounds: pass=false→pass=true observed="24 80")
