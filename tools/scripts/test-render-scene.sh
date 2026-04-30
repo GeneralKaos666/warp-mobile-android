@@ -222,8 +222,11 @@ LOGCAT_FILE=$(mktemp /tmp/m2-s04-logcat.XXXXXX)
     "warp-android-host:V" \
     "*:S" > "$LOGCAT_FILE" &
 LOGCAT_PID=$!
-# Merge logcat cleanup with keep_awake cleanup (defined earlier).
-trap 'kill $LOGCAT_PID 2>/dev/null; rm -f $LOGCAT_FILE; keep_awake_stop; keep_awake_restore "$SERIAL"' EXIT
+# Merge logcat cleanup with keep_awake cleanup. Each command tolerates
+# already-completed predecessor (codex round-3 nit: under `set -e`, a
+# `kill $PID` after the explicit kill below would abort the trap before
+# keep_awake_restore runs, leaving stay-on/aod overrides on the device).
+trap 'kill $LOGCAT_PID 2>/dev/null || true; rm -f $LOGCAT_FILE 2>/dev/null || true; keep_awake_stop || true; keep_awake_restore "$SERIAL" || true' EXIT
 
 sleep "$CAPTURE_SECONDS"
 
