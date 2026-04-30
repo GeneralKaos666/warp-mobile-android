@@ -42,7 +42,7 @@ adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
 adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 2
-adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
+adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
 sleep 1
 
 # Send resize broadcast
@@ -53,19 +53,21 @@ adb_cmd shell am broadcast \
     --ei cols "$COLS" 2>/dev/null || true
 sleep 1
 
-# Write stty size to PTY stdin via broadcast
+# Write stty size to PTY stdin via broadcast.
+# Pass literal backslash-n so adb doesn't parse it; Service.handleWrite converts it.
 adb_cmd shell am broadcast \
     -n "${PKG}/.PtyBroadcastReceiver" \
     -a dev.warp.mobile.PTY_WRITE \
-    --es data "stty size\n" 2>/dev/null || true
+    --es data 'stty size\n' 2>/dev/null || true
 
 # Wait for stty size output in logcat
 OBSERVED=""
 COUNT=0
 while [[ $COUNT -lt 15 ]]; do
     RAW=$(adb_cmd logcat -d 2>/dev/null || true)
-    # Match any line from our logcat tag that contains two numbers separated by space
-    LINE=$(print "$RAW" | grep "$LOGCAT_TAG" | grep -oE '[0-9]+ [0-9]+' | tail -1 || true)
+    # Use printf to avoid print treating lines starting with '-' as options
+    # Use grep -F for literal string match on tag containing ':'
+    LINE=$(printf '%s\n' "$RAW" | grep -F "$LOGCAT_TAG" | grep -oE '[0-9]+ [0-9]+' | tail -1 || true)
     if [[ -n "$LINE" ]]; then
         OBSERVED="$LINE"
         break

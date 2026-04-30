@@ -9,6 +9,6 @@ import android.content.Intent
 class PtyBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val forward = Intent(intent).apply { setClass(context, WarpTerminalService::class.java) }
-        context.startForegroundService(forward)
+        context.startService(forward)
     }
 }

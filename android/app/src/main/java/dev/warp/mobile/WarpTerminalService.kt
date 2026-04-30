@@ -63,12 +63,16 @@ class WarpTerminalService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureForeground()
-        // Route PTY control intents forwarded by PtyBroadcastReceiver
-        when (intent?.action) {
-            ACTION_SPAWN  -> handleSpawn(intent)
-            ACTION_WRITE  -> handleWrite(intent)
-            ACTION_RESIZE -> handleResize(intent)
-            ACTION_KILL   -> handleKill(intent)
+        // Dispatch off main thread to avoid ANR on blocking JNI calls
+        val action = intent?.action
+        val intentCopy = intent
+        if (intentCopy != null) scope.launch {
+            when (action) {
+                ACTION_SPAWN  -> handleSpawn(intentCopy)
+                ACTION_WRITE  -> handleWrite(intentCopy)
+                ACTION_RESIZE -> handleResize(intentCopy)
+                ACTION_KILL   -> handleKill(intentCopy)
+            }
         }
         return START_STICKY
     }

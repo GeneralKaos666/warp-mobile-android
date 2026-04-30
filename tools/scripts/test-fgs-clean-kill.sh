@@ -40,7 +40,7 @@ adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
 sleep 2
 adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 4
-adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
+adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
 sleep 2
 
 # Check notification is present before kill (Samsung may suppress display; treat empty as 0)

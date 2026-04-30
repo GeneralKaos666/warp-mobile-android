@@ -47,9 +47,13 @@ sleep 2
 # Spawn PTY via broadcast (Service must handle this intent)
 # %3N not supported on all platforms; fall back to seconds * 1000
 T_SPAWN=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo $(( $(date +%s) * 1000 )))
-adb_cmd shell am broadcast -n "${PKG}/.PtyBroadcastReceiver" \
+adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" \
     -a dev.warp.mobile.PTY_SPAWN \
-    --es cmd "sleep ${DELAY} && echo ${TOKEN}" 2>/dev/null || true
+    --es cmd "sh" 2>/dev/null || true
+sleep 1
+adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" \
+    -a dev.warp.mobile.PTY_WRITE \
+    --es data "sleep ${DELAY} && echo ${TOKEN}" 2>/dev/null || true
 
 # Rotate device 5 times while PTY runs
 for i in {1..5}; do
