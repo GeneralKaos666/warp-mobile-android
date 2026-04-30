@@ -1,11 +1,39 @@
 # RALPLAN: Warp Terminal on Android (Open-Source First Port)
 
 > **Mode**: DELIBERATE consensus plan (high-risk: 12-18 month porting, GPL fork, multi-platform native, AGPL compliance)
-> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 CLOSED CONDITIONAL GO** (2026-04-29) → **M1 CLOSED CONDITIONAL GO 10/10 stories PASS** (2026-04-30) → **M2 NEXT (warpui Android backend, 8-12 weeks)**
-> **Amendments**: 1 (D1 invalidated) → 2 (D1.5-hybrid) → 3 (minSdk 31) → **4 (M1: am force-stop semantics)**
+> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 CLOSED CONDITIONAL GO** (2026-04-29) → **M1 CLOSED CONDITIONAL GO 10/10 stories PASS** (2026-04-30) → **M2 CLOSED CONDITIONAL GO 12/14 PASS** (2026-04-30) → **M3 IN PROGRESS — S01+S02 PASS, S03 PRE-MORTEM C TRIPPED 2026-04-30**
+> **Amendments**: 1 (D1 invalidated) → 2 (D1.5-hybrid) → 3 (minSdk 31) → 4 (M1: am force-stop semantics) → **5 (M3: app/ extraction, NOT cfg-gate)**
 > **Upstream commit referenced**: `warpdotdev/Warp@d0f045c` (just-released 2026-04-28)
 > **Author**: Planner agent (RALPLAN-DR deliberate); **Amendments 1+3+4 by team-lead@warp-mobile** post-M0/M1 autonomous tasks
 > **Date**: 2026-04-29 → 2026-04-30 (M1 close-out)
+
+---
+
+## ⚠️ Amendment 5 (2026-04-30 M3-S03) — M3 architecture pivots from cfg-gating `app/` to **extraction**: M3-relevant types move into facade, `app/` stays out of Android build graph
+
+**Tl;dr**: M3-S03 worker (executor opus) attempted the original ralplan §6 M3 row #2 plan ("cfg-gate `app::terminal::*` desktop-only paths so `cargo build --target aarch64-linux-android -p app` succeeds with cfg-gate count <500 lines"). Empirical measurement on warp-src commit `03e6182`: **41 cfg-gate lines added (well under budget) yet 145 distinct compile errors remain across 19 `app/` subsystems** (ai, search, server, remote_server, system, ssh, profiling, persistence, cli_agent_sessions, debug_dump, code, terminal, ...). This is **Pre-mortem C trip — not a budget overrun, but an architecture mismatch**: the original plan assumed 5 dep edges but `app/src/lib.rs` (2786 lines / 146 imports) has hundreds of unconditional usages whose imports become feature-gated transitively. Compiling all of `app/` for Android is far outside the cfg-gate <500 line budget regardless of how aggressively we widen the facade.
+
+**Evidence**: `/tmp/m3-s03-build-full.txt` (full 2584-line build log), worker handoff (commit `03e6182`). 145 errors breakdown: E0433 ×99 (unresolved name), E0432 ×37 (unresolved import), E0425 ×4, E0412 ×4, E0583 ×1. Top crate-gate impact: tantivy ×45, tokio ×30, sysinfo ×17, comfy_table ×16, inquire ×13, aws_config ×10, plus 16 other crates.
+
+**This amendment**:
+
+1. **§6 M3 row #2 ("cfg-gate `app::terminal::*` desktop-only paths")** is REPLACED with: "**extract** the M3-relevant subset of `app::terminal::model::*` (Block + BlockList + ANSI parser including DCS hooks + Session glue) into `warp_terminal_mobile_facade::app_terminal::*` modules. `app/` is NOT in the Android build graph (Android `cargo ndk` builds: `warp_terminal`, `warpui`, `warpui_extras`, `warp_terminal_mobile_facade`, `android-host` — that's it)."
+
+2. **§6 M3 row #4 (DCS parser) reaffirmed but reframed**: per M3-S01 round-1 archeology, DCS parser already exists at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs`. M3-S05 = **extract** dcs_hooks.rs into facade `app_terminal::ansi::dcs_hooks` module, NOT discover from scratch.
+
+3. **§7 Risk register update**: Pre-mortem C #1 (cfg-gate budget) **retired** — replaced with "extraction completeness" risk. Tracked: are the extracted facade modules a self-consistent island that compiles without pulling in the full `app/` orchestrator? If not, extract more or carve a sharper boundary.
+
+4. **D1.5-hybrid spirit preserved**: Amendment 2's invariant ("`warp_terminal → warpui` Cargo edge stays; warp_terminal/warpui untouched") still holds. The change is `app/` is now ALSO in the "untouched on Android" bucket — Android consumes a *strict subset* of app/ via the facade extraction modules.
+
+5. **Cargo.lock churn**: ZERO upstream churn target maintained — `warp_terminal` / `warpui` Cargo.lock rows untouched. Worker `03e6182` already verified this.
+
+6. **M3 story renumbering**: M3-S03 reframes from "cfg-gate app/" → "extract app::terminal::model::* into facade modules". M3-S04 (facade → warpui Android push_frame wiring) is unblocked once the extracted facade compiles for Android. M3-S05 (DCS parser) becomes "extract dcs_hooks.rs from app/ into facade::app_terminal::ansi::dcs_hooks". M3-S07 (Block model) similarly extracts block.rs + blocks.rs into facade::app_terminal::model.
+
+**M3-S03 carry-forward decision (2026-04-30 by lead)**: Worker commit `03e6182` is KEPT (the 41-line cfg-gate work for `app/Cargo.toml` mio/nix and `warpui_extras/secure_storage` Android shim is foundation work even under the extraction approach — the extracted facade modules will benefit from these gates). Worker correctly stopped at AC#5 mandate ("if cfg-gate count ≥500 lines OR cannot complete clean build: STOP and report") and surfaced the architecture mismatch instead of bypassing.
+
+**Pattern lesson saved to project memory**: when a Pre-mortem trip reveals scope mismatch (not just budget overrun), the plan amendment is the correct response — facade widening to the *full extraction* level is the architecture-honest path. M2-S11 self-PASS chaos showed what happens when workers paper over architecture mismatches; M3-S03 demonstrates the right pattern (worker stops, lead amends, work resumes with realistic scope).
+
+**Author**: team-lead@warp-mobile-m3 (Claude Opus 4.7 1M).
 
 ---
 

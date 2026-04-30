@@ -59,17 +59,17 @@
     },
     {
       "id": "M3-S03",
-      "title": "cfg-gate app::terminal::* desktop-only paths (Pre-mortem C threshold <500 lines)",
+      "title": "Extract app::terminal::model::* into facade modules (Plan Amendment 5; replaces cfg-gate approach)",
       "passes": false,
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "cfg-gates added to warp-src/app/src/terminal/model/session.rs and edge files (mod.rs / Cargo.toml mio/nix/ai gates / build.rs) so cargo build --target aarch64-linux-android -p app succeeds with cfg-gate count <500 lines",
-        "Use cfg(target_os = \"android\") for mobile path; cfg(not(target_os = \"android\")) for desktop-only (consistent with Plan Amendment 2 D1.5-hybrid dialect — NO platform_family mixing per Pre-mortem C #5)",
-        "The 5 dependency edges (app::ai / app::feature_flag / app::ssh / app::app_context) routed through warp_terminal_mobile_facade shims on Android",
-        "Verification: `cargo build --target aarch64-linux-android -p app 2>&1 | tee` shows zero compilation errors; cfg-gate diff line count via `git diff main warp-mobile/m0-facade -- '*.rs' | grep -E '^[+-]\\s*#\\[cfg' | wc -l`",
-        "If cfg-gate count ≥500 lines: surface as Pre-mortem C blocker; defer additional gating to facade widening (still under D1.5-hybrid)",
-        "Web search docs cited (warp upstream platform-cfg pattern; Rust cfg attribute composition)",
+        "Per Plan Amendment 5: original cfg-gate-app/ approach REPLACED with extraction. app/ stays out of Android build graph.",
+        "warp_terminal_mobile_facade adds new app_terminal::* module tree containing extracted Block, BlockList, ANSI parser (incl dcs_hooks), and minimal Session glue from app/src/terminal/model/* — NOT a re-export, but a copy-and-adapt to compile standalone for Android",
+        "Use cfg(target_os = \"android\") only where the extracted code itself needs platform-specific handling (e.g. PTY traits) — most extracted code should be platform-neutral and compile cleanly under cargo ndk check",
+        "Web search docs cited (Cargo workspace member crates with copied source; legal/license note that AGPL allows copying within same workspace under same license)",
+        "Verification: `cargo ndk -t arm64-v8a check -p warp_terminal_mobile_facade` passes; `cargo test -p warp_terminal_mobile_facade` passes including ≥3 new tests for extracted Block/BlockList/DCS parsing; Cargo.lock unchanged for warp_terminal/warpui edges",
+        "Pre-mortem C escape hatch: if extraction completeness blocks (extracted module pulls in another module that pulls in app/ orchestrator), STOP and report; lead may amend extraction boundary",
         "Codex review dispatched and PASS verdict received"
       ]
     },
