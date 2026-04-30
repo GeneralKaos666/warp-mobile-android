@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- M2-S04: require Vulkan 1.1 (matches MainActivity Vulkan setup;
+         Adreno 6xx+ baseline per Plan Amendment 3 minSdk 31). -->
+    <uses-feature android:name="android.hardware.vulkan.level" android:required="true" />
+    <uses-feature android:name="android.hardware.vulkan.version"
+        android:version="0x00401000"
+        android:required="true" />
+
     <!-- Fix #3: signature-level permission so only our own signed APKs can control PTY -->
     <permission android:name="dev.warp.mobile.permission.PTY_CONTROL"
         android:protectionLevel="signature" />

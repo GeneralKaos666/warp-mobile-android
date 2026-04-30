@@ -18,3 +18,12 @@ libc = "0.2"
 [target.'cfg(target_os = "android")'.dependencies]
 ndk = "0.9"
 ndk-sys = "0.6"
+# M2-S04: Vulkan via ash + ANativeWindow. The CANONICAL implementation is in
+# `warp-src/crates/warpui/src/platform/android/vulkan.rs` (per M2-S04 AC#1).
+# This crate hosts an equivalent runtime harness because cross-workspace path
+# deps (warp-src has its own `workspace.package` inheritance not present in
+# the main repo) would require a major refactor of warpui's manifest. Both
+# implementations follow the same M0 spike (`spikes/vulkan-surface-recreate/`)
+# pattern. The harness here is the production runtime path until M3 unifies
+# the workspaces.
+ash = "0.38"

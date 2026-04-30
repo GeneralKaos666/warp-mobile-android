@@ -1,10 +1,18 @@
 #[cfg(unix)]
 pub mod pty;
 
+#[cfg(target_os = "android")]
+mod vulkan;
+
 use jni::objects::{JByteArray, JClass, JObjectArray, JString};
 use jni::sys::{jbyteArray, jint, jlong, jshort, jstring};
 use jni::JNIEnv;
 use std::sync::Arc;
+
+#[cfg(target_os = "android")]
+use jni::objects::JObject;
+#[cfg(target_os = "android")]
+use jni::sys::{jboolean, jfloat, JNI_FALSE, JNI_TRUE};
 
 #[allow(non_snake_case)]
 #[no_mangle]
@@ -190,6 +198,90 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyKill(
     // Decrement the Arc refcount held by the Java map (spawned with Arc::into_raw)
     unsafe { Arc::decrement_strong_count(ptr as *const pty::PtySession) };
 }
+
+// ── Vulkan / render JNI bindings (M2-S04) ───────────────────────────────────
+
+/// Attaches an Android `Surface` (from `SurfaceHolder.getSurface()`) to the
+/// Vulkan swapchain. Returns `true` on success.
+///
+/// Wraps `ANativeWindow_fromSurface` + the M0-spike-validated initialization
+/// path in `vulkan.rs`.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderAttachSurface(
+    env: JNIEnv,
+    _class: JClass,
+    surface: JObject,
+) -> jboolean {
+    init_logger();
+    if surface.is_null() {
+        log::error!(target: "warp-android-host", "renderAttachSurface: null Surface");
+        return JNI_FALSE;
+    }
+    // SAFETY: env.get_native_interface() returns a valid JNIEnv* per JNI spec;
+    // ANativeWindow_fromSurface returns a refcounted ANativeWindow* (we own the
+    // ref and pass ownership into vulkan::attach).
+    let native_window = unsafe {
+        ndk_sys::ANativeWindow_fromSurface(
+            env.get_native_interface() as *mut _,
+            surface.as_raw() as *mut _,
+        )
+    };
+    if native_window.is_null() {
+        log::error!(target: "warp-android-host",
+            "renderAttachSurface: ANativeWindow_fromSurface returned null");
+        return JNI_FALSE;
+    }
+    // SAFETY: ownership transfers to vulkan::attach.
+    let ok = unsafe { vulkan::attach(native_window) };
+    if ok { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Detaches the Vulkan swapchain. Idempotent.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDetachSurface(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    init_logger();
+    vulkan::detach();
+}
+
+/// Submits a single clear-color frame. Returns `true` on successful
+/// `vkQueuePresentKHR`. The clear color components are floats in [0.0, 1.0].
+///
+/// For M2-S04 the JNI side typically passes magenta `(1.0, 0.0, 1.0, 1.0)`.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderClearFrame(
+    _env: JNIEnv,
+    _class: JClass,
+    r: jfloat,
+    g: jfloat,
+    b: jfloat,
+    a: jfloat,
+) -> jboolean {
+    let ok = vulkan::submit_clear_frame([r, g, b, a]);
+    if ok { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Returns the cumulative number of frames presented since the last attach.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderFramesPresented(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jlong {
+    vulkan::frames_presented() as jlong
+}
+
+// On non-Android Unix targets (host-side cargo test) the Vulkan symbols are
+// gated out — JNI bindings are only meaningful on Android.
 
 // ── Logger ──────────────────────────────────────────────────────────────────
 
