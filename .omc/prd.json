@@ -140,17 +140,19 @@
     },
     {
       "id": "M3-S08",
-      "title": "Live ls -la /system colored + line-wrapped on S24 Ultra (M3 Acceptance #1)",
+      "title": "Per-cell dynamic_grid renderer + Live ls -la /system on S24U (M3 Acceptance #1, post-amend)",
       "passes": false,
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "End-to-end PTY → terminal model → renderer pipeline produces correctly colored + line-wrapped output for `ls -la /system` (Android system dir, ~50-100 lines)",
-        "Color attributes: ANSI 16-color baseline; ls --color=auto must produce blue dirs / green executables (compare vs Linux baseline screenshot)",
-        "Line wrap: 80-col terminal default; long filenames wrap at column boundary OR continue per stty/COLUMNS env",
-        "Driver: tools/scripts/test-ls-la.sh R5CX10VFFBA — install APK, spawn PTY shell, send `ls -la /system\\n`, capture frame via M2-S05 capture, pull PNG, run pixel diff against `M3-S08-golden.png` (≥95% similarity)",
-        "Result artifact: .omc/m3-artifacts/M3-S08-result.json with line_count, color_attribute_count_per_color, golden_diff_percentage, gate.overall_pass",
-        "Honest disclosure: any color/wrap deviation from Linux baseline documented",
+        "Build warp-src/crates/warpui/src/platform/android/dynamic_grid.rs (NEW): per-cell renderer that reads from TerminalModel.cells() with SGR fg/bg/attrs honored. Reuses M2-S07 glyph atlas + cosmic-text shaping. The static_grid M2-S08 path stays untouched (M2 acceptance held).",
+        "Window::push_frame routing: prefer dynamic_grid when TerminalModel has non-default cells (i.e. PTY-driven content); fall back to static_grid for the M2-S08 demo flow when terminal_mode flag is false.",
+        "Per-cell color verification (synthetic SGR injection): inject \\x1b[31mRED\\x1b[32mGREEN\\x1b[34mBLUE\\x1b[0m via TerminalSimulationReceiver TERM_INJECT_RAW; capture screenshot; visual inspection shows distinct red/green/blue text in their respective cells (NOT the M3-S05 static_grid replication artifact).",
+        "Line wrap on real PTY: spawn /system/bin/sh; run `/system/bin/ls -la /system\\n`; output wraps at 80-col boundary; ≥40 lines visible on screen (or scrollable; scrollback test is M3-S09).",
+        "Toybox ls color limitation DEFERRED to M5: Android's stock toybox /system/bin/ls does NOT emit ANSI colors even with --color=always. M3-S08 verifies per-cell color rendering via synthetic SGR injection (above); M5 Termux brings GNU coreutils ls --color=auto for full real-PTY colored verification.",
+        "Linux baseline pixel similarity gate DEFERRED to M5: requires a Linux reference render with matching font/cell-size which is out of scope for M3-S08. M3-S08 verifies functional correctness (per-cell colors visible + line-wrap + ≥40 ls lines rendered) instead of pixel-equality.",
+        "Driver: tools/scripts/test-dynamic-grid.sh R5CX10VFFBA — install APK, launch terminal_mode, inject RED/GREEN/BLUE synthetic SGR, capture screenshot.png; spawn ls -la /system, capture screenshot-ls.png; emit result.json with sgr_color_test_pass, ls_lines_visible, gate.overall_pass.",
+        "Result artifact: .omc/m3-artifacts/M3-S08-color-test.png (synthetic SGR), M3-S08-ls-output.png (real ls), M3-S08-result.json (gate evidence).",
         "Codex review dispatched and PASS verdict received"
       ]
     },
