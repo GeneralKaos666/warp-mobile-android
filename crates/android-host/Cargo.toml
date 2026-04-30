@@ -33,3 +33,14 @@ ash = "0.38"
 # `png` crate is image's underlying PNG codec anyway.
 # Ref: <https://github.com/image-rs/image-png>
 png = { version = "0.17", default-features = false }
+# M2-S07: cosmic-text + fontdb for the device-side font-render harness.
+# The CANONICAL FontDB lives in `warp-src/crates/warpui/src/platform/android/font.rs`
+# (mirrors the desktop windowing/winit/fonts.rs); this crate mirrors the
+# subset needed to verify "Hello, 世界" glyph rasterization on device end-to-
+# end without depending on warpui (cross-workspace gap noted above).
+# Same warpdotdev fork rev as warpui so behaviour matches.
+# Refs:
+#   <https://github.com/warpdotdev/cosmic-text>
+#   <https://github.com/pop-os/cosmic-text/issues/243>
+cosmic-text = { git = "https://github.com/warpdotdev/cosmic-text.git", rev = "15198beba692162201c0ea8b15222cf5643ea068" }
+fontdb = "0.23.0"

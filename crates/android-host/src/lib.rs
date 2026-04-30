@@ -2,6 +2,9 @@
 pub mod pty;
 
 #[cfg(target_os = "android")]
+mod font_render;
+
+#[cfg(target_os = "android")]
 mod vulkan;
 
 use jni::objects::{JByteArray, JClass, JObjectArray, JString};
@@ -313,6 +316,78 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderCaptureFrame(
     };
     let out_path = std::path::PathBuf::from(&path_str);
     match vulkan::capture_to_png([r, g, b, a], &out_path) {
+        Some(_) => JNI_TRUE,
+        None => JNI_FALSE,
+    }
+}
+
+/// M2-S07: capture a single frame as PNG with shaped text composited on top.
+///
+/// 1. Renders one magenta clear frame and reads back the swapchain image into
+///    a host-coherent staging buffer (M2-S05 pipeline).
+/// 2. Constructs a cosmic-text `FontSystem` populated from `/system/fonts/`
+///    via `ASystemFontIterator` (NDK API 29+) — see
+///    `crates/android-host/src/font_render.rs` for the full discovery pipeline.
+/// 3. Shapes `text` (typically `"Hello, 世界"`) and rasterizes each glyph via
+///    swash; alpha-blends every glyph onto the captured RGBA buffer at
+///    `(baseline_x, baseline_y)` using `font_size_px`.
+/// 4. Encodes the modified buffer as PNG.
+///
+/// Returns `true` on success. Logs `capture_ok` (M2-S05 schema) AND a new
+/// `font_render_ok` line carrying the M2-S07 counters (fonts_loaded,
+/// glyphs_total, composed_pixels, mean_rgb_after, primary/cjk family). The
+/// test driver greps these to verify glyph coverage.
+///
+/// Synchronous — blocks the calling thread until the PNG file is fully
+/// flushed to disk.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderCaptureFrameWithText(
+    mut env: JNIEnv,
+    _class: JClass,
+    path: JString,
+    r: jfloat,
+    g: jfloat,
+    b: jfloat,
+    a: jfloat,
+    text: JString,
+    font_size_px: jfloat,
+    baseline_x: jfloat,
+    baseline_y: jfloat,
+) -> jboolean {
+    init_logger();
+    let path_str: String = match env.get_string(&path) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(
+                target: "warp-android-host",
+                "renderCaptureFrameWithText: could not extract path JString: {:?}",
+                e
+            );
+            return JNI_FALSE;
+        }
+    };
+    let text_str: String = match env.get_string(&text) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(
+                target: "warp-android-host",
+                "renderCaptureFrameWithText: could not extract text JString: {:?}",
+                e
+            );
+            return JNI_FALSE;
+        }
+    };
+    let out_path = std::path::PathBuf::from(&path_str);
+    match vulkan::capture_to_png_with_text(
+        [r, g, b, a],
+        &out_path,
+        &text_str,
+        font_size_px,
+        baseline_x,
+        baseline_y,
+    ) {
         Some(_) => JNI_TRUE,
         None => JNI_FALSE,
     }

@@ -66,6 +66,9 @@
             android:permission="dev.warp.mobile.permission.PTY_CONTROL">
             <intent-filter>
                 <action android:name="dev.warp.mobile.CAPTURE_FRAME" />
+                <!-- M2-S07: text-render variant (compose shaped glyphs onto
+                     the captured RGBA before PNG encode). -->
+                <action android:name="dev.warp.mobile.CAPTURE_FRAME_WITH_TEXT" />
             </intent-filter>
         </receiver>
 

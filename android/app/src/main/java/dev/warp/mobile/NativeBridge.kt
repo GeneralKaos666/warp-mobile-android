@@ -67,4 +67,40 @@ object NativeBridge {
         b: Float,
         a: Float
     ): Boolean
+
+    /**
+     * M2-S07: capture a single frame as PNG at `path`, with shaped text
+     * composited on top.
+     *
+     * Renders one clear-color frame (RGBA in [0.0, 1.0]), reads it back via
+     * the M2-S05 readback pipeline, then:
+     *  - Discovers system fonts via `ASystemFontIterator` (NDK API 29+)
+     *    or `/system/fonts/` directory scan as fallback.
+     *  - Loads them into a `cosmic_text::FontSystem`.
+     *  - Shapes `text` (e.g. `"Hello, 世界"`) — Latin from Roboto/Sans-Serif,
+     *    CJK fallback from Noto Sans CJK.
+     *  - Rasterizes each glyph via swash and alpha-blends the resulting
+     *    bitmap onto the captured RGBA buffer at `(baselineX, baselineY)`
+     *    in white.
+     *  - Encodes the modified buffer as PNG.
+     *
+     * Returns `true` on success. The Rust side logs `capture_ok` (M2-S05
+     * schema) AND `font_render_ok via=… fonts_loaded=… glyphs_total=…
+     * composed_pixels=…` which the device driver greps for. The driver
+     * additionally checks the resulting PNG for non-magenta pixels in the
+     * expected glyph band.
+     *
+     * Synchronous — blocks until the PNG is fully flushed to disk.
+     */
+    external fun renderCaptureFrameWithText(
+        path: String,
+        r: Float,
+        g: Float,
+        b: Float,
+        a: Float,
+        text: String,
+        fontSizePx: Float,
+        baselineX: Float,
+        baselineY: Float
+    ): Boolean
 }

@@ -1,0 +1,91 @@
+{
+  "story": "M2-S07",
+  "device_serial": "R5CX10VFFBA",
+  "png_path_local": "/tmp/m2-s07-capture.png",
+  "png_file_size_bytes": 66906,
+  "capture": {
+    "frame_num": 540,
+    "ts_ms": 118160567,
+    "width": 1080,
+    "height": 2340,
+    "bytes_logged": 66906,
+    "mean_r_before": 255,
+    "mean_g_before": 0,
+    "mean_b_before": 255,
+    "bgra_swizzled": false
+  },
+  "font_render": {
+    "via": "ASystemFontIterator",
+    "fonts_loaded": 358,
+    "families_loaded": 197,
+    "glyphs_total": 9,
+    "glyphs_missing": 0,
+    "composed_pixels": 11138,
+    "mean_rgb_after_raw": "255,0,255",
+    "primary_family": "Some(\"Roboto\")",
+    "cjk_family": "Some(\"SEC CJK SC\")",
+    "mean_r_after": 255,
+    "mean_g_after": 0,
+    "mean_b_after": 255
+  },
+  "render_params": {
+    "baseline_x": 100.0,
+    "baseline_y": 600.0,
+    "font_size_px": 96.0
+  },
+  "pil_verify": {
+    "dims": [
+      1080,
+      2340
+    ],
+    "mode": "RGBA",
+    "mean": {
+      "r": 255.0,
+      "g": 0.9812484172206395,
+      "b": 255.0,
+      "a": 255.0
+    },
+    "error": null,
+    "glyph_pixel_count": 10426,
+    "band": {
+      "r": 255.0,
+      "g": 17.13523355444997,
+      "b": 255.0,
+      "top": 504,
+      "bottom": 638,
+      "glyph_pixel_count_in_band": 10426
+    }
+  },
+  "validation_layer": {
+    "clean": true,
+    "layer_loaded": true,
+    "warn_count": 0,
+    "err_count": 0,
+    "sample_lines": [
+      {
+        "severity": "D",
+        "line": "04-30 19:06:02.681 D/warp-android-host(24343): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11106.bin for reading (it may not exist yet)"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 19:06:02.703 D/warp-android-host(24343): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11106.bin for writing"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 19:06:02.712 D/warp-android-host(24343): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11106.bin for reading (it may not exist yet)"
+      }
+    ]
+  },
+  "acceptance_gate": {
+    "capture_ok_seen": true,
+    "font_render_ok_seen": true,
+    "dims_match": true,
+    "fonts_loaded_gt_zero": true,
+    "glyphs_total_ge_7": true,
+    "composed_pixels_gt_1000": true,
+    "glyphs_visible_in_band": true,
+    "file_size_ok": true,
+    "validation_clean_pass": true,
+    "overall_pass": true
+  }
+}

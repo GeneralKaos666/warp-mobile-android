@@ -1294,6 +1294,225 @@ pub(crate) fn capture_to_png(
     }
 }
 
+// ---------------------------------------------------------------------------
+// M2-S07: capture + font composite path
+// ---------------------------------------------------------------------------
+
+/// Metadata returned by [`capture_to_png_with_text`].
+///
+/// In addition to the M2-S05 capture metadata, this carries the M2-S07 font-
+/// render counters (fonts loaded, glyphs shaped, pixels touched). The driver
+/// script greps for the `font_render_ok` line to verify glyph coverage on
+/// device. Fields are read via Debug formatting in error logs and surfaced to
+/// callers indirectly through the `font_render_ok` logcat line; the
+/// dead-code lint can't see through `{:?}` usage.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(crate) struct CaptureWithTextMetadata {
+    pub width: u32,
+    pub height: u32,
+    pub mean_r_before: u8,
+    pub mean_g_before: u8,
+    pub mean_b_before: u8,
+    pub mean_r_after: u8,
+    pub mean_g_after: u8,
+    pub mean_b_after: u8,
+    pub png_bytes_written: u64,
+    pub bgra_swizzled: bool,
+    pub font_via: String,
+    pub fonts_loaded: usize,
+    pub families_loaded: usize,
+    pub glyphs_total: usize,
+    pub glyphs_missing: usize,
+    pub composed_pixels: u64,
+}
+
+/// Compute mean RGB across an RGBA buffer.
+fn mean_rgb(rgba: &[u8], width: u32, height: u32) -> (u8, u8, u8) {
+    let pixel_count = (width as u64) * (height as u64);
+    if pixel_count == 0 || rgba.is_empty() {
+        return (0, 0, 0);
+    }
+    let mut sr: u64 = 0;
+    let mut sg: u64 = 0;
+    let mut sb: u64 = 0;
+    for chunk in rgba.chunks_exact(4) {
+        sr += chunk[0] as u64;
+        sg += chunk[1] as u64;
+        sb += chunk[2] as u64;
+    }
+    (
+        (sr / pixel_count) as u8,
+        (sg / pixel_count) as u8,
+        (sb / pixel_count) as u8,
+    )
+}
+
+/// Capture + composite text + PNG-encode in one shot.
+///
+/// 1. Grabs the swapchain image as RGBA via the M2-S05 readback path.
+/// 2. Calls `font_render::compose_text_on_rgba` to shape `text` and overlay
+///    the resulting glyphs onto the captured buffer at `(baseline_x, baseline_y)`
+///    using `font_size_px`.
+/// 3. Encodes the modified buffer as PNG.
+///
+/// Returns `Some(meta)` on success, including the before/after mean-RGB delta
+/// + glyph counts so the test driver can assert glyph pixels exist.
+pub(crate) fn capture_to_png_with_text(
+    clear_rgba: [f32; 4],
+    out_path: &std::path::Path,
+    text: &str,
+    font_size_px: f32,
+    baseline_x: f32,
+    baseline_y: f32,
+) -> Option<CaptureWithTextMetadata> {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        log::error!(
+            target: "WarpVulkan",
+            "capture_to_png_with_text: no surface attached"
+        );
+        return None;
+    };
+    if !s.swapchain_supports_transfer_src {
+        log::error!(
+            target: "WarpVulkan",
+            "capture_to_png_with_text: swapchain does not advertise TRANSFER_SRC"
+        );
+        return None;
+    }
+    let captured = match unsafe { record_and_capture_raw(s, clear_rgba) } {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!(
+                target: "WarpVulkan",
+                "capture_to_png_with_text: capture failed: {:?}",
+                e
+            );
+            return None;
+        }
+    };
+    let CapturedRgba {
+        mut rgba,
+        width,
+        height,
+        mean_r,
+        mean_g,
+        mean_b,
+        bgra_swizzled,
+    } = captured;
+
+    // Composite text onto the captured RGBA buffer.
+    let stats = crate::font_render::compose_text_on_rgba(
+        rgba.as_mut_slice(),
+        width,
+        height,
+        text,
+        font_size_px,
+        baseline_x,
+        baseline_y,
+    );
+
+    // Mean RGB after composite (for the driver's drift assertion).
+    let (after_r, after_g, after_b) = mean_rgb(&rgba, width, height);
+
+    // Encode PNG.
+    if let Some(parent) = out_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = match std::fs::File::create(out_path) {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!(
+                target: "WarpVulkan",
+                "capture_to_png_with_text: create PNG file failed: {:?}",
+                e
+            );
+            return None;
+        }
+    };
+    let writer = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = match encoder.write_header() {
+        Ok(w) => w,
+        Err(e) => {
+            log::error!(
+                target: "WarpVulkan",
+                "capture_to_png_with_text: PNG header write failed: {:?}",
+                e
+            );
+            return None;
+        }
+    };
+    if let Err(e) = writer.write_image_data(&rgba) {
+        log::error!(
+            target: "WarpVulkan",
+            "capture_to_png_with_text: PNG image data write failed: {:?}",
+            e
+        );
+        return None;
+    }
+    if let Err(e) = writer.finish() {
+        log::error!(
+            target: "WarpVulkan",
+            "capture_to_png_with_text: PNG finish failed: {:?}",
+            e
+        );
+        return None;
+    }
+    let png_bytes_written = std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0);
+
+    let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+        *c += 1;
+        *c
+    } else {
+        0
+    };
+    log::info!(
+        target: "WarpVulkan",
+        "capture_ok frame={} ts={} dims={}x{} bytes={} mean_rgb={},{},{} bgra_swizzled={}",
+        n, uptime_millis(), width, height,
+        png_bytes_written, mean_r, mean_g, mean_b, bgra_swizzled
+    );
+    log::info!(
+        target: "WarpVulkan",
+        "font_render_ok via={} fonts_loaded={} families_loaded={} glyphs_total={} glyphs_missing={} composed_pixels={} mean_rgb_after={},{},{} primary_family={:?} cjk_family={:?}",
+        stats.via,
+        stats.fonts_loaded,
+        stats.families_loaded,
+        stats.glyphs_total,
+        stats.glyphs_missing,
+        stats.composed_pixels,
+        after_r, after_g, after_b,
+        stats.primary_family,
+        stats.cjk_family
+    );
+
+    Some(CaptureWithTextMetadata {
+        width,
+        height,
+        mean_r_before: mean_r,
+        mean_g_before: mean_g,
+        mean_b_before: mean_b,
+        mean_r_after: after_r,
+        mean_g_after: after_g,
+        mean_b_after: after_b,
+        png_bytes_written,
+        bgra_swizzled,
+        font_via: stats.via.to_string(),
+        fonts_loaded: stats.fonts_loaded,
+        families_loaded: stats.families_loaded,
+        glyphs_total: stats.glyphs_total,
+        glyphs_missing: stats.glyphs_missing,
+        composed_pixels: stats.composed_pixels,
+    })
+}
+
 fn destroy_surface(s: VulkanSurface) {
     // SAFETY: ordered RAII teardown — wait_idle, per-surface, device, instance, native_window.
     unsafe {
