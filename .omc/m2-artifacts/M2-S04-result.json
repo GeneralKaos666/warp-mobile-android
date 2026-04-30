@@ -2,18 +2,18 @@
   "story": "M2-S04",
   "device_serial": "R5CX10VFFBA",
   "capture_seconds": 60,
-  "frames_observed": 7614,
+  "frames_observed": 7606,
   "first_frame_num": 1,
-  "last_frame_num": 7614,
-  "first_ts_ms": 113268968,
-  "last_ts_ms": 113332325,
-  "attach_ts_ms": 113268885,
+  "last_frame_num": 7606,
+  "first_ts_ms": 113950428,
+  "last_ts_ms": 114013704,
+  "attach_ts_ms": 113950271,
   "detach_ts_ms": null,
   "frame_interval_ms": {
     "p50": 8,
     "p95": 9,
     "p99": 10,
-    "count": 7613
+    "count": 7605
   },
   "peak_fps_in_1s_window": 122,
   "validation_layer": {
@@ -24,15 +24,15 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 17:44:36.422 D/warp-android-host(14993): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11089.bin for reading (it may not exist yet)"
+        "line": "04-30 17:55:57.809 D/warp-android-host(18483): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11090.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 17:44:36.433 D/warp-android-host(14993): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11089.bin for writing"
+        "line": "04-30 17:55:57.883 D/warp-android-host(18483): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11090.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 17:44:36.442 D/warp-android-host(14993): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11089.bin for reading (it may not exist yet)"
+        "line": "04-30 17:55:57.896 D/warp-android-host(18483): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11090.bin for reading (it may not exist yet)"
       }
     ]
   },
