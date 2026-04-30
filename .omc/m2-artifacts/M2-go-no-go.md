@@ -1,7 +1,7 @@
 # M2 Go/No-Go 整合報告
 
 **日期**：2026-04-30 (M2 milestone close-out)
-**主分支**：`main` @ `90c6d76` (this doc lands at `7d9dd60`; lead picked up codex's S04/S08/S09 result.json reruns at `90c6d76`)
+**主分支**：`main` @ `c71421e` (S14 doc lands at `7d9dd60`; lead picked up codex's S04/S08/S09 result.json reruns at `90c6d76`; codex round-1 fixes at `c71421e`)
 **warp-src 對應**：`warp-mobile/m0-facade` @ `d7616e5` (pushed to ImL1s/warp)
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` §6 M2 (lines 489-502, Amendment 1+2 D1.5-hybrid)
 **前置 milestones**：
@@ -42,7 +42,7 @@ warp-src/crates/warpui/src/platform/android/        (NEW in M2-S03)
 ├── mod.rs              14,144 bytes — cfg(target_os = "android") dispatch + AppDelegate + module re-exports
 ├── window.rs           11,528 bytes — Window + WindowContext + WindowManager (headless-derived)
 ├── dispatch.rs          3,284 bytes — DispatchDelegate (ALooper main-thread dispatch, headless-derived)
-├── vulkan.rs           88,690 bytes — ash + ANativeWindow + render_scene (line 313) + request_frame_capture (line 325)
+├── vulkan.rs           88,690 bytes — ash + ANativeWindow; submit_scene at line 289, capture_to_png at 317, capture_to_callback at 383 (trait entries `WindowContext::render_scene` + `request_frame_capture` live in window.rs:313/325)
 ├── ime.rs              32,949 bytes — composing-text state machine + pending_finish defer (Gboard quirk)
 ├── input.rs            13,942 bytes — onTouchEvent → MouseDown/Up/scroll; sign convention docs at lines 152-155
 ├── font.rs             39,821 bytes — FontDB 15 methods (ASystemFontIterator NDK API 29+ at line 169 + /system/fonts fallback)
@@ -245,7 +245,7 @@ Pixel 4a or Galaxy A52s API 31 → re-run `test-pty-reattach.sh`, `test-pty-resi
 
 **Rationale for CONDITIONAL (not full) GO**:
 
-- **AC#1 device-matrix gap**: Plan §6 M2 originally required flagship + mid-tier + replacement low-end Adreno 6xx. Flagship S24 Ultra fully demonstrated; mid-tier S21+ and replacement low-end (Pixel 4a / A52s API 31) deferred to **M2-S13 user-action carry-over**. Same rationale as M1-go-no-go.md §6 verdict ("PARTIAL — flagship fully demonstrated; low-end deferred").
+- **AC#1 device-matrix gap**: Plan §6 M2 originally required flagship + mid-tier + replacement low-end Adreno 6xx. Flagship S24 Ultra fully demonstrated; mid-tier S21+ and replacement low-end (Pixel 4a / A52s API 31) deferred to **M2-S13 user-action carry-over**. Same rationale as M1-go-no-go.md §6 verdict ("CONDITIONAL GO — flagship fully demonstrated; AC#5 PARTIAL on low-end deferral").
 - **S14 (this doc)** awaiting Codex review dispatch.
 
 All other M2 risk areas — render_scene production swapchain, request_frame_capture, FontDB CJK, TextLayoutSystem, static-grid 11k-instance pipeline, swapchain recreate, IME state machine, touch input — are empirically validated end-to-end on flagship pathway with **3 independent codex reproductions** (S04 60s frame timing + S05 100-capture stress + S05 rotation-during-capture).
@@ -255,7 +255,7 @@ All other M2 risk areas — render_scene production swapchain, request_frame_cap
 1. Acquire Pixel 4a or Galaxy A52s, re-run M1-S06/S07/S08/S09 + M2-S04/S08/S09 drivers (M2-S13).
 2. Lead dispatch Codex audit on this doc (M2-S14); on PASS mark `prd.json M2-S14.passes:true`.
 
-**Decision**: Proceed to M3 (Warp minimal terminal/session integration) with M2 milestone closing CONDITIONAL on the above 3 path-to-GO items. M2 close-out criteria (4 hand-written areas + acceptance #1+#2+#3 + cargo doc) all satisfied on flagship pathway; the CONDITIONAL is purely a device-matrix completeness gap + 2 outstanding audit dispatches, not a code-quality or architecture concern.
+**Decision**: Proceed to M3 (Warp minimal terminal/session integration) with M2 milestone closing CONDITIONAL on the above 2 path-to-GO items. M2 close-out criteria (4 hand-written areas + acceptance #1+#2+#3 + cargo doc) all satisfied on flagship pathway; the CONDITIONAL is purely a device-matrix completeness gap + the outstanding S14 audit dispatch (this doc), not a code-quality or architecture concern.
 
 ---
 
@@ -483,7 +483,7 @@ S04+S05 codex reproductions revealed several script fragility patterns that were
 
 ### 8.5 M2-S13 deferral parallel to M1-S09 deferral
 
-M1 closed CONDITIONAL on the same low-end deferral (M1-go-no-go.md §6: "PARTIAL — flagship S24 Ultra fully demonstrated; low-end deferred to M2 per Plan Amendment 3 §3"). M2 inherits the same deferral; rationale and resolution are identical:
+M1 closed CONDITIONAL on the same low-end deferral (M1-go-no-go.md §6: "CONDITIONAL GO — flagship S24 Ultra fully demonstrated; AC#5 PARTIAL on low-end deferral to M2 per Plan Amendment 3 §3"). M2 inherits the same deferral; rationale and resolution are identical:
 
 - **Rationale**: replacement device (Pixel 4a or Galaxy A52s API 31) not yet acquired; user-action carry-over.
 - **Resolution path**: acquire device → run drivers → produce artifact → codex review → flip prd.json to passes:true.
