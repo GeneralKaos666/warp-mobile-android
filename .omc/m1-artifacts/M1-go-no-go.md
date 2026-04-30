@@ -105,6 +105,7 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 4. **D1.5-hybrid M2 implementation** (M2 main work: warpui::platform::android backend + 4 hand-written areas — see Plan §6 M2)
 5. **android-activity / winit M2 reorganization** (warpui/Cargo.toml explicit android-activity dep currently redundant per Codex S02 review; fold into D1.5-hybrid restructuring)
 6. **Notification customization** (current notification is generic "Warp terminal"; M2 should add session count, command preview, tap → MainActivity intent)
+7. **Clippy lint cleanup** (`cargo clippy -p warp-mobile-android-host --target aarch64-linux-android -- -D warnings` flags 7 style issues — uninlined format args, let_unit_value on init_logger result; non-blocking for M1 functional milestone, M2 should clean up before scope expansion)
 
 ---
 
