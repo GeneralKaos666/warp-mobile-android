@@ -64,7 +64,8 @@
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/ created by copying headless/ as starting base (preserve git history of which files were headless-derived in commit message)",
         "warp-src/crates/warpui/src/platform/mod.rs adds cfg(target_os = \"android\") branch dispatching to android module, mirroring how linux/mac/windows are dispatched",
-        "warp-src/crates/warpui/src/platform/android/mod.rs has TODO markers for 4 hand-written areas (render_scene, request_frame_capture, FontDB, TextLayoutSystem) referencing M0 platform-trait-delta evidence",
+        "Module file structure aligned with ralplan §6 M2 implementation table (lines 489-502): mod.rs (cfg dispatch entry), window.rs (Window/WindowContext/WindowManager), dispatch.rs (DispatchDelegate), vulkan.rs (ash + ANativeWindow + render_scene + request_frame_capture), ime.rs, input.rs, font.rs, text_layout.rs",
+        "warp-src/crates/warpui/src/platform/android/mod.rs has TODO markers for 4 major-rewrite areas (render_scene, request_frame_capture, FontDB, TextLayoutSystem) referencing M0-platform-trait-delta.md §6.2 A4 path scoring (22 total reuse + 10 minor patch + 4 major rewrite)",
         "ANDROID_NDK_ROOT=$NDK cargo ndk -t arm64-v8a check -p warpui in warp-src/ succeeds (other crates' android-incompat errors are out-of-scope per D1.5-hybrid)",
         "Web search docs: warp upstream warpui platform module organization, headless backend trait stubs",
         "Commit on warp-src branch warp-mobile/m0-facade and pushed to ImL1s/warp",
@@ -78,7 +79,7 @@
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "warp-src/crates/warpui/src/platform/android/render.rs implements render_scene by initializing VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + minimal renderpass + present queue submission",
+        "warp-src/crates/warpui/src/platform/android/vulkan.rs (per ralplan §6 M2 row #3) implements WindowContext::render_scene by initializing VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + minimal renderpass + present queue submission",
         "Renders single solid-color quad (clear-color test) on first frame; not yet textured grid (that is M2-S08)",
         "Vulkan validation layers ON in debug build; zero validation warnings during 60-second steady run on flagship",
         "Web search docs: ash crate Vulkan surface creation, ANativeWindow_fromSurface NDK API, VK_KHR_android_surface extension, M0 spikes/vulkan-surface-recreate prior art",
@@ -94,7 +95,7 @@
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "warp-src/crates/warpui/src/platform/android/capture.rs implements request_frame_capture using vkCmdCopyImageToBuffer + memory mapping",
+        "warp-src/crates/warpui/src/platform/android/vulkan.rs (extension; lives alongside render_scene impl per ralplan §6 M2 row #3) implements WindowContext::request_frame_capture using vkCmdCopyImageToBuffer + memory mapping",
         "Outputs raw RGBA bitmap and PNG-encoded variant (use image crate already in warpui deps if available, else add)",
         "Web search docs: Vulkan readback patterns, vkCmdCopyImageToBuffer host-coherent memory, ash examples",
         "Device run on flagship: capture single frame from M2-S04 render → adb pull → assert bitmap size matches expected dims and not all-black",

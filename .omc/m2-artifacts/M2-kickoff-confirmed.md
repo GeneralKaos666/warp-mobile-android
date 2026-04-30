@@ -1,10 +1,11 @@
 # M2 Kickoff 確認報告
 
 **日期**：2026-04-30 (M2 milestone 正式開始)
-**主分支**：`main` @ `51d9ccf`
+**PRD scaffold base**：`51d9ccf` (M1→M2 prd.json transition commit)
+**This artifact landed at**：`19b7b5f` — main has since advanced via codex-review fix-up commits
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` §6 M2 (lines 389-502) + Amendment 1+2 D1.5-hybrid
 **前置 milestones**：
-- M0 close-out CONDITIONAL GO @ commit `24a2c1c` (Vulkan surface recreate p95 < 200ms verified)
+- M0 close-out CONDITIONAL GO @ commit `24a2c1c` (Vulkan surface recreate p95 < 200ms on Adreno 6xx+; S8/Mali-G71 dropped per Plan Amendment 3)
 - M1 close-out CONDITIONAL GO @ commit `f7feb3f` (10/10 stories PASS — PTY/Service plumbing verified on S24 Ultra)
 
 ---
@@ -15,7 +16,7 @@ M2 入場條件全部確認：
 
 | 條件 | 狀態 | 證據 |
 |---|---|---|
-| M0 Vulkan surface recreate p95 < 200ms on Adreno 6xx+ | **PASS** | `.omc/m0-artifacts/M0-vulkan-spike-report.md` — 3-device 100-cycle run: Pixel 9 Pro p95=9ms, Galaxy S21+ p95=21ms, S24 Ultra p95=52ms. E1 retreat trigger NOT fired (1/3 fail < 2/3 threshold). S8/Mali-G71 p95=326ms FAIL but dropped from matrix per Plan Amendment 3. |
+| M0 Vulkan surface recreate p95 < 200ms on Adreno 6xx+ | **PASS (2/3)** | `.omc/m0-artifacts/M0-vulkan-spike-report.md`:<br>**100-cycle swapchain recreate latency** (the AC-relevant metric): S24 Ultra (Adreno 750) p50=13ms / p95=**18ms** / p99=21ms PASS;  S21+ (Adreno 660) p50=23ms / p95=**28ms** / p99=31ms PASS;  S8 (Mali-G71) p50=190ms / p95=**326ms** / p99=394ms FAIL.<br>**Steady-state single-frame** (separate metric, lead-context-snapshot.md §8): S24 Ultra ~9ms / S21+ ~21ms / S8 ~52ms.<br>**E1 retreat trigger** (M0-tension3-decision.md): "fails on 2+ of 3 devices" — actual = 1/3 fail, trigger **NOT activated**, port proceeds. S8/Mali-G71 dropped from matrix per Plan Amendment 3 (minSdk raised 26→31). |
 | M1 PTY/Service plumbing verified (FGS + Activity recreate + resize + clean kill + 30-min stress) | **PASS** | `.omc/m1-artifacts/M1-go-no-go.md` §6 verdict — 5/5 Plan §6 M1 ACs satisfied on S24 Ultra flagship pathway. delta_ms=26 (S06), orphans=0 (S08), pwd 4ms at t=30min (S09). |
 | minSdk 31 baseline established | **PASS** | Plan Amendment 3 @ commit `2ccc0f7`. S8/Mali-G71 dropped. |
 | warp-src cloned at warp-mobile/m0-facade | **PASS** | `warp-src/` at `ImL1s/warp:warp-mobile/m0-facade` @ commit `afc74ec` (android-activity feature fix, M1-S02). |
@@ -29,7 +30,7 @@ M2 入場條件全部確認：
 |---|---|---|
 | Rust | 1.92.0 (ded5c06cf 2025-12-08) | 實際 `rustc --version` 輸出 |
 | cargo-ndk | 4.1.2 | 實際 `cargo ndk --version` 輸出 |
-| Android NDK | **r28.2 @ `/Users/setsuna-new/development/android-sdk/ndk/28.2.13676358`** (substitute) | 專案 `.envrc:1` 標稱 r29 (`29.0.13113456`)，但本機未安裝 r29；用已安裝的最高版本 r28.2.13676358 替代。`.envrc` 為 committed file，不修改；以 shell-level env override 跑 `setup-cargo-config.sh`。 |
+| Android NDK | **r28.2 @ `/Users/setsuna-new/development/android-sdk/ndk/28.2.13676358`** (substitute, 限本機 cargo-ndk bring-up) | 專案 `.envrc:1` 標稱 r29 (`29.0.13113456`)；本機未安裝 r29，僅用 r28.2 替代以驅動 cargo-ndk 進行 host 端 Rust 交叉編譯。**範圍限制**：（1）AGP 端 `android/app/build.gradle:89` `ndkVersion '29.0.13113456'` 仍標稱 r29，AGP 只在實際呼叫 native compile 時才檢查（本專案僅 copy 預先 build 好的 .so，不走 AGP 的 native compile path）；（2）任何 NDK API 高於 minSdk 31 baseline 的（如 `AFontMatcher` API 29 OK；NDK 33+ APIs 須 runtime-guard）必須在 source 端做 `android_get_device_api_level()` 或 reflection guard。official ref: developer.android.com/ndk/downloads/, developer.android.com/ndk/guides/using-newer-apis. |
 | Android SDK | `/Users/setsuna-new/development/android-sdk/` (本機路徑) | 專案 `.envrc:2` 標稱 `~/Library/Android/sdk/` (project-owner 機器路徑)；本機以 shell env override |
 | Java | JDK 21 (`~/development/jdk-21.0.6+7/`) | 本機 PATH；專案 spec 為 OpenJDK 17 — 21 向後兼容，待 Gradle build 驗證 |
 | Rust target | `aarch64-apple-darwin` + `aarch64-linux-android` (installed) | `rustup target list --installed` 確認 |
@@ -47,16 +48,29 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §6 M2 lines 393-396:
 
 ### M2a — Layer 1 hand-written areas (4-5 weeks 估算)
 
-目標：在 `warp-src/crates/warpui/src/platform/android/` 內實作 4 個必須手寫的 platform 區域，其餘 85 個 trait methods 全部從 `warpui::platform::headless` derive。
+目標：在 `warp-src/crates/warpui/src/platform/android/` 內實作 4 個 **major rewrite areas**；其餘 32 methods 從 `warpui::platform::headless` derive (22 total reuse + 10 minor patch ≤20 lines each)。
 
-**4 個手寫區域**（來自 M0 `M0-platform-trait-delta.md` Platform Trait Delta 分析）：
+**完整覆蓋分佈**（來自 `.omc/m0-artifacts/M0-platform-trait-delta.md` §6.2 A4 path scoring）：
 
-| 區域 | 實作位置 | 說明 |
+| 類別 | Method 數 | 處理方式 |
 |---|---|---|
-| `render_scene` | `platform/android/render.rs` | ash Vulkan + ANativeWindow; VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + renderpass + present queue。從 M0 spike `spikes/vulkan-surface-recreate/` 的 50-line proof 擴展為 production swapchain。 |
-| `request_frame_capture` | `platform/android/capture.rs` | ash readback via vkCmdCopyImageToBuffer + memory mapping → raw RGBA bitmap + PNG。用於 visual regression testing。 |
-| `FontDB` (15 methods) | `platform/android/font.rs` | cosmic-text wrapper + Android system font discovery (AFontMatcher NDK API since API 29 OR `/system/fonts/` scan + bundled assets)。需支援 CJK 字型 (Noto Sans CJK)。 |
-| `TextLayoutSystem` (2 methods) | `platform/android/text_layout.rs` | cosmic-text shaping/layout；與 linux/mac backends 保持 parity。 |
+| Total reuse | 22 | 直接從 headless 拿來用,0 行新 code |
+| Minor patch (≤20 lines each) | 10 | mpsc → ALooper、is_headless 翻 false、open_url → JNI Intent、microphone permission → Android API 等 |
+| **Major rewrite (4 areas)** | render_scene + request_frame_capture + FontDB (15) + TextLayoutSystem (2) | 本 milestone 的核心 deliverable |
+
+**4 major rewrite areas + ralplan §6 M2 table 對應**（per ralplan lines 489-502 implementation table — `vulkan.rs` 是 plan 規定的檔名,`render_scene` / `request_frame_capture` 是 method names 而非檔名）：
+
+| Method / Area | 實作檔案 | 說明 |
+|---|---|---|
+| `WindowContext::render_scene` | `platform/android/vulkan.rs` (per ralplan §6 M2 row #3) | ash Vulkan + ANativeWindow; VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + renderpass + present queue。從 M0 spike `spikes/vulkan-surface-recreate/` 的 50-line proof 擴展為 production swapchain。 |
+| `WindowContext::request_frame_capture` | `platform/android/vulkan.rs` (readback) | ash readback via vkCmdCopyImageToBuffer + memory mapping → raw RGBA bitmap + PNG。用於 visual regression testing。 |
+| `FontDB` (15 methods) | `platform/android/font.rs` (per ralplan §6 M2 row #6) | cosmic-text wrapper + Android system font discovery (AFontMatcher NDK API since API 29 OR `/system/fonts/` scan + bundled assets)。需支援 CJK 字型 (Noto Sans CJK)。 |
+| `TextLayoutSystem` (2 methods) | `platform/android/text_layout.rs` (extension; ralplan table uses "etc.") | cosmic-text shaping/layout；與 linux/mac backends 保持 parity。 |
+
+**Window/WindowContext/WindowManager/DispatchDelegate 結構**（minor-patch 區,per ralplan §6 M2 row #2）：
+- `platform/android/window.rs` — Window + WindowContext methods (incl render_scene + request_frame_capture call-sites)
+- `platform/android/dispatch.rs` — DispatchDelegate (ALooper-based main-thread dispatch)
+- `platform/android/mod.rs` — cfg(target_os = "android") dispatch 入口
 
 **M2a 完成門檻** (ralplan §6 M2 AC #1 + #2 + #5):
 1. Static 50×20 grid "Hello, World" 以 60fps 渲染於 S24 Ultra (Adreno 730+)，p95 frame time < 16.6ms（30秒持續）
@@ -146,13 +160,13 @@ per `.omc/m2-kickoff.md` §Death-pit awareness + `.omc/plans/ralplan-warp-on-mob
 
 **跳脫口**：若 composing-text 在 5 person-days 內無法 stable，先 commit 只到 Latin keystroke (no composing) 作為 M2 PARTIAL，defer CJK IME to M3 with explicit deviation note。
 
-### 風險 #3 — 4 手寫區域 D1.5-hybrid 中的存活率
+### 風險 #3 — 4 major-rewrite 區域 D1.5-hybrid 中的存活率
 
-**描述**：M0 archeology 確認 headless backend 有 85 個 stubbed methods + 4 個需要真實實作。但 warpui upstream 持續演進；`warp-mobile/m0-facade` branch 以 `afc74ec` 為基礎，任何 upstream cherry-pick 都可能 conflict 進入這 4 個區域。
+**描述**：M0 `M0-platform-trait-delta.md` §6.2 確認 headless backend 中 32 methods 是 total reuse + minor patch（22 + 10）；4 個 major rewrite areas 是 M2 核心 deliverable。但 warpui upstream 持續演進；`warp-mobile/m0-facade` branch 以 `afc74ec` 為基礎，任何 upstream cherry-pick 都可能 conflict 進入這 4 個區域。
 
 **緩解**：M0-platform-trait-delta.md 鎖定了比較的 upstream commit hashes。M2-S03 scaffold story 明確 preserve git history of headless-derived files。每個 story (S03-S07) 在 warp-src branch 上 commit，Codex review 前不 merge to main。
 
-**跳脫口**：ralplan §Pre-mortem scenario (a) — "M2 WarpUI Android backend stalls"：若 M2a > 10 person-weeks，trigger Companion retreat evaluation（per Tension 3 sign-off, `.omc/m0-artifacts/M0-tension3-decision.md`）。
+**跳脫口（Companion retreat）**：簽核的 trigger 是 **E1** — 「M0 Vulkan spike fails on 2+ of 3 reference devices」（per `.omc/m0-artifacts/M0-tension3-decision.md` Question E）。M0 Task #8 結果為 1/3 fail（S8 Mali-G71 only），**E1 NOT activated**，port 進入 M2。E2（M2a > 8 weeks）和 E3（cumulative >50% overrun by M3）為 **rejected alternatives**，不是 signed trigger，但作為 **at-risk escalation checkpoint**：若 M2a 在第 8 週仍未達 acceptance #1+#2，lead 觸發 escalation discussion（不是自動 retreat）。ralplan Pre-mortem Scenario A（"M2 WarpUI Android backend stalls"）明列 "12-week budget for M2 with hard checkpoint at week 8"。
 
 ---
 
@@ -210,16 +224,17 @@ warp-src/                        (gitignored; Warp upstream fork ImL1s/warp)
     └── crates/warpui/src/platform/  ← M2 target: add android/ subdirectory here
 ```
 
-**M2 主要新增**（S03-S12 完成後）：
+**M2 主要新增**（S03-S12 完成後 — 對齊 ralplan §6 M2 implementation table lines 489-502）：
 ```
 warp-src/crates/warpui/src/platform/android/
-├── mod.rs          (cfg dispatch + trait re-exports)
-├── render.rs       (render_scene — ash Vulkan production swapchain)
-├── capture.rs      (request_frame_capture — ash readback to bitmap)
-├── font.rs         (FontDB 15 methods — cosmic-text + Android NDK font discovery)
-├── text_layout.rs  (TextLayoutSystem 2 methods — cosmic-text shaping)
-├── ime.rs          (composing-text state machine — JNI ↔ Rust input events)
-└── input.rs        (onTouchEvent → MouseDown/Up/scroll; GestureDetector)
+├── mod.rs          (cfg dispatch + trait re-exports — ralplan #1)
+├── window.rs       (Window + WindowContext + WindowManager methods — ralplan #2; 含 render_scene/request_frame_capture call-sites)
+├── dispatch.rs     (DispatchDelegate — ralplan #2; ALooper main-thread dispatch)
+├── vulkan.rs       (ash Vulkan + ANativeWindow integration — ralplan #3; production swapchain incl render_scene + request_frame_capture impls)
+├── ime.rs          (composing-text state machine via InputConnection JNI — ralplan #4)
+├── input.rs        (onTouchEvent → MouseDown/Up/scroll; GestureDetector — ralplan #5)
+├── font.rs         (FontDB 15 methods — cosmic-text + Android NDK font discovery — ralplan #6)
+└── text_layout.rs  (TextLayoutSystem 2 methods — cosmic-text shaping; extension to ralplan "etc." in row #2)
 ```
 
 ---
