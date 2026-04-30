@@ -130,19 +130,48 @@ class WarpTerminalService : Service() {
     private fun extractWarpAssets() {
         val warpDir = File(filesDir, "warp")
         val target = File(warpDir, "zsh_body.sh")
-        if (target.exists()) {
+        val temp = File(warpDir, "zsh_body.sh.tmp")
+        // Read canonical bytes from the asset stream. `openFd` would let us
+        // skip the buffer but it only works for uncompressed assets; AGP
+        // compresses .sh files by default. The file is 66KB so buffering
+        // is cheap, and reading once gives us the size for the integrity check.
+        val canonicalBytes = try {
+            assets.open("warp/zsh_body.sh").use { it.readBytes() }
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "failed to read zsh_body.sh from APK assets: ${e.message}", e)
+            return
+        }
+        val expectedSize = canonicalBytes.size.toLong()
+        // Codex M3-S06 round-1 finding #1: validate existing file by size
+        // before treating as already-extracted. A partial copy from a prior
+        // launch (process killed mid-write) leaves a truncated file that
+        // would otherwise be skipped forever.
+        if (target.exists() && target.length() == expectedSize) {
             Log.i(LOG_TAG, "zsh_body.sh already extracted at ${target.absolutePath} (${target.length()} bytes); skipping")
             return
         }
+        if (target.exists()) {
+            Log.w(LOG_TAG, "zsh_body.sh size mismatch (target=${target.length()} expected=$expectedSize); re-extracting")
+        }
+        // Atomic-replace pattern: write to a same-dir temp file, verify size,
+        // then rename. If any step fails the temp is deleted and target stays
+        // either absent (first launch) or untouched (corrupt-detect re-extract).
+        warpDir.mkdirs()
+        if (temp.exists()) temp.delete()
         try {
-            warpDir.mkdirs()
-            assets.open("warp/zsh_body.sh").use { input ->
-                target.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+            temp.writeBytes(canonicalBytes)
+            if (temp.length() != expectedSize) {
+                throw java.io.IOException("size mismatch after write: temp=${temp.length()} expected=$expectedSize")
+            }
+            if (target.exists() && !target.delete()) {
+                throw java.io.IOException("could not remove stale target ${target.absolutePath}")
+            }
+            if (!temp.renameTo(target)) {
+                throw java.io.IOException("rename ${temp.absolutePath} → ${target.absolutePath} failed")
             }
             Log.i(LOG_TAG, "extracted zsh_body.sh to ${target.absolutePath} (${target.length()} bytes)")
         } catch (e: Exception) {
+            temp.delete()
             Log.e(LOG_TAG, "failed to extract zsh_body.sh: ${e.message}", e)
         }
     }

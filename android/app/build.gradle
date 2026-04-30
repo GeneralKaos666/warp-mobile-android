@@ -144,10 +144,15 @@ task copyRustLibsRelease(type: Copy) {
 //
 // warp-src/app/assets/bundled/bootstrap/zsh_body.sh is the canonical source
 // of the Warp zsh hook script (lines 80, 254, 301 emit DCS hooks consumed by
-// the M3-S05 DCS parser). The file is not committed to the main repo — it
-// lives only in the warp-src fork (gitignored). This Gradle Copy task stages
-// it into android/app/src/main/assets/warp/ before every build so AGP picks
-// it up via the default assets source set.
+// the M3-S05 DCS parser). The canonical source lives only in the warp-src
+// fork (gitignored as a separate repo per project conventions). This Gradle
+// Copy task stages it into android/app/src/main/assets/warp/ before every
+// build so AGP picks it up via the default assets source set. The staged
+// android/app/src/main/assets/warp/zsh_body.sh IS committed to the main repo
+// as a snapshot for fresh-clone resumability — the Gradle copy refreshes it
+// from warp-src on every build, so the snapshot only needs to be regenerated
+// when warp-src updates. (Codex M3-S06 round-1 doc nit: prior comment said
+// "not committed" which contradicted the tracked file.)
 //
 // Path resolution: repoRoot = android/../ = warp-mobile-android root.
 // warp-src is checked out at <repoRoot>/warp-src per README fresh-clone SOP.
