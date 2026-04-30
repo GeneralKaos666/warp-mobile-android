@@ -44,7 +44,7 @@
       "id": "M2-S02",
       "title": "Gradle copy task replacing jniLibs symlink",
       "passes": true,
-      "verifiedBy": "codex",
+      "verifiedBy": "codex round-1 06-20-11Z REVISE (2 blockers + 1 nit: release packaged stale debug .so via NO-SOURCE; onlyIf gate too narrow; willir rationale incomplete) → fix 419d7a0 (per-variant intermediate dirs build/intermediates/rust-jnilibs/{debug,release}/jniLibs/, fail-fast verifyRustLib{Debug,Release} tasks, hasCargoNdk gate accepts either ANDROID_HOME/ANDROID_NDK_ROOT, willir rationale updated) → codex round-2 06-35-13Z CODEX_PASS. Verified: missing release .so → fails at verifyRustLibRelease; debug build untouched release staging; release APK packaged 716344 bytes (not 17MB debug). Non-blocking nits: build.gradle:34 stale comment fixed at 9c73441, ANDROID_NDK_HOME not in gate (deferred).",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "android/app/src/main/jniLibs/arm64-v8a/libwarp_mobile_android_host.so absolute symlink removed and added to .gitignore if not already",
