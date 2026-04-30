@@ -379,6 +379,11 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             gridCols = intent.getIntExtra("grid_cols", 80)
             gridCellWPx = intent.getFloatExtra("grid_cell_w_px", 24.0f)
             gridCellHPx = intent.getFloatExtra("grid_cell_h_px", 40.0f)
+            // M3-S09: report cell height to the input view so its onScroll /
+            // onFling pixel→rows conversion uses the right divisor. Reset
+            // any prior scroll state too (rotation / Activity recreate).
+            warpInputView?.setCellHeightPx(gridCellHPx)
+            warpInputView?.resetScroll()
             // Reshape the Rust model so PTY chunks land in the right grid
             // size from the start (the model's dirty bit will trigger the
             // first push_frame on the next dirty vsync).

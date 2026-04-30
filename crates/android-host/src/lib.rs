@@ -545,10 +545,19 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDynamicGridStats(
     _class: JClass,
 ) -> jstring {
     let s = match vulkan::dynamic_grid_stats() {
-        Some((atlas, glyph_q, bg_q, rows, cols)) => format!(
-            "atlas_glyphs={},glyph_quads={},bg_quads={},rows={},cols={}",
-            atlas, glyph_q, bg_q, rows, cols
-        ),
+        Some((atlas, glyph_q, bg_q, rows, cols)) => {
+            // M3-S09: append fast-path / full-reinit counters so the device
+            // driver can verify the optimization actually fired during
+            // sustained scroll. Falling back to (0,0) if no surface attached
+            // (already filtered above by `dynamic_grid_stats() => Some`).
+            let (fast_updates, full_reinits) =
+                vulkan::dynamic_grid_perf_counters().unwrap_or((0, 0));
+            format!(
+                "atlas_glyphs={},glyph_quads={},bg_quads={},rows={},cols={},\
+                 fast_path_updates={},full_reinits={}",
+                atlas, glyph_q, bg_q, rows, cols, fast_updates, full_reinits
+            )
+        }
         None => String::new(),
     };
     env.new_string(s)
@@ -1120,6 +1129,57 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalResize(
         target: "WarpTerminalModel",
         "terminal_resize rows={} cols={}", rows, cols
     );
+}
+
+// ── M3-S09: scrollback + viewport offset JNI ────────────────────────────────
+//
+// Drives the scrollback ring + viewport offset from the M2-S11 GestureDetector
+// callbacks (drag scroll + fling momentum). Java side calls
+// `terminalSetScrollOffset` from `WarpInputView.gestureListener.onScroll` and
+// the fling-decay timer; the Rust side clamps to `scrollback.len()` and sets
+// the dirty flag so the next vsync re-inits the GPU grid.
+
+/// M3-S09: set the viewport scroll offset (rows back into history).
+/// `0` = live tail; `>0` = scrolled up by N rows. Clamped to
+/// `scrollback.len()` inside Rust so callers cannot scroll beyond the
+/// retained history.
+///
+/// Negative values from Java are saturated to 0 (a finger drag past the
+/// live tail can't unscroll the future).
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalSetScrollOffset(
+    _env: JNIEnv,
+    _class: JClass,
+    offset_rows: jint,
+) {
+    init_logger();
+    let clamped = if offset_rows < 0 { 0usize } else { offset_rows as usize };
+    terminal_model::set_scroll_offset(clamped);
+    log::info!(
+        target: "WarpTerminalModel",
+        "terminal_set_scroll_offset offset={} actual={}",
+        clamped, terminal_model::scroll_offset()
+    );
+}
+
+/// M3-S09: returns scrollback state as a CSV string for the JNI driver:
+///   "scrollback_len=N,scrollback_max=N,scroll_offset=N"
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalScrollbackInfo(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let s = format!(
+        "scrollback_len={},scrollback_max={},scroll_offset={}",
+        terminal_model::scrollback_len(),
+        terminal_model::scrollback_max_lines(),
+        terminal_model::scroll_offset(),
+    );
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
 }
 
 // ── Logger ──────────────────────────────────────────────────────────────────

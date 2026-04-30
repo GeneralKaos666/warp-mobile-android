@@ -1991,6 +1991,36 @@ pub(crate) fn init_dynamic_grid(
         log::error!(target: "WarpDynamicGrid", "init_dynamic_grid: no surface attached");
         return false;
     };
+
+    // M3-S09: try the in-place fast path first. If the cached atlas covers
+    // every glyph in the new snapshot AND geometry matches, this is a
+    // ~1ms map+memcpy instead of the ~30-60ms shape+rasterize+pipeline
+    // rebuild. Critical for sustained 60fps scroll.
+    if let Some(grid) = s.dynamic_grid.as_mut() {
+        let t0 = uptime_millis();
+        match unsafe {
+            grid.try_update_in_place(&s.device, cells, font_size_px, cell_w_px, cell_h_px)
+        } {
+            Ok(()) => {
+                let dt = uptime_millis() - t0;
+                log::info!(
+                    target: "WarpDynamicGrid",
+                    "dynamic_grid_fast_path_ok dt_ms={} instances={} fast_path_updates={} full_reinits={}",
+                    dt, grid.instance_count, grid.fast_path_updates, grid.full_reinits
+                );
+                return true;
+            }
+            Err(reason) => {
+                log::debug!(
+                    target: "WarpDynamicGrid",
+                    "dynamic_grid_fast_path_miss reason={} — falling back to full re-init",
+                    reason
+                );
+            }
+        }
+    }
+
+    // Slow path: full pipeline + atlas rebuild.
     unsafe {
         let _ = s.device.device_wait_idle();
         if let Some(old) = s.dynamic_grid.take() {
@@ -2216,4 +2246,18 @@ pub(crate) fn dynamic_grid_stats() -> Option<(u32, u32, u32, u32, u32)> {
             )
         })
     })
+}
+
+/// M3-S09 perf counters: (fast_path_updates, full_reinits) for the current
+/// dynamic_grid (or None if no grid attached). Surfaced via the JNI to the
+/// device-side test driver so the test asserts the fast path actually
+/// fired during sustained scroll.
+pub(crate) fn dynamic_grid_perf_counters() -> Option<(u64, u64)> {
+    let state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    state
+        .as_ref()
+        .and_then(|s| s.dynamic_grid.as_ref().map(|g| (g.fast_path_updates, g.full_reinits)))
 }

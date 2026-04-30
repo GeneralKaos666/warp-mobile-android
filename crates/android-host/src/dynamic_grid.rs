@@ -222,7 +222,7 @@ pub(crate) struct DynamicGrid {
     instance_buffer: vk::Buffer,
     instance_buffer_memory: vk::DeviceMemory,
     instance_buffer_capacity: vk::DeviceSize,
-    instance_count: u32,
+    pub(crate) instance_count: u32,
     // Pipeline
     descriptor_set_layout: vk::DescriptorSetLayout,
     descriptor_pool: vk::DescriptorPool,
@@ -232,6 +232,16 @@ pub(crate) struct DynamicGrid {
     /// Vertex/fragment shader modules (kept around for cleanup).
     vert_module: vk::ShaderModule,
     frag_module: vk::ShaderModule,
+    // M3-S09 — cached shaping/atlas tables so subsequent snapshots can
+    // skip cosmic-text + swash work if the unique character set is a
+    // subset of what's already in the atlas. The cosmic-text shaping
+    // call is the most expensive step in the M3-S08 init path
+    // (~30-40ms for a fresh ASCII-set rebuild), so caching it lets
+    // sustained scroll bursts reuse the existing pipeline + atlas
+    // and only update the instance buffer (memcpy < 1ms for a
+    // 24×80 grid).
+    cached_glyph_for_char: HashMap<char, CellGlyph>,
+    cached_atlas_entries: HashMap<(cosmic_text::fontdb::ID, u16), AtlasEntry>,
     // Diagnostics
     pub(crate) glyphs_per_frame: u32,
     pub(crate) atlas_glyph_count: u32,
@@ -241,6 +251,11 @@ pub(crate) struct DynamicGrid {
     pub(crate) cell_w_px: f32,
     pub(crate) cell_h_px: f32,
     pub(crate) font_size_px: f32,
+    // M3-S09 — counters surfaced to the JNI for the device driver to assert
+    // the fast-path actually fired during sustained scroll. Indices are
+    // simple wrapping u64s so they overflow gracefully on long sessions.
+    pub(crate) fast_path_updates: u64,
+    pub(crate) full_reinits: u64,
 }
 
 impl DynamicGrid {
@@ -276,6 +291,7 @@ impl DynamicGrid {
         // ── 1. Shape each unique printable glyph + rasterize. ───────────────
         let (atlas_pixels, atlas_entries, glyph_for_char) =
             shape_and_rasterize_cells(cells, font_size_px)?;
+        let atlas_entries_len = atlas_entries.len() as u32;
 
         // ── 2. Build per-instance vertex data: one per non-blank glyph cell
         //       (+ one bg quad per non-default-bg cell). ──────────────────────
@@ -302,7 +318,7 @@ impl DynamicGrid {
             // shader will discard via the alpha-< 0.01 path.
             return build_empty(
                 instance, device, phys_device, graphics_queue, command_pool,
-                render_pass, &atlas_pixels, &atlas_entries, rows, cols,
+                render_pass, &atlas_pixels, &atlas_entries, glyph_for_char, rows, cols,
                 cell_w_px, cell_h_px, font_size_px,
             );
         }
@@ -345,15 +361,113 @@ impl DynamicGrid {
             pipeline,
             vert_module,
             frag_module,
+            cached_glyph_for_char: glyph_for_char,
+            cached_atlas_entries: atlas_entries,
             glyphs_per_frame: glyph_quads,
-            atlas_glyph_count: atlas_entries.len() as u32,
+            atlas_glyph_count: atlas_entries_len,
             grid_rows: rows,
             grid_cols: cols,
             bg_quads_per_frame: bg_quads,
             cell_w_px,
             cell_h_px,
             font_size_px,
+            fast_path_updates: 0,
+            full_reinits: 1, // count this initial init
         })
+    }
+
+    /// M3-S09 — attempt an in-place update of the instance buffer using the
+    /// cached atlas + shaping tables. Returns `Ok(())` if the fast path
+    /// fired (no atlas churn, ~1ms cost); returns `Err(reason)` if the
+    /// caller must fall back to a full re-init via [`Self::new`].
+    ///
+    /// Fast-path conditions:
+    ///   * Grid dims, cell size, font size unchanged.
+    ///   * Every printable char in `cells` is already in
+    ///     `cached_glyph_for_char` (no new glyphs to rasterize).
+    ///   * Resulting instance count fits in `instance_buffer_capacity`.
+    ///
+    /// When all hold, we rebuild the per-instance vertex array (CPU-side,
+    /// ~30 KiB worst-case for 24×80) and memcpy into the existing
+    /// HOST_VISIBLE+HOST_COHERENT GPU buffer. The render pass + pipeline +
+    /// atlas image stay untouched.
+    pub(crate) unsafe fn try_update_in_place(
+        &mut self,
+        device: &ash::Device,
+        cells: &[Vec<Cell>],
+        font_size_px: f32,
+        cell_w_px: f32,
+        cell_h_px: f32,
+    ) -> Result<(), String> {
+        // Geometry must match — otherwise the per-instance positions are
+        // wrong relative to the cached pipeline's viewport mapping.
+        let rows = cells.len() as u32;
+        let cols = cells.first().map(|r| r.len()).unwrap_or(0) as u32;
+        if rows != self.grid_rows
+            || cols != self.grid_cols
+            || (cell_w_px - self.cell_w_px).abs() > 0.01
+            || (cell_h_px - self.cell_h_px).abs() > 0.01
+            || (font_size_px - self.font_size_px).abs() > 0.01
+        {
+            return Err(format!(
+                "geometry mismatch (cached {}x{} cell={:.1}x{:.1}px font={:.1} vs new {}x{} cell={:.1}x{:.1}px font={:.1})",
+                self.grid_rows, self.grid_cols, self.cell_w_px, self.cell_h_px, self.font_size_px,
+                rows, cols, cell_w_px, cell_h_px, font_size_px
+            ));
+        }
+        // Every non-whitespace char must already be in the cache.
+        for row in cells {
+            for cell in row {
+                if cell.glyph.is_whitespace() {
+                    continue;
+                }
+                if !self.cached_glyph_for_char.contains_key(&cell.glyph) {
+                    return Err(format!("uncached glyph '{}'", cell.glyph));
+                }
+            }
+        }
+        let new_instances = build_dynamic_instances(
+            cells,
+            &self.cached_glyph_for_char,
+            &self.cached_atlas_entries,
+            cell_w_px,
+            cell_h_px,
+        );
+        let new_instance_count = new_instances.len() as u32;
+        let new_bg_quads = new_instances.iter().filter(|i| i.cell_size_w < 0.0).count() as u32;
+        let new_glyph_quads = new_instance_count - new_bg_quads;
+        let new_size_bytes =
+            (new_instances.len() * std::mem::size_of::<DynInstanceData>()) as vk::DeviceSize;
+        if new_size_bytes > self.instance_buffer_capacity {
+            return Err(format!(
+                "instance buffer too small (need {} bytes, have {})",
+                new_size_bytes, self.instance_buffer_capacity
+            ));
+        }
+
+        // Map → memcpy → unmap. HOST_COHERENT means no explicit flush needed.
+        if new_instance_count > 0 {
+            let mapped = device
+                .map_memory(
+                    self.instance_buffer_memory,
+                    0,
+                    new_size_bytes,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .map_err(|e| format!("map instance memory: {:?}", e))?
+                as *mut u8;
+            let src_bytes = std::slice::from_raw_parts(
+                new_instances.as_ptr() as *const u8,
+                new_instances.len() * std::mem::size_of::<DynInstanceData>(),
+            );
+            std::ptr::copy_nonoverlapping(src_bytes.as_ptr(), mapped, src_bytes.len());
+            device.unmap_memory(self.instance_buffer_memory);
+        }
+        self.instance_count = new_instance_count;
+        self.glyphs_per_frame = new_glyph_quads;
+        self.bg_quads_per_frame = new_bg_quads;
+        self.fast_path_updates = self.fast_path_updates.saturating_add(1);
+        Ok(())
     }
 
     /// Records the draw call into `cmd_buf` (assumed to be inside a render
@@ -1395,6 +1509,7 @@ unsafe fn build_empty(
     render_pass: vk::RenderPass,
     atlas_pixels: &[u8],
     atlas_entries: &HashMap<(cosmic_text::fontdb::ID, u16), AtlasEntry>,
+    glyph_for_char: HashMap<char, CellGlyph>,
     rows: u32,
     cols: u32,
     cell_w_px: f32,
@@ -1455,6 +1570,8 @@ unsafe fn build_empty(
         pipeline,
         vert_module,
         frag_module,
+        cached_glyph_for_char: glyph_for_char,
+        cached_atlas_entries: atlas_entries.clone(),
         glyphs_per_frame: 0,
         atlas_glyph_count: atlas_entries.len() as u32,
         grid_rows: rows,
@@ -1463,6 +1580,8 @@ unsafe fn build_empty(
         cell_w_px,
         cell_h_px,
         font_size_px,
+        fast_path_updates: 0,
+        full_reinits: 1,
     })
 }
 

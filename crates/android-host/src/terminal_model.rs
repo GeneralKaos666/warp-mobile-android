@@ -52,6 +52,7 @@
 //!   <https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#GetByteArrayRegion>
 //!   <https://developer.android.com/training/articles/perf-jni>
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
@@ -105,6 +106,10 @@ pub const UNENCODED_JSON_MARKER: u8 = b'f';
 
 const DCS_BODY_CAP: usize = 64 * 1024;
 const CSI_BUF_CAP: usize = 256;
+
+/// M3-S09 — maximum number of historical lines retained in the scrollback
+/// ring (mirror of facade `render::SCROLLBACK_MAX_LINES`).
+pub const SCROLLBACK_MAX_LINES: usize = 1000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Cell {
@@ -406,6 +411,10 @@ struct TerminalState {
     // ── M3-S07: Block aggregation (mirror) ──────────────────────────────
     blocks: BlockList,
     block_events: Vec<BlockEvent>,
+
+    // ── M3-S09: scrollback ring + viewport offset (mirror) ─────────────
+    scrollback: VecDeque<Vec<Cell>>,
+    scroll_offset: usize,
 }
 
 impl TerminalModel {
@@ -431,6 +440,8 @@ impl TerminalModel {
                 dcs_error_count: 0,
                 blocks: BlockList::new(),
                 block_events: Vec::new(),
+                scrollback: VecDeque::with_capacity(SCROLLBACK_MAX_LINES),
+                scroll_offset: 0,
             }),
             dirty: AtomicBool::new(false),
         }
@@ -491,13 +502,51 @@ impl TerminalModel {
         self.dirty.load(Ordering::Acquire)
     }
 
+    // ── M3-S09: scrollback + viewport offset accessors (mirror) ─────────
+
+    /// Mirror of `facade::render::TerminalModel::set_scroll_offset`. Updates
+    /// the viewport offset (0 = live tail) and sets the dirty flag so the
+    /// Choreographer re-inits the GPU grid on the next vsync.
+    pub fn set_scroll_offset(&self, offset: usize) {
+        let mut state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let clamped = offset.min(state.scrollback.len());
+        if clamped != state.scroll_offset {
+            state.scroll_offset = clamped;
+            self.dirty.store(true, Ordering::Release);
+        }
+    }
+
+    pub fn scroll_offset(&self) -> usize {
+        let state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        state.scroll_offset
+    }
+
+    pub fn scrollback_len(&self) -> usize {
+        let state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        state.scrollback.len()
+    }
+
+    pub fn scrollback_max_lines(&self) -> usize {
+        SCROLLBACK_MAX_LINES
+    }
+
     pub fn snapshot_text(&self) -> String {
         let state = match self.inner.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
+        let view = snapshot_view(&state);
         let mut out = String::with_capacity(state.rows * (state.cols + 1));
-        for (r, row) in state.cells.iter().enumerate() {
+        for (r, row) in view.iter().enumerate() {
             for cell in row {
                 out.push(cell.glyph);
             }
@@ -512,12 +561,15 @@ impl TerminalModel {
     /// Returns `rows × cols` of [`Cell`] preserving glyph + fg/bg/attrs.
     /// Bounded copy (24×80 = 1920 cells × 16 bytes = ~30KB per frame on the
     /// hot path; flagship S24U can absorb this at 60Hz).
+    ///
+    /// M3-S09: honors `scroll_offset` so a scrolled-up viewport returns the
+    /// historical rows from the scrollback ring at the top of the grid.
     pub fn snapshot_cells(&self) -> Vec<Vec<Cell>> {
         let state = match self.inner.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
-        state.cells.clone()
+        snapshot_view(&state)
     }
 
     pub fn dims(&self) -> (usize, usize) {
@@ -1197,6 +1249,56 @@ fn hex_to_nibble(b: u8) -> Result<u8, &'static str> {
     }
 }
 
+/// M3-S09 mirror — see facade `render::snapshot_view`. Builds rows × cols
+/// snapshot honoring `state.scroll_offset` (0 = live tail; >0 = scrolled
+/// into history). Padding for missing top rows is blank cells.
+fn snapshot_view(state: &TerminalState) -> Vec<Vec<Cell>> {
+    if state.scroll_offset == 0 {
+        return state.cells.clone();
+    }
+    let rows = state.rows;
+    let cols = state.cols;
+    let scrollback_len = state.scrollback.len();
+    let total_stream_len = scrollback_len + rows;
+    let last_visible = total_stream_len
+        .saturating_sub(1)
+        .saturating_sub(state.scroll_offset);
+    let first_visible = last_visible.saturating_sub(rows.saturating_sub(1));
+
+    let mut out: Vec<Vec<Cell>> = Vec::with_capacity(rows);
+    for r in 0..rows {
+        let idx = first_visible + r;
+        if idx < scrollback_len {
+            if let Some(row) = state.scrollback.get(idx) {
+                let mut clone = row.clone();
+                if clone.len() < cols {
+                    clone.resize(cols, Cell::blank());
+                } else if clone.len() > cols {
+                    clone.truncate(cols);
+                }
+                out.push(clone);
+            } else {
+                out.push(vec![Cell::blank(); cols]);
+            }
+        } else {
+            let live_idx = idx - scrollback_len;
+            if live_idx < rows {
+                let row = &state.cells[live_idx];
+                let mut clone = row.clone();
+                if clone.len() < cols {
+                    clone.resize(cols, Cell::blank());
+                } else if clone.len() > cols {
+                    clone.truncate(cols);
+                }
+                out.push(clone);
+            } else {
+                out.push(vec![Cell::blank(); cols]);
+            }
+        }
+    }
+    out
+}
+
 fn scroll_up(state: &mut TerminalState) {
     if state.rows < 2 {
         for c in 0..state.cols {
@@ -1204,7 +1306,12 @@ fn scroll_up(state: &mut TerminalState) {
         }
         return;
     }
-    state.cells.remove(0);
+    // M3-S09: push the departing row into the bounded scrollback ring.
+    let departing = state.cells.remove(0);
+    state.scrollback.push_back(departing);
+    while state.scrollback.len() > SCROLLBACK_MAX_LINES {
+        state.scrollback.pop_front();
+    }
     state.cells.push(vec![Cell::blank(); state.cols]);
 }
 
@@ -1245,6 +1352,29 @@ pub fn resize(rows: usize, cols: usize) {
 /// M3-S07: process-wide accessor for the JNI `terminalBlocksDump` export.
 pub fn blocks_dump_json() -> String {
     global_model().blocks_dump_json()
+}
+
+// ── M3-S09: scrollback global accessors ─────────────────────────────────────
+
+/// Set the global terminal model's viewport offset. Surfaced for the JNI
+/// `terminalSetScrollOffset` export.
+pub fn set_scroll_offset(offset: usize) {
+    global_model().set_scroll_offset(offset);
+}
+
+/// Get the current viewport scroll offset (0 = live tail).
+pub fn scroll_offset() -> usize {
+    global_model().scroll_offset()
+}
+
+/// Number of lines currently held in the scrollback ring.
+pub fn scrollback_len() -> usize {
+    global_model().scrollback_len()
+}
+
+/// Configured scrollback cap (constant [`SCROLLBACK_MAX_LINES`]).
+pub fn scrollback_max_lines() -> usize {
+    global_model().scrollback_max_lines()
 }
 
 #[cfg(test)]
@@ -1590,5 +1720,71 @@ mod tests {
         }
         assert_eq!(entry["command"], "echo hello");
         assert_eq!(entry["exit_code"], 0);
+    }
+
+    // ── M3-S09: scrollback + viewport offset (mirror) ──────────────────
+
+    #[test]
+    fn scrollback_collects_evicted_rows_mirror() {
+        let m = TerminalModel::new(2, 8);
+        m.ingest_pty_bytes(b"AA\r\nBB\r\nCC\r\nDD");
+        assert_eq!(m.scrollback_len(), 2);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'C');
+        assert_eq!(m.cell(1, 0).unwrap().glyph, 'D');
+        assert_eq!(m.scroll_offset(), 0);
+    }
+
+    #[test]
+    fn scrollback_evicts_when_at_cap_mirror() {
+        let m = TerminalModel::new(2, 4);
+        let mut payload = String::new();
+        for i in 0..(SCROLLBACK_MAX_LINES + 5) {
+            payload.push_str(&format!("L{}\n", i % 10));
+        }
+        m.ingest_pty_bytes(payload.as_bytes());
+        assert_eq!(m.scrollback_len(), SCROLLBACK_MAX_LINES);
+        assert_eq!(m.scrollback_max_lines(), SCROLLBACK_MAX_LINES);
+    }
+
+    #[test]
+    fn scroll_offset_shifts_viewport_into_history_mirror() {
+        let m = TerminalModel::new(2, 8);
+        m.ingest_pty_bytes(b"AA\r\nBB\r\nCC\r\nDD");
+        assert_eq!(m.scrollback_len(), 2);
+
+        let snap_live = m.snapshot_cells();
+        assert_eq!(snap_live[0][0].glyph, 'C');
+        assert_eq!(snap_live[1][0].glyph, 'D');
+
+        m.set_scroll_offset(1);
+        let snap = m.snapshot_cells();
+        assert_eq!(snap[0][0].glyph, 'B');
+        assert_eq!(snap[1][0].glyph, 'C');
+
+        m.set_scroll_offset(2);
+        let snap = m.snapshot_cells();
+        assert_eq!(snap[0][0].glyph, 'A');
+        assert_eq!(snap[1][0].glyph, 'B');
+
+        // Over-scroll clamps.
+        m.set_scroll_offset(999);
+        assert_eq!(m.scroll_offset(), 2);
+
+        m.set_scroll_offset(0);
+        let snap = m.snapshot_cells();
+        assert_eq!(snap[0][0].glyph, 'C');
+        assert_eq!(snap[1][0].glyph, 'D');
+    }
+
+    #[test]
+    fn scrollback_holds_at_least_1000_lines_mirror() {
+        let m = TerminalModel::new(2, 8);
+        for _ in 0..1500 {
+            m.ingest_pty_bytes(b"line\n");
+        }
+        assert!(m.scrollback_len() >= 1000);
+        assert!(m.scrollback_len() <= SCROLLBACK_MAX_LINES);
+        m.set_scroll_offset(1000);
+        assert_eq!(m.scroll_offset(), m.scrollback_len().min(1000));
     }
 }

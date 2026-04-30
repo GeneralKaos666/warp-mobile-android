@@ -1,0 +1,47 @@
+{
+  "story": "M3-S09",
+  "device_serial": "R5CX10VFFBA",
+  "device_class": "flagship",
+  "scrollback": {
+    "max_lines_cap": 1000,
+    "observed_max": 1000,
+    "lines_injected": 2000,
+    "total_bytes_ingested": 0,
+    "expected": "saturates at 1000 (cap is intentional)",
+    "pass": true
+  },
+  "scroll_drag": {
+    "set_scroll_offset_calls": 40,
+    "swipe_count": 10,
+    "expected": "≥1 set_scroll_offset call from gesture detector",
+    "pass": true
+  },
+  "frame_timing": {
+    "scroll_p50_ms": 8,
+    "scroll_p95_ms": 9,
+    "scroll_p99_ms": 10,
+    "peak_fps": 144,
+    "num_frames": 748,
+    "p95_threshold_ms": 16.6,
+    "expected": "p95 <16.6ms during sustained scroll",
+    "pass": true
+  },
+  "dynamic_grid_perf": {
+    "fast_path_lines": 10,
+    "full_reinit_lines": 0,
+    "fast_path_total": 14,
+    "full_reinit_total": 1
+  },
+  "evidence": {
+    "logcat": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S09-logcat-evidence.txt",
+    "frames": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S09-frames.txt",
+    "screenshot_pre": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S09-screenshot-pre.png",
+    "screenshot_post": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S09-screenshot-post.png"
+  },
+  "deferred_to_m5_or_later": {
+    "low_end_pixel_4a_a52s": "Per M2-S13 user choice; flagship-only for M3."
+  },
+  "gate": {
+    "overall_pass": true
+  }
+}

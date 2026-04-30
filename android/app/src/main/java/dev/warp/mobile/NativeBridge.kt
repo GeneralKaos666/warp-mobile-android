@@ -424,4 +424,29 @@ object NativeBridge {
      * #3 (block model start_time + command + exit_code populated correctly).
      */
     external fun terminalBlocksDump(): String
+
+    // ── Scrollback + viewport offset (M3-S09) ───────────────────────────────
+    //
+    // Drives the scrollback ring + viewport offset on the Rust side. Java
+    // calls `terminalSetScrollOffset` from the M2-S11 GestureDetector
+    // `onScroll` callback (drag scroll) and from a Choreographer-driven fling
+    // decay timer (`onFling` momentum). Rust clamps the request to
+    // `scrollback.len()` and sets the dirty flag so the next vsync re-inits
+    // the GPU grid with the new viewport.
+    //
+    // Logcat tag: `WarpTerminalModel` (Rust target). The M3-S09 driver greps
+    // `terminal_set_scroll_offset offset=…`.
+
+    /**
+     * M3-S09: set viewport scroll offset (rows back into history).
+     * 0 = live tail; >0 = scrolled up. Negative values are clamped to 0;
+     * over-scroll is clamped to the actual scrollback length on the Rust side.
+     */
+    external fun terminalSetScrollOffset(offsetRows: Int)
+
+    /**
+     * M3-S09: returns scrollback state as a CSV string for the device driver:
+     *   "scrollback_len=N,scrollback_max=N,scroll_offset=N"
+     */
+    external fun terminalScrollbackInfo(): String
 }

@@ -135,6 +135,9 @@
                 <!-- M3-S07: dump current Vec<Block> as JSON to logcat for the
                      test-block-model.sh device driver to grep. -->
                 <action android:name="dev.warp.mobile.TERM_BLOCKS_DUMP" />
+                <!-- M3-S09: scrollback dump + scroll-offset broadcast control. -->
+                <action android:name="dev.warp.mobile.TERM_SCROLLBACK_DUMP" />
+                <action android:name="dev.warp.mobile.TERM_SET_SCROLL_OFFSET" />
             </intent-filter>
         </receiver>
 

@@ -1,6 +1,8 @@
 package dev.warp.mobile
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.text.Spanned
 import android.util.AttributeSet
 import android.util.Log
@@ -11,6 +13,7 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import kotlin.math.abs
 
 /**
  * M2-S10: a focusable, IME-attaching `View` that does NOT render anything
@@ -102,6 +105,48 @@ class WarpInputView @JvmOverloads constructor(
 
     fun warpInputConnectionOrNull(): WarpInputConnection? = lastInputConnection
 
+    // ── M3-S09: scroll offset state ─────────────────────────────────────
+    //
+    // The `currentScrollOffsetRows` is the number of rows the viewport has
+    // been scrolled UP into the scrollback (mirrors the Rust-side
+    // `TerminalModel::scroll_offset`). Updated on `onScroll` (drag scroll)
+    // and via the fling decay scheduler. Cell height is reported by
+    // MainActivity through [setCellHeightPx]; default tracks the M3-S08
+    // `GRID_CELL_H_PX` baseline of 27px.
+    private var currentScrollOffsetRows: Int = 0
+    private var cellHeightPx: Float = 27f
+    /// Pixel accumulator for sub-cell scroll motion. The GestureDetector
+    /// emits `distanceY` in pixels; we accumulate small motions until they
+    /// add up to ≥ 1 cell row before bumping the offset. This avoids
+    /// flooding the JNI bridge with no-op offset calls.
+    private var pixelAccumulator: Float = 0f
+    /// Active fling decay scheduler — non-null while a fling is in flight.
+    private var flingRunnable: Runnable? = null
+    private val flingHandler = Handler(Looper.getMainLooper())
+
+    /// Update the assumed cell height (px). MainActivity calls this after
+    /// resolving the grid params from --ef grid_cell_h_px / display metrics
+    /// so onScroll's pixel→rows conversion uses the right divisor.
+    fun setCellHeightPx(px: Float) {
+        if (px > 0.0f) {
+            cellHeightPx = px
+        }
+    }
+
+    /// Reset scroll state (live tail). Called on terminal_mode launch + when
+    /// the surface is recreated (rotation, IME show/hide).
+    fun resetScroll() {
+        currentScrollOffsetRows = 0
+        pixelAccumulator = 0f
+        cancelFling()
+        NativeBridge.terminalSetScrollOffset(0)
+    }
+
+    private fun cancelFling() {
+        flingRunnable?.let { flingHandler.removeCallbacks(it) }
+        flingRunnable = null
+    }
+
     // M2-S11: GestureDetector for tap / long-press / scroll detection.
     private val gestureListener = object : GestureDetector.SimpleOnGestureListener() {
         /**
@@ -158,6 +203,97 @@ class WarpInputView @JvmOverloads constructor(
             }
             Log.d(TAG, "gesture_scroll x=${e2.x} y=${e2.y} dx=$distanceX dy=$distanceY vx=$vx vy=$vy")
             NativeBridge.inputScroll(e2.x, e2.y, distanceX, distanceY, vx, vy)
+
+            // M3-S09: drag scroll → terminal viewport offset.
+            //
+            // GestureDetector convention: positive `distanceY` = finger moved
+            // UP (content scrolled DOWN). Terminal convention: scrolling
+            // content DOWN means revealing more recent text → offset DECREASES
+            // toward 0. Conversely, finger moves DOWN (positive y direction
+            // in absolute terms; negative `distanceY`) reveals older history
+            // → offset INCREASES.
+            //
+            // Pixel-to-rows conversion uses `cellHeightPx` provided by
+            // MainActivity. We accumulate sub-cell motion in
+            // `pixelAccumulator` so a slow drag doesn't get rounded away.
+            if (cellHeightPx > 0f) {
+                // Cancel any in-flight fling — direct touch trumps inertia.
+                cancelFling()
+
+                // distanceY > 0 → finger up → newer content → offset --
+                // distanceY < 0 → finger down → older content → offset ++
+                pixelAccumulator -= distanceY
+                val rowsDelta = (pixelAccumulator / cellHeightPx).toInt()
+                if (rowsDelta != 0) {
+                    pixelAccumulator -= rowsDelta * cellHeightPx
+                    val newOffset = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
+                    if (newOffset != currentScrollOffsetRows) {
+                        currentScrollOffsetRows = newOffset
+                        NativeBridge.terminalSetScrollOffset(newOffset)
+                    }
+                }
+            }
+            return true
+        }
+
+        /**
+         * M3-S09: two-finger flick / fast swipe → momentum scroll.
+         *
+         * GestureDetector calls `onFling` on ACTION_UP if the trailing
+         * velocity exceeds the system's fling threshold. We schedule a
+         * decay-driven scroll: each frame (16ms) the velocity is multiplied
+         * by 0.9 (matches Android scroller decel curve close enough for
+         * terminal use; cf. iOS UIScrollView's similar-feel constant of
+         * ~0.998 per ms ≈ 0.9 per 16ms). When velocity drops below
+         * one cell-per-second the timer cancels.
+         *
+         * `velocityY` follows the M2-S11 sign convention: positive = finger
+         * moves DOWNWARD. Same mapping as `onScroll` — finger down = older
+         * history = increase offset.
+         */
+        override fun onFling(
+            e1: MotionEvent?,
+            e2: MotionEvent,
+            velocityX: Float,
+            velocityY: Float
+        ): Boolean {
+            Log.i(TAG, "gesture_fling vx=$velocityX vy=$velocityY")
+            if (cellHeightPx <= 0f) {
+                return false
+            }
+            cancelFling()
+
+            // Internal mutable velocity capture for the decay closure.
+            val velocityArr = floatArrayOf(velocityY)
+            val r = object : Runnable {
+                override fun run() {
+                    val v = velocityArr[0]
+                    // Per-frame distance: v px/s × frame_duration_s.
+                    // We use 16ms frame budget; matches Choreographer cadence.
+                    val deltaPx = v * 0.016f
+                    pixelAccumulator += deltaPx
+                    val rowsDelta = (pixelAccumulator / cellHeightPx).toInt()
+                    if (rowsDelta != 0) {
+                        pixelAccumulator -= rowsDelta * cellHeightPx
+                        val newOffset = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
+                        if (newOffset != currentScrollOffsetRows) {
+                            currentScrollOffsetRows = newOffset
+                            NativeBridge.terminalSetScrollOffset(newOffset)
+                        }
+                    }
+                    // Decay velocity. Reference iOS UIScrollView momentum
+                    // model + Android OverScroller default decel: ~0.9 per
+                    // 16ms frame → ~95% of velocity decays in ~50 frames.
+                    velocityArr[0] = v * 0.9f
+                    if (abs(velocityArr[0]) > cellHeightPx) {
+                        flingHandler.postDelayed(this, 16L)
+                    } else {
+                        flingRunnable = null
+                    }
+                }
+            }
+            flingRunnable = r
+            flingHandler.postDelayed(r, 16L)
             return true
         }
 

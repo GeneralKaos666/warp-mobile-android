@@ -48,8 +48,29 @@ class TerminalSimulationReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_TERM_INJECT_RAW -> handleInjectRaw(intent)
             ACTION_TERM_BLOCKS_DUMP -> handleBlocksDump()
+            ACTION_TERM_SCROLLBACK_DUMP -> handleScrollbackDump()
+            ACTION_TERM_SET_SCROLL_OFFSET -> handleSetScrollOffset(intent)
             else -> Log.w(TAG, "onReceive: unknown action ${intent.action}")
         }
+    }
+
+    /**
+     * M3-S09: dump the current scrollback ring state to logcat.
+     * Test driver greps `TERM_SCROLLBACK_DUMP info=…`.
+     */
+    private fun handleScrollbackDump() {
+        Log.i(TAG, "TERM_SCROLLBACK_DUMP info=${NativeBridge.terminalScrollbackInfo()}")
+    }
+
+    /**
+     * M3-S09: drive the viewport scroll offset directly from a broadcast.
+     * Useful for repeatable test scenarios that don't depend on synthetic
+     * touch swipes (which can vary across OEM ROMs).
+     */
+    private fun handleSetScrollOffset(intent: Intent) {
+        val offset = intent.getIntExtra(EXTRA_OFFSET_ROWS, 0)
+        NativeBridge.terminalSetScrollOffset(offset)
+        Log.i(TAG, "TERM_SET_SCROLL_OFFSET offset=$offset info=${NativeBridge.terminalScrollbackInfo()}")
     }
 
     /**
@@ -95,6 +116,9 @@ class TerminalSimulationReceiver : BroadcastReceiver() {
         // Surface the post-injection SGR/DCS counters so the test driver can
         // grep them out of logcat without a follow-up call.
         Log.i(TAG, "TERM_INJECT_RAW summary=${NativeBridge.terminalSgrSummary()}")
+        // M3-S09 — also surface the scrollback state so the M3-S09 driver can
+        // gate on the ring-buffer fill level without a separate broadcast.
+        Log.i(TAG, "TERM_INJECT_RAW scrollback=${NativeBridge.terminalScrollbackInfo()}")
     }
 
     companion object {
@@ -102,9 +126,13 @@ class TerminalSimulationReceiver : BroadcastReceiver() {
 
         const val ACTION_TERM_INJECT_RAW = "dev.warp.mobile.TERM_INJECT_RAW"
         const val ACTION_TERM_BLOCKS_DUMP = "dev.warp.mobile.TERM_BLOCKS_DUMP"
+        // M3-S09 actions.
+        const val ACTION_TERM_SCROLLBACK_DUMP = "dev.warp.mobile.TERM_SCROLLBACK_DUMP"
+        const val ACTION_TERM_SET_SCROLL_OFFSET = "dev.warp.mobile.TERM_SET_SCROLL_OFFSET"
 
         const val EXTRA_CMD_ID = "cmd_id"
         const val EXTRA_BYTES_B64 = "bytes_b64"
         const val EXTRA_BYTES_ASCII = "bytes_ascii"
+        const val EXTRA_OFFSET_ROWS = "offset_rows"
     }
 }
