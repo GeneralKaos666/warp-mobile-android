@@ -36,6 +36,15 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     private var renderActive = false
+    // M2-S09: track currently-attached surface dimensions. surfaceChanged is
+    // *always* called by Android once after surfaceCreated with the initial
+    // dimensions, then again only on actual size/format changes. If we
+    // re-attach blindly on every surfaceChanged we double-init the Vulkan
+    // pipeline (attach + init_static_grid run twice → ~200ms wasted per
+    // rotation). Skip the second redundant call by tracking last-attached
+    // dims and only re-attaching when they change.
+    private var attachedWidth = -1
+    private var attachedHeight = -1
     // M2-S08: when true, doFrame calls renderDrawGridFrame instead of
     // renderClearFrame. Toggled by the START_STATIC_GRID broadcast (driver
     // path) or by intent extras at launch.
@@ -216,36 +225,66 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     override fun surfaceCreated(holder: SurfaceHolder) {
         val ts = SystemClock.uptimeMillis()
         Log.i(TAG, "surfaceCreated_ts=$ts")
+        // Attach uses the Surface's current dimensions (read inside Rust via
+        // ANativeWindow_getWidth/getHeight). We mark attachedWidth=-1 so the
+        // first surfaceChanged is treated as a real change and updates our
+        // local cache, but we skip the redundant re-attach since this
+        // surfaceCreated call already did one.
         attachAndStartRender(holder.surface)
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         val ts = SystemClock.uptimeMillis()
         Log.i(TAG, "surfaceChanged_ts=$ts width=$width height=$height")
-        // Re-attach: the Rust side replaces any prior swapchain in attach().
-        // M2-S08: the surface attach destroys the prior VulkanSurface and the
-        // attached static-grid along with it. attachAndStartRender will
-        // re-init the grid if `gridMode` is still set, so a rotation/resize
-        // self-heals.
+        // M2-S09: skip the redundant double-init. Android calls surfaceChanged
+        // exactly once after surfaceCreated with the initial dims (always),
+        // then again only on real size/format changes. Re-attaching here on
+        // the first call duplicates what surfaceCreated→attachAndStartRender
+        // just did and wastes ~80ms on grid_init.
+        //
+        // Strategy: if renderActive is true and we haven't recorded dims yet
+        // (attachedWidth=-1 — fresh attach from surfaceCreated), this is the
+        // spurious follow-up surfaceChanged. Just record dims and bail.
+        // If dims match the recorded ones, also bail (idempotent).
+        // Only re-attach when dims actually changed.
+        if (renderActive && attachedWidth == -1 && attachedHeight == -1) {
+            // First surfaceChanged after surfaceCreated already attached.
+            attachedWidth = width
+            attachedHeight = height
+            return
+        }
+        if (renderActive && attachedWidth == width && attachedHeight == height) {
+            // No-op: same dims, already attached.
+            return
+        }
+        // Real change: re-attach with fresh dims.
         renderActive = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
-        attachAndStartRender(holder.surface)
+        attachAndStartRender(holder.surface, width, height)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         val ts = SystemClock.uptimeMillis()
         Log.i(TAG, "surfaceDestroyed_ts=$ts")
         renderActive = false
+        attachedWidth = -1
+        attachedHeight = -1
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         NativeBridge.renderDetachSurface()
     }
 
     // ── Internals ────────────────────────────────────────────────────────────
 
-    private fun attachAndStartRender(surface: Surface) {
+    private fun attachAndStartRender(surface: Surface, width: Int = -1, height: Int = -1) {
         val ok = NativeBridge.renderAttachSurface(surface)
         Log.i(TAG, "renderAttachSurface ok=$ok")
         if (ok) {
+            // M2-S09: cache dims so the followup surfaceChanged with the same
+            // dims becomes a no-op. width=-1/height=-1 means caller didn't
+            // know the dims (surfaceCreated path); the followup surfaceChanged
+            // will record the real dims on its first run.
+            attachedWidth = width
+            attachedHeight = height
             renderActive = true
             // M2-S08: if grid mode was requested before surface was ready, do
             // the init now while we have a valid swapchain. The Rust side
