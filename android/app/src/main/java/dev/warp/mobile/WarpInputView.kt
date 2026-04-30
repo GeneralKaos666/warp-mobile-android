@@ -142,9 +142,12 @@ class WarpInputView @JvmOverloads constructor(
             val vy: Float
             val vt = velocityTracker
             if (vt != null) {
-                vt.addMovement(e2)
-                // Units: pixels per second (default). Positive = moving right/down.
+                // NOTE: do NOT call vt.addMovement(e2) here — onTouchEvent already
+                // fed e2 to the tracker in its ACTION_MOVE branch before forwarding
+                // to gestureDetector. Adding it again with the same timestamp skews
+                // the computed velocity. Just query what was already accumulated.
                 vt.computeCurrentVelocity(1000)
+                // Units: pixels per second (default). Positive = moving right/down.
                 vx = vt.xVelocity
                 vy = vt.yVelocity
             } else {

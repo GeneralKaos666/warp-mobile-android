@@ -237,6 +237,11 @@ impl AndroidInput {
     }
 
     fn push(&mut self, event: InputEvent) {
+        // events_emitted is the count of all events ever pushed (never reset by
+        // drain_events). Use it as the log counter so events_total stays
+        // monotonically increasing across drain cycles, as the driver contract
+        // requires for window reconstruction via monotonic-break detection.
+        let total = self.events_emitted + 1; // +1 because we increment below
         log::info!(
             target: "WarpInput",
             "input_event kind={} x={:.1} y={:.1} vx={:.1} vy={:.1} events_total={}",
@@ -245,7 +250,7 @@ impl AndroidInput {
             event.y(),
             event.vx(),
             event.vy(),
-            self.events.len() as u64 + 1
+            total,
         );
         self.events.push(event);
         self.events_emitted += 1;

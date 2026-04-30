@@ -99,15 +99,14 @@
              and long-press sub-tests where adb shell input's timing is non-
              deterministic, the driver broadcasts these intents which call the
              Rust JNI entry points directly (disclosed in result JSON).
-             No android:permission attribute so `adb shell am broadcast` from
-             uid=2000 (shell) can reach this receiver during device testing.
-             The adb input commands require a connected host anyway, so the
-             security boundary is physical device access, not app signing.
-             (PTY_CONTROL is a signature-level restriction that blocks shell uid=2000
-             on Android 14+, tested on Galaxy S24 Ultra API 36.) -->
+             PTY_CONTROL signature permission protects release builds from arbitrary
+             broadcast injection; the debug manifest overlay (src/debug/) strips it
+             so `adb shell am broadcast` from uid=2000 can reach this receiver during
+             device testing (same pattern as PtyBroadcastReceiver/ImeSimulationReceiver). -->
         <receiver
             android:name=".TouchSimulationReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
             <intent-filter>
                 <action android:name="dev.warp.mobile.INPUT_TOUCH_DOWN" />
                 <action android:name="dev.warp.mobile.INPUT_TOUCH_UP" />

@@ -278,6 +278,7 @@ echo "" >&2
 echo "=== capturing logcat ===" >&2
 LOGCAT_FILE=$(mktemp /tmp/m2-s11-logcat.XXXXXX)
 "${ADB[@]}" logcat -d -v time \
+    "WarpIme:I" \
     "WarpRender:I" \
     "WarpInput:W" \
     "WarpInput:I" \
