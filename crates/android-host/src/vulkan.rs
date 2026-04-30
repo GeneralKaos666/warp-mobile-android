@@ -857,14 +857,32 @@ impl From<png::EncodingError> for CaptureError {
     }
 }
 
-/// Capture pipeline — see canonical impl in warpui's vulkan.rs for the full
-/// pipeline doc + web-search refs.
+/// Captured pixel data + metadata returned from `record_and_capture_raw`.
+struct CapturedRgba {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    mean_r: u8,
+    mean_g: u8,
+    mean_b: u8,
+    bgra_swizzled: bool,
+}
+
+/// Round-2 capture pipeline — mirror of canonical impl in
+/// `warp-src/crates/warpui/src/platform/android/vulkan.rs::record_and_capture_raw`.
+///
+/// Codex round-1 blockers fixed:
+/// 1. TRANSFER_WRITE → HOST_READ buffer memory barrier before vkMapMemory
+///    (HOST_COHERENT removes invalidate, NOT host-visibility).
+///    <https://docs.vulkan.org/spec/latest/chapters/synchronization.html>
+/// 2. queue_present_khr after submit so WSI recovers the acquired image
+///    (otherwise vkAcquireNextImageKHR runs out after 2-3 captures).
+///    <https://docs.vulkan.org/spec/latest/chapters/VK_KHR_surface/wsi.html>
 #[allow(clippy::too_many_lines)]
-unsafe fn record_and_capture(
+unsafe fn record_and_capture_raw(
     s: &mut VulkanSurface,
     clear_rgba: [f32; 4],
-    out_path: &std::path::Path,
-) -> Result<CaptureMetadata, CaptureError> {
+) -> Result<CapturedRgba, CaptureError> {
     let device = &s.device;
     let extent = s.extent;
     let buffer_size: vk::DeviceSize = (extent.width as u64) * (extent.height as u64) * 4;
@@ -998,7 +1016,30 @@ unsafe fn record_and_capture(
         &[region],
     );
 
-    // TRANSFER_SRC_OPTIMAL → PRESENT_SRC_KHR.
+    // Round-2 (Codex round-1 blocker 1): TRANSFER_WRITE → HOST_READ buffer
+    // memory barrier on the staging buffer. HOST_COHERENT removes invalidate,
+    // NOT the host-visibility barrier. Mirror of warp-src canonical impl.
+    let to_host_read = vk::BufferMemoryBarrier::default()
+        .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+        .dst_access_mask(vk::AccessFlags::HOST_READ)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .buffer(staging_buffer)
+        .offset(0)
+        .size(vk::WHOLE_SIZE);
+    device.cmd_pipeline_barrier(
+        cmd_buf,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::PipelineStageFlags::HOST,
+        vk::DependencyFlags::empty(),
+        &[],
+        &[to_host_read],
+        &[],
+    );
+
+    // TRANSFER_SRC_OPTIMAL → PRESENT_SRC_KHR (so we can call queue_present
+    // below — required to release the acquired image back to WSI per
+    // <https://docs.vulkan.org/spec/latest/chapters/VK_KHR_surface/wsi.html>).
     let to_present_src = vk::ImageMemoryBarrier::default()
         .src_access_mask(vk::AccessFlags::TRANSFER_READ)
         .dst_access_mask(vk::AccessFlags::empty())
@@ -1031,23 +1072,34 @@ unsafe fn record_and_capture(
         return Err(e.into());
     }
 
-    // Wait on image_available (signaled by acquire) but do NOT signal
-    // render_finished — we don't present this frame, so the semaphore would
-    // otherwise stay signaled-but-unwaited and trip the validation layer
-    // on the next normal render path's wait. (See canonical impl for the
-    // VUID-vkQueueSubmit-pSignalSemaphores semaphore-reuse rationale.)
+    // Round-2 (Codex round-1 blocker 2): submit signals render_finished;
+    // queue_present_khr waits on it and recovers the WSI image.
     let wait_semaphores = [s.image_available];
+    let signal_semaphores = [s.render_finished];
     let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
     let cmd_bufs = [cmd_buf];
     let submit_info = vk::SubmitInfo::default()
         .wait_semaphores(&wait_semaphores)
         .wait_dst_stage_mask(&wait_stages)
-        .command_buffers(&cmd_bufs);
+        .command_buffers(&cmd_bufs)
+        .signal_semaphores(&signal_semaphores);
     if let Err(e) = device.queue_submit(s.graphics_queue, &[submit_info], s.fence) {
         device.free_memory(staging_memory, None);
         device.destroy_buffer(staging_buffer, None);
         return Err(e.into());
     }
+
+    // Present the captured image so WSI bookkeeping recovers it.
+    let swapchains = [s.swapchain];
+    let image_indices = [image_index];
+    let present_info = vk::PresentInfoKHR::default()
+        .wait_semaphores(&signal_semaphores)
+        .swapchains(&swapchains)
+        .image_indices(&image_indices);
+    let present_result = s
+        .swapchain_loader
+        .queue_present(s.graphics_queue, &present_info);
+
     if let Err(e) = device.queue_wait_idle(s.graphics_queue) {
         device.free_memory(staging_memory, None);
         device.destroy_buffer(staging_buffer, None);
@@ -1055,6 +1107,23 @@ unsafe fn record_and_capture(
     }
     let _ = device.reset_fences(&[s.fence]);
     let _ = device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty());
+
+    match present_result {
+        Ok(false) => {} // optimal
+        Ok(true) => {
+            log::warn!(target: "WarpVulkan",
+                "capture: present returned SUBOPTIMAL (caller will recreate)");
+        }
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            log::warn!(target: "WarpVulkan",
+                "capture: present returned OUT_OF_DATE (caller will recreate)");
+        }
+        Err(e) => {
+            log::error!(target: "WarpVulkan",
+                "capture: queue_present unexpected error: {:?}", e);
+            // Don't fail the capture — readback already succeeded.
+        }
+    }
 
     // Map memory + extract pixels.
     let raw_ptr = match device.map_memory(
@@ -1102,53 +1171,51 @@ unsafe fn record_and_capture(
     let mean_g = (sum_g / pixel_count.max(1)) as u8;
     let mean_b = (sum_b / pixel_count.max(1)) as u8;
 
-    if let Some(parent) = out_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let file = match std::fs::File::create(out_path) {
-        Ok(f) => f,
-        Err(e) => {
-            device.free_memory(staging_memory, None);
-            device.destroy_buffer(staging_buffer, None);
-            return Err(e.into());
-        }
-    };
-    let writer = std::io::BufWriter::new(file);
-    let mut encoder = png::Encoder::new(writer, extent.width, extent.height);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = match encoder.write_header() {
-        Ok(w) => w,
-        Err(e) => {
-            device.free_memory(staging_memory, None);
-            device.destroy_buffer(staging_buffer, None);
-            return Err(e.into());
-        }
-    };
-    if let Err(e) = writer.write_image_data(&rgba) {
-        device.free_memory(staging_memory, None);
-        device.destroy_buffer(staging_buffer, None);
-        return Err(e.into());
-    }
-    if let Err(e) = writer.finish() {
-        device.free_memory(staging_memory, None);
-        device.destroy_buffer(staging_buffer, None);
-        return Err(e.into());
-    }
-
-    let png_bytes_written = std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0);
-
     device.free_memory(staging_memory, None);
     device.destroy_buffer(staging_buffer, None);
 
-    Ok(CaptureMetadata {
+    Ok(CapturedRgba {
+        rgba,
         width: extent.width,
         height: extent.height,
         mean_r,
         mean_g,
         mean_b,
-        png_bytes_written,
         bgra_swizzled,
+    })
+}
+
+/// PNG-encoding wrapper around [`record_and_capture_raw`]. Used by the
+/// device-driver test path (JNI `renderCaptureFrame` → `capture_to_png`).
+unsafe fn record_and_capture(
+    s: &mut VulkanSurface,
+    clear_rgba: [f32; 4],
+    out_path: &std::path::Path,
+) -> Result<CaptureMetadata, CaptureError> {
+    let captured = record_and_capture_raw(s, clear_rgba)?;
+
+    if let Some(parent) = out_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = std::fs::File::create(out_path)?;
+    let writer = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, captured.width, captured.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header()?;
+    writer.write_image_data(&captured.rgba)?;
+    writer.finish()?;
+
+    let png_bytes_written = std::fs::metadata(out_path).map(|m| m.len()).unwrap_or(0);
+
+    Ok(CaptureMetadata {
+        width: captured.width,
+        height: captured.height,
+        mean_r: captured.mean_r,
+        mean_g: captured.mean_g,
+        mean_b: captured.mean_b,
+        png_bytes_written,
+        bgra_swizzled: captured.bgra_swizzled,
     })
 }
 

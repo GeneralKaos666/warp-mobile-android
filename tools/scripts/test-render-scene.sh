@@ -90,10 +90,31 @@ echo "=== clearing logcat ===" >&2
 "${ADB[@]}" logcat -c
 
 echo "=== keep screen on for the duration ===" >&2
+# Capture original stay-on so we can restore it on exit (S24 Ultra hardening).
+ORIG_STAY_ON=$("${ADB[@]}" shell settings get global stay_on_while_plugged_in 2>/dev/null \
+                  | tr -d '\r' || print 0)
 # Stay-on while plugged: 1=AC, 2=USB, 4=wireless. 7=all. Restored after run.
 "${ADB[@]}" shell settings put global stay_on_while_plugged_in 7 2>&1 >&2 || true
+"${ADB[@]}" shell svc power stayon true 2>&1 >&2 || true
 "${ADB[@]}" shell input keyevent KEYCODE_WAKEUP 2>&1 >&2 || true
+"${ADB[@]}" shell wm dismiss-keyguard 2>&1 >&2 || true
+# S24 Ultra (One UI) parks focus on NotificationShade after WAKEUP+settings
+# changes; explicit collapse + HOME ensures app focus isn't stolen by the
+# notification panel before MainActivity launches.
+"${ADB[@]}" shell cmd statusbar collapse 2>&1 >&2 || true
+"${ADB[@]}" shell input keyevent KEYCODE_HOME 2>&1 >&2 || true
 sleep 0.5
+
+# Probe screen state — if not ON, fail fast.
+SCREEN_STATE=$("${ADB[@]}" shell dumpsys display 2>/dev/null \
+                  | grep -E "mScreenState=" | head -1 || true)
+if ! echo "$SCREEN_STATE" | grep -q "ON"; then
+    echo "ERROR: screen state not ON before launch: ${SCREEN_STATE}" >&2
+    "${ADB[@]}" shell svc power stayon false 2>&1 >&2 || true
+    "${ADB[@]}" shell settings put global stay_on_while_plugged_in "$ORIG_STAY_ON" 2>&1 >&2 || true
+    exit 9
+fi
+echo "=== screen state confirmed ON ===" >&2
 
 echo "=== launching $PACKAGE/$ACTIVITY ===" >&2
 "${ADB[@]}" shell am start -n "$PACKAGE/$ACTIVITY" 2>&1 | tail -2 >&2
@@ -363,7 +384,8 @@ echo "=== done ===" >&2
 
 # Try to gracefully stop the activity so the device isn't left rendering.
 "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 | tail -2 >&2 || true
-# Restore stay-on default (0).
-"${ADB[@]}" shell settings put global stay_on_while_plugged_in 0 2>&1 >&2 || true
+"${ADB[@]}" shell svc power stayon false 2>&1 >&2 || true
+# Restore stay-on default to user's original.
+"${ADB[@]}" shell settings put global stay_on_while_plugged_in "$ORIG_STAY_ON" 2>&1 >&2 || true
 
 exit $PARSE_RC
