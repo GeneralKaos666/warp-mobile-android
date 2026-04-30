@@ -90,16 +90,18 @@
     },
     {
       "id": "M3-S05",
-      "title": "DCS hook parser implementation (ESC P $ d ... 0x9c)",
+      "title": "DCS hook frame parser + ANSI streaming (post Amendment 5)",
       "passes": false,
       "verifiedBy": null,
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "warp-src/crates/warp_terminal/src/dcs.rs (or wherever upstream parses DCS — verify file path via M0 archeology re-check) implements DCS sequence parser for ESC P $ d <payload> ST (where ST = 0x9c or ESC \\)",
-        "Parser extracts payload bytes between ESC P $ d and ST; payload format: warp-specific (likely JSON-ish or key=value; verify upstream warp protocol)",
-        "Unit tests: feed synthetic DCS sequences (start, end, malformed) into parser; verify state machine transitions correctly",
-        "Web search docs cited (DCS sequence spec ECMA-48 §5.6 / xterm DCS / warp upstream DCS hook format)",
-        "cargo ndk -t arm64-v8a check -p warp_terminal succeeds; if any android-incompat errors, scope as additional cfg-gate work",
+        "Per Plan Amendment 5: DCS schema already extracted into facade::app_terminal::ansi::dcs_hooks (M3-S03 v2 commit c76f876). M3-S05 adds the streaming frame detector + hex decoder + dispatch.",
+        "Implement streaming DCS detection in TerminalModel::ingest_pty_bytes: state machine recognizes ESC P dollar d <hex_chars> ST (where ST = 0x9c or ESC backslash); accumulates hex bytes; on ST: hex-decode body and call DProtoHook::deserialize",
+        "Wire DProtoHook events: Precmd marks new pending block start (deferred to S07); Preexec records command text/start_time (deferred to S07); CommandFinished sets exit_code + finalizes Block (deferred to S07). For S05 baseline: just log/emit DProtoHook events; full Block aggregation in S07.",
+        "Add minimal ANSI streaming parser for plain-text + cursor-positioning + SGR color attributes. Specifically support: CSI n m (SGR), CSI n;m H (cursor pos), CSI K (erase line), newline carriage-return backspace tab. Ignore unknown CSI sequences gracefully (do not print).",
+        "Renderer integration choice: keep Option A static_grid baseline OR flip to Option B dynamic_grid.rs. Worker decides based on per-cell distinct rendering needs. If Option B: new file warp-src/crates/warpui/src/platform/android/dynamic_grid.rs that supports per-cell color/glyph from terminal model cells.",
+        "Tests: at least 3 new tests feeding actual zsh_body.sh hex JSON DCS samples (lines 80, 254, 301 from warp-src/app/assets/bundled/bootstrap/zsh_body.sh) through the parser; verify DProtoHook Precmd / Preexec / CommandFinished are correctly emitted",
+        "Verification: cargo ndk check -p warp_terminal_mobile_facade + warpui passes; cargo test passes (at least 17 tests total — 14 from S04 + 3 new); device test on S24 Ultra R5CX10VFFBA shows colored ls -la output OR colored echo output (e.g. echo -e to render red and green text in their respective colors)",
         "Codex review dispatched and PASS verdict received"
       ]
     },
