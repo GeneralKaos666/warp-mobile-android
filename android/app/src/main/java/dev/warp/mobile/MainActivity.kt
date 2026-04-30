@@ -10,6 +10,7 @@ import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -59,6 +60,14 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Keep the screen on while this Activity is in the foreground.
+        // Same flag YouTube/Netflix/etc. use — survives Samsung One UI's
+        // power-policy overrides that defeat `adb shell svc power stayon`
+        // and `wm dismiss-keyguard`. Only effective while Activity is at
+        // the top of the stack; system reclaims power management once the
+        // user backgrounds us. Fixes M2-S05 round-2 manual unlock loop.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // POST_NOTIFICATIONS for FGS (M1 carry-over, unchanged).
         if (Build.VERSION.SDK_INT >= 33 &&
