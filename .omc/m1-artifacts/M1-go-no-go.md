@@ -201,10 +201,10 @@ This section maps each prd.json M1-S0[1-9] acceptance criterion to its supportin
 - AC2 Each prd.json acceptance criterion has one-line citation → `M1-go-no-go.md` §7 (this section, ~50 ACs with file:line refs)
 - AC3 M1 verdict GO/CONDITIONAL GO/NO-GO with rationale → `M1-go-no-go.md` §6 (CONDITIONAL GO, lines 113-128)
 - AC4 Carry-overs for M2 listed → `M1-go-no-go.md` §5 (6 carry-overs, lines 102-107)
-- AC5 Codex review dispatched + PASS verdict received → Codex round-1 REVISE at 04-25-55-060Z → round-2 REVISE at 04-31-32-544Z → round-3 review pending after this commit
+- AC5 Codex review dispatched + PASS verdict received → Codex review history at `.omc/artifacts/ask/codex-*-m1-s10-close-out-*` artifacts (rounds 1-3 REVISE addressed iteratively in commits `7513445`, `ad3d0cc`, `fc0a892`; final round verdict is whatever this commit's review returns — which is the dispatch that closes this AC)
 
 ---
 
 *撰寫人：team-lead@warp-mobile-m1 (M0 close-out same governance)*
-*Closed at commit `ad3d0cc` + this revision (round-3 fixes)*
-*下一步：dispatch Codex round-4 review of M1-S10 close-out doc; on PASS mark prd.json M1-S10.passes:true and proceed to M2.*
+*Closed at commit `fc0a892` + this revision (round-4 minor fix)*
+*下一步：on Codex round-4 PASS mark prd.json M1-S10.passes:true and proceed to M2.*
