@@ -42,8 +42,8 @@
     {
       "id": "M3-S02",
       "title": "warp_terminal_mobile_facade real impl (Session API + AppContext + FeatureFlag + SSH-noop)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 PASS @ 2960b41 (warp-src)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp-src/crates/warp_terminal_mobile_facade/Cargo.toml has real deps (was M0 placeholder); cdylib not required (rlib for app/ to consume)",
