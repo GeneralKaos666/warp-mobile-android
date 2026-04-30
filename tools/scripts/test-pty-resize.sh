@@ -37,39 +37,33 @@ if [[ "$DEVICE_STATE" != "device" ]]; then
     exit 2
 fi
 
-# Launch app and spawn bash PTY
+# Launch app and spawn sh PTY (bash may not be on /system/bin)
 adb_cmd shell am force-stop "$PKG" 2>/dev/null || true
 adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${PKG}/.MainActivity" >/dev/null 2>&1
 sleep 2
-adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" -a dev.warp.mobile.PTY_SPAWN --es cmd "bash" 2>/dev/null || true
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_SPAWN --es cmd 'sh'" 2>/dev/null || true
 sleep 1
 
-# Send resize broadcast
-adb_cmd shell am broadcast \
-    -n "${PKG}/.PtyBroadcastReceiver" \
-    -a dev.warp.mobile.PTY_RESIZE \
-    --ei rows "$ROWS" \
-    --ei cols "$COLS" 2>/dev/null || true
+# Send resize via FGS direct (same path as S06 — debug overlay exposes Service)
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_RESIZE --ei rows ${ROWS} --ei cols ${COLS}" 2>/dev/null || true
 sleep 1
 
-# Write stty size to PTY stdin via broadcast.
-# Pass literal backslash-n so adb doesn't parse it; Service.handleWrite converts it.
-adb_cmd shell am broadcast \
-    -n "${PKG}/.PtyBroadcastReceiver" \
-    -a dev.warp.mobile.PTY_WRITE \
-    --es data 'stty size\n' 2>/dev/null || true
+# Write `stty size` — handleWrite appends \n automatically when missing
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_WRITE --es data 'stty size'" 2>/dev/null || true
 
-# Wait for stty size output in logcat
+# Wait for stty size output in logcat. Anchor on lines whose PtyOutput message
+# is *exactly* two numbers (rows cols) — NOT the date/PID/TID columns of the
+# logcat default format, NOT the echo'd 'stty size' command line.
 OBSERVED=""
 COUNT=0
 while [[ $COUNT -lt 15 ]]; do
     RAW=$(adb_cmd logcat -d 2>/dev/null || true)
-    # Use printf to avoid print treating lines starting with '-' as options
-    # Use grep -F for literal string match on tag containing ':'
-    LINE=$(printf '%s\n' "$RAW" | grep -F "$LOGCAT_TAG" | grep -oE '[0-9]+ [0-9]+' | tail -1 || true)
+    # Match: "...WarpTerminal:PtyOutput: <rows> <cols>" at end-of-line.
+    LINE=$(printf '%s\n' "$RAW" | grep -E "WarpTerminal:PtyOutput:[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]*\$" | tail -1 || true)
     if [[ -n "$LINE" ]]; then
-        OBSERVED="$LINE"
+        # Extract just the two trailing numbers
+        OBSERVED=$(printf '%s' "$LINE" | grep -oE '[0-9]+[[:space:]]+[0-9]+[[:space:]]*$' | head -1 | sed -E 's/[[:space:]]+$//' | tr -s ' ')
         break
     fi
     COUNT=$(( COUNT + 1 ))

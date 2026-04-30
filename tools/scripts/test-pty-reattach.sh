@@ -47,13 +47,13 @@ sleep 2
 # Spawn PTY via broadcast (Service must handle this intent)
 # %3N not supported on all platforms; fall back to seconds * 1000
 T_SPAWN=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo $(( $(date +%s) * 1000 )))
-adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" \
-    -a dev.warp.mobile.PTY_SPAWN \
-    --es cmd "sh" 2>/dev/null || true
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_SPAWN --es cmd 'sh'" 2>/dev/null || true
 sleep 1
-adb_cmd shell am start-foreground-service -n "${PKG}/.WarpTerminalService" \
-    -a dev.warp.mobile.PTY_WRITE \
-    --es data "sleep ${DELAY} && echo ${TOKEN}" 2>/dev/null || true
+# Wrap entire shell cmd in double-quotes; --es data value in single-quotes so
+# the device shell does NOT interpret '&&' as command separator. Without this
+# only "sleep" reaches PTY (6 bytes incl \n) and shell errors with
+# "sleep: Needs 1 argument" before the echo can fire.
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_WRITE --es data 'sleep ${DELAY} && echo ${TOKEN}'" 2>/dev/null || true
 
 # Rotate device 5 times while PTY runs
 for i in {1..5}; do
@@ -62,9 +62,28 @@ for i in {1..5}; do
     sleep 1.5
 done
 
-T_EXPECTED=$(( T_SPAWN + DELAY * 1000 ))
+# Anchor t_expected on the actual PTY_WRITE log timestamp — that's when the
+# `sleep N && echo TOKEN` command actually entered the shell. FGS startup +
+# write dispatch latency (~1-2s) would otherwise inflate the expected delta
+# beyond the 1s acceptance threshold even though sleep itself is exact.
+SPAWN_LOG=$(adb_cmd logcat -d -v epoch 2>/dev/null | grep -F "WarpTerminal:" | grep -F "spawn ok cmdId=default" | tail -1 || true)
+SPAWN_EPOCH=$(printf '%s\n' "$SPAWN_LOG" | grep -oE '^[[:space:]]*[0-9]+\.[0-9]+' | head -1 | tr -d '[:space:]' || true)
+if [[ -n "$SPAWN_EPOCH" ]]; then
+    T_SPAWN=$(python3 -c "print(int(float('$SPAWN_EPOCH') * 1000))" 2>/dev/null || echo "$T_SPAWN")
+fi
 
-# Wait for token with tolerance
+WRITE_LOG=$(adb_cmd logcat -d -v epoch 2>/dev/null | grep -F "WarpTerminal:" | grep -F "PTY_WRITE cmdId=default" | tail -1 || true)
+WRITE_EPOCH=$(printf '%s\n' "$WRITE_LOG" | grep -oE '^[[:space:]]*[0-9]+\.[0-9]+' | head -1 | tr -d '[:space:]' || true)
+if [[ -n "$WRITE_EPOCH" ]]; then
+    T_WRITE=$(python3 -c "print(int(float('$WRITE_EPOCH') * 1000))" 2>/dev/null || echo "$T_SPAWN")
+else
+    T_WRITE=$T_SPAWN
+fi
+T_EXPECTED=$(( T_WRITE + DELAY * 1000 ))
+
+# Wait for token with tolerance. Match ONLY lines where the token stands alone
+# after the WarpTerminal:PtyOutput tag — not the command-echo line that contains
+# 'echo PTY_REATTACH_TOKEN_OK' as part of the user's input.
 FOUND=""
 FOUND_LINE=""
 COUNT=0
@@ -72,7 +91,9 @@ while [[ $COUNT -lt 30 ]]; do
     # Use -v epoch so timestamps are unambiguous seconds since epoch — bypasses
     # timezone, DST, and year-rollover issues that plague MM-DD parsing.
     RAW=$(adb_cmd logcat -d -v epoch 2>/dev/null || true)
-    FOUND_LINE=$(printf '%s\n' "$RAW" | grep -F "$LOGCAT_TAG" | grep "$TOKEN" | tail -1 || true)
+    # Match: "<epoch> <pid> <tid> I WarpTerminal:PtyOutput: PTY_REATTACH_TOKEN_OK"
+    # at end-of-line — excludes echo-back of the input command line.
+    FOUND_LINE=$(printf '%s\n' "$RAW" | grep -E "WarpTerminal:PtyOutput:[[:space:]]+${TOKEN}[[:space:]]*\$" | tail -1 || true)
     if [[ -n "$FOUND_LINE" ]]; then
         FOUND="$FOUND_LINE"
         break

@@ -1,0 +1,14 @@
+Starting service: Intent { act=dev.warp.mobile.PTY_SPAWN cmp=dev.warp.mobile/.WarpTerminalService (has extras) }
+{
+  "device": "R5CX10VFFBA",
+  "pid_before": 1,
+  "pid_after": 0,
+  "orphans": 0,
+  "pass": true,
+  "after_listing": "none",
+  "notif_before": 0,
+  "notif_after": 0,
+  "script_version": "1.0",
+  "git_commit": "e41d3c41212d81dd4985f22cad8ea6cadf2a16a6",
+  "artifact_path": ""
+}

@@ -1,0 +1,14 @@
+Starting service: Intent { act=dev.warp.mobile.PTY_SPAWN cmp=dev.warp.mobile/.WarpTerminalService (has extras) }
+Starting service: Intent { act=dev.warp.mobile.PTY_RESIZE cmp=dev.warp.mobile/.WarpTerminalService (has extras) }
+Starting service: Intent { act=dev.warp.mobile.PTY_WRITE cmp=dev.warp.mobile/.WarpTerminalService (has extras) }
+{
+  "device": "R5CX10VFFBA",
+  "rows": 24,
+  "cols": 80,
+  "expected": "24 80",
+  "observed": "24 80",
+  "pass": true,
+  "script_version": "1.0",
+  "git_commit": "e41d3c41212d81dd4985f22cad8ea6cadf2a16a6",
+  "artifact_path": ""
+}
