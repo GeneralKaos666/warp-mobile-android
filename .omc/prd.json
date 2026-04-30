@@ -58,8 +58,8 @@
     {
       "id": "M2-S03",
       "title": "warpui::platform::android scaffold from headless",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 06-57-03Z CODEX_PASS at warp-src commit 5933841 (warp-mobile/m0-facade pushed to ImL1s/warp). 8-file scaffold matches ralplan §6 M2 table (mod/window/dispatch/vulkan/ime/input/font/text_layout). cfg(target_os = \"android\") dispatch in platform/mod.rs verified. CO-3 fold-in (android-activity/winit reorganization) sound and bounded — cargo tree --target aarch64-linux-android -p warpui shows ONLY android-activity (no font-kit/winit/wgpu/cosmic-text/global-hotkey/fontconfig). desktop_native cfg consistently defined in both warpui/build.rs and warpui_core/build.rs. cargo check -p warpui_core PASS on host; cargo ndk -t arm64-v8a check -p warpui PASS 0 errors / 30 warnings (expected scaffold dead-code, no unsafe/lifetime/Send/Sync). 2 non-blocking nits: private_interfaces warning at android/mod.rs:91 (M2-S04+ will resolve when types become public), pre-existing unused_must_use at platform/app.rs:28 (NOT introduced by S03).",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/ created by copying headless/ as starting base (preserve git history of which files were headless-derived in commit message)",
