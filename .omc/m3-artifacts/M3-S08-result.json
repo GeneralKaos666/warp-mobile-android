@@ -1,0 +1,49 @@
+{
+  "story": "M3-S08",
+  "device_serial": "R5CX10VFFBA",
+  "subtests": {
+    "sgr_color_test": {
+      "sgr_apply_count": "4",
+      "expected": ">=4 (RED/GREEN/BLUE/reset)",
+      "screenshot": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S08-color-test.png",
+      "screenshot_bytes": 44833,
+      "pass": true
+    },
+    "ls_real_pty": {
+      "glyph_quads_observed": "995",
+      "atlas_glyphs_observed": "39",
+      "bytes_ingested_total": 1323,
+      "expected_glyph_quads": ">=600 (~30% of 24x80 viewport filled)",
+      "expected_atlas_glyphs": ">=25 (digits/letters/punctuation diversity)",
+      "expected_bytes_ingested": ">=800 (full PTY ls -la /system dump)",
+      "ls_lines_visible_proxy": 19,
+      "screenshot": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S08-ls-output.png",
+      "screenshot_bytes": 186934,
+      "pass": true
+    },
+    "dynamic_grid_pipeline": {
+      "dynamic_grid_init_ok_lines": 4,
+      "terminal_push_frame_dynamic_ok_lines": 4,
+      "present_ok_lines": 1460,
+      "atlas_glyphs": "39",
+      "glyph_quads": "995",
+      "bg_quads": "0",
+      "pass": true
+    }
+  },
+  "evidence": {
+    "logcat": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S08-logcat-evidence.txt",
+    "color_screenshot": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S08-color-test.png",
+    "ls_screenshot": "/Users/setsuna-new/Documents/warp-mobile-android/.omc/m3-artifacts/M3-S08-ls-output.png",
+    "last_sgr_summary": "05-01 06:47:33.844 21724 21724 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=4,dcs_hook_count=0,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00",
+    "last_dynamic_init_line": "05-01 06:47:37.834 21724 21724 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_init_ok dt_ms=38 rows=24 cols=80 cell=13.5x27px font_size_px=22 atlas_glyphs=39 glyph_quads=995 bg_quads=0"
+  },
+  "deferred_to_m5": {
+    "toybox_color_via_real_pty": "Android stock /system/bin/ls does not emit ANSI colors; full real-PTY color verification requires Termux GNU coreutils ls --color=auto",
+    "linux_pixel_similarity_gate": "Requires Linux reference render with matching font/cell-size; out of scope for M3-S08 functional verification"
+  },
+  "gate": {
+    "overall_pass": true,
+    "criteria": "sgr_apply_count >= 4 AND dynamic_grid_init_ok seen AND glyph_quads >= 600 AND atlas_glyphs >= 25 AND bytes_ingested >= 800 AND both screenshots captured (>1KB)"
+  }
+}

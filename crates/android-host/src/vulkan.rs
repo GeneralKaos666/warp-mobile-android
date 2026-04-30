@@ -99,6 +99,11 @@ struct VulkanSurface {
     /// `attach_static_grid()` after surface init; consumed by
     /// `submit_grid_frame()`. None ⇒ render path falls back to clear-color.
     static_grid: Option<crate::static_grid::StaticGrid>,
+    /// M3-S08: optional per-cell dynamic-grid renderer (runtime mirror).
+    /// Populated by `init_dynamic_grid()`; consumed by
+    /// `submit_dynamic_grid_frame()`. Coexists with `static_grid` so the
+    /// M2-S08 demo path stays usable when terminal_mode is off.
+    dynamic_grid: Option<crate::dynamic_grid::DynamicGrid>,
 }
 
 // SAFETY: ANativeWindow* is ref-counted (NDK contract). Vulkan handles are
@@ -622,6 +627,7 @@ fn init_surface(
         debug_utils_loader,
         debug_messenger,
         static_grid: None,
+        dynamic_grid: None,
     })
 }
 
@@ -637,6 +643,15 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
         log::warn!(target: "WarpStaticGrid",
             "static_grid_dropped reason=swapchain_recreate atlas_glyphs={} instances={}",
             grid.atlas_glyph_count, grid.glyphs_per_frame);
+        grid.destroy(&s.device);
+    }
+    // M3-S08: same lifecycle rule as static_grid for the per-cell dynamic
+    // grid pipeline. Logged so the test driver can detect mid-capture
+    // orientation/scale events.
+    if let Some(grid) = s.dynamic_grid.take() {
+        log::warn!(target: "WarpDynamicGrid",
+            "dynamic_grid_dropped reason=swapchain_recreate atlas_glyphs={} instances={} bg_quads={}",
+            grid.atlas_glyph_count, grid.glyphs_per_frame, grid.bg_quads_per_frame);
         grid.destroy(&s.device);
     }
 
@@ -1539,6 +1554,11 @@ fn destroy_surface(mut s: VulkanSurface) {
         if let Some(grid) = s.static_grid.take() {
             grid.destroy(&s.device);
         }
+        // M3-S08: tear down the dynamic-grid pipeline + atlas BEFORE the
+        // device.
+        if let Some(grid) = s.dynamic_grid.take() {
+            grid.destroy(&s.device);
+        }
         for fb in &s.framebuffers {
             s.device.destroy_framebuffer(*fb, None);
         }
@@ -1945,6 +1965,254 @@ pub(crate) fn static_grid_stats() -> Option<(u32, u32, u32, u32, String)> {
                 g.grid_rows,
                 g.grid_cols,
                 g.text_per_cell.clone(),
+            )
+        })
+    })
+}
+
+// ---------------------------------------------------------------------------
+// M3-S08: per-cell dynamic grid render path (runtime mirror)
+// ---------------------------------------------------------------------------
+
+/// Initializes the per-cell dynamic grid renderer from a `Vec<Vec<Cell>>`
+/// snapshot. Idempotent: replaces the prior dynamic grid if any. Logs
+/// `dynamic_grid_init_ok` for the test driver.
+pub(crate) fn init_dynamic_grid(
+    cells: &[Vec<crate::dynamic_grid::Cell>],
+    font_size_px: f32,
+    cell_w_px: f32,
+    cell_h_px: f32,
+) -> bool {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        log::error!(target: "WarpDynamicGrid", "init_dynamic_grid: no surface attached");
+        return false;
+    };
+    unsafe {
+        let _ = s.device.device_wait_idle();
+        if let Some(old) = s.dynamic_grid.take() {
+            old.destroy(&s.device);
+        }
+    }
+    let t0 = uptime_millis();
+    let grid = unsafe {
+        crate::dynamic_grid::DynamicGrid::new(
+            &s.instance,
+            &s.device,
+            s.phys_device,
+            s.graphics_queue,
+            s.command_pool,
+            s.render_pass,
+            cells,
+            font_size_px,
+            cell_w_px,
+            cell_h_px,
+        )
+    };
+    match grid {
+        Ok(g) => {
+            let dt = uptime_millis() - t0;
+            log::info!(
+                target: "WarpDynamicGrid",
+                "dynamic_grid_init_ok dt_ms={} rows={} cols={} cell={}x{}px font_size_px={} \
+                 atlas_glyphs={} glyph_quads={} bg_quads={}",
+                dt, g.grid_rows, g.grid_cols, g.cell_w_px, g.cell_h_px, g.font_size_px,
+                g.atlas_glyph_count, g.glyphs_per_frame, g.bg_quads_per_frame
+            );
+            s.dynamic_grid = Some(g);
+            true
+        }
+        Err(e) => {
+            log::error!(
+                target: "WarpDynamicGrid",
+                "dynamic_grid_init_fail reason={:?}", e
+            );
+            false
+        }
+    }
+}
+
+unsafe fn record_and_present_dynamic_grid(
+    s: &mut VulkanSurface,
+    clear_rgba: [f32; 4],
+) -> Result<FrameOutcome, vk::Result> {
+    let device = &s.device;
+
+    let (image_index, acquire_suboptimal) = match s.swapchain_loader.acquire_next_image(
+        s.swapchain,
+        u64::MAX,
+        s.image_available,
+        vk::Fence::null(),
+    ) {
+        Ok(pair) => pair,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => return Err(e),
+    };
+
+    let cmd_buf = s.command_buffers[image_index as usize];
+    let begin_info = vk::CommandBufferBeginInfo::default()
+        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    device.begin_command_buffer(cmd_buf, &begin_info)?;
+
+    let clear_values = [vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: clear_rgba,
+        },
+    }];
+    let rp_begin = vk::RenderPassBeginInfo::default()
+        .render_pass(s.render_pass)
+        .framebuffer(s.framebuffers[image_index as usize])
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D::default(),
+            extent: s.extent,
+        })
+        .clear_values(&clear_values);
+    device.cmd_begin_render_pass(cmd_buf, &rp_begin, vk::SubpassContents::INLINE);
+    if let Some(grid) = s.dynamic_grid.as_ref() {
+        grid.record_draw(
+            device,
+            cmd_buf,
+            s.extent.width as f32,
+            s.extent.height as f32,
+        );
+    }
+    device.cmd_end_render_pass(cmd_buf);
+    device.end_command_buffer(cmd_buf)?;
+
+    let wait_semaphores = [s.image_available];
+    let signal_semaphores = [s.render_finished_per_image[image_index as usize]];
+    let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+    let cmd_bufs = [cmd_buf];
+    let submit_info = vk::SubmitInfo::default()
+        .wait_semaphores(&wait_semaphores)
+        .wait_dst_stage_mask(&wait_stages)
+        .command_buffers(&cmd_bufs)
+        .signal_semaphores(&signal_semaphores);
+    device.queue_submit(s.graphics_queue, &[submit_info], s.fence)?;
+
+    let swapchains = [s.swapchain];
+    let image_indices = [image_index];
+    let present_info = vk::PresentInfoKHR::default()
+        .wait_semaphores(&signal_semaphores)
+        .swapchains(&swapchains)
+        .image_indices(&image_indices);
+    let present_result = s
+        .swapchain_loader
+        .queue_present(s.graphics_queue, &present_info);
+
+    let present_suboptimal = match present_result {
+        Ok(suboptimal) => suboptimal,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            device.queue_wait_idle(s.graphics_queue)?;
+            device.reset_fences(&[s.fence])?;
+            device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => {
+            let _ = device.queue_wait_idle(s.graphics_queue);
+            let _ = device.reset_fences(&[s.fence]);
+            let _ = device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty());
+            return Err(e);
+        }
+    };
+
+    device.queue_wait_idle(s.graphics_queue)?;
+    device.reset_fences(&[s.fence])?;
+    device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
+
+    if acquire_suboptimal || present_suboptimal {
+        Ok(FrameOutcome::PresentedSuboptimal)
+    } else {
+        Ok(FrameOutcome::Presented)
+    }
+}
+
+/// Submits a single frame consisting of a clear + the dynamic grid draw.
+/// Returns `true` on successful present. If no grid is attached, this is
+/// equivalent to `submit_clear_frame`.
+pub(crate) fn submit_dynamic_grid_frame(clear_rgba: [f32; 4]) -> bool {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        return false;
+    };
+    if s.dynamic_grid.is_none() {
+        log::debug!(target: "WarpDynamicGrid",
+            "submit_dynamic_grid_frame called with no grid attached; falling back to clear");
+    }
+    match unsafe { record_and_present_dynamic_grid(s, clear_rgba) } {
+        Ok(FrameOutcome::Presented) => {
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            let ts = uptime_millis();
+            log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
+            true
+        }
+        Ok(FrameOutcome::PresentedSuboptimal) => {
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            let ts = uptime_millis();
+            log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
+            log::warn!(target: "WarpVulkan", "swapchain suboptimal — recreating before next frame");
+            if let Err(e) = unsafe { recreate_swapchain(s) } {
+                log::error!(target: "WarpVulkan", "recreate after suboptimal failed: {:?}", e);
+            }
+            true
+        }
+        Ok(FrameOutcome::OutOfDate) => {
+            log::warn!(target: "WarpVulkan", "swapchain out-of-date — recreating");
+            if let Err(e) = unsafe { recreate_swapchain(s) } {
+                log::error!(target: "WarpVulkan", "recreate failed: {:?}", e);
+            }
+            false
+        }
+        Err(e) => {
+            log::error!(target: "WarpVulkan", "dynamic_grid present failed: {:?}", e);
+            false
+        }
+    }
+}
+
+/// Whether a dynamic grid is currently attached. Used by JNI for
+/// diagnostic logging.
+#[allow(dead_code)]
+pub(crate) fn dynamic_grid_attached() -> bool {
+    let state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    state.as_ref().map(|s| s.dynamic_grid.is_some()).unwrap_or(false)
+}
+
+/// Diagnostic stats: (atlas_glyph_count, glyph_quads, bg_quads, rows, cols).
+pub(crate) fn dynamic_grid_stats() -> Option<(u32, u32, u32, u32, u32)> {
+    let state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    state.as_ref().and_then(|s| {
+        s.dynamic_grid.as_ref().map(|g| {
+            (
+                g.atlas_glyph_count,
+                g.glyphs_per_frame,
+                g.bg_quads_per_frame,
+                g.grid_rows,
+                g.grid_cols,
             )
         })
     })

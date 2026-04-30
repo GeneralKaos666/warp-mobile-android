@@ -17,6 +17,11 @@ pub mod input;
 #[cfg(target_os = "android")]
 mod static_grid;
 
+// M3-S08: per-cell dynamic grid renderer (runtime mirror of
+// `warp-src/crates/warpui/src/platform/android/dynamic_grid.rs`).
+#[cfg(target_os = "android")]
+mod dynamic_grid;
+
 // M3-S04: terminal model. Pure Rust + atomics (mirrors the canonical facade
 // `warp_terminal_mobile_facade::render::TerminalModel`); built on host targets
 // too so `cargo test -p warp-mobile-android-host` exercises ingest/dirty/snapshot.
@@ -494,6 +499,63 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderStaticGridAttached(
     if vulkan::static_grid_attached() { JNI_TRUE } else { JNI_FALSE }
 }
 
+/// M3-S08 — submit one frame of the per-cell dynamic grid (without
+/// re-initialization). Used by the Choreographer fallback path when the
+/// model is not dirty: the previously-initialized dynamic grid is
+/// re-presented so the surface keeps showing the last PTY frame instead
+/// of going to clear color between dirty pushes.
+///
+/// Returns `true` on successful present. If no dynamic grid is attached,
+/// falls back to clear-color (which the caller observes via the same
+/// black-screen path as before).
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDrawDynamicGridFrame(
+    _env: JNIEnv,
+    _class: JClass,
+    r: jfloat,
+    g: jfloat,
+    b: jfloat,
+    a: jfloat,
+) -> jboolean {
+    let ok = vulkan::submit_dynamic_grid_frame([r, g, b, a]);
+    if ok { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Returns true if a dynamic grid is currently attached.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDynamicGridAttached(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jboolean {
+    if vulkan::dynamic_grid_attached() { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// M3-S08 — diagnostic stats: comma-separated CSV
+///   "atlas_glyphs=N,glyph_quads=N,bg_quads=N,rows=N,cols=N"
+/// or empty string if no dynamic grid attached. Used by the driver.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDynamicGridStats(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let s = match vulkan::dynamic_grid_stats() {
+        Some((atlas, glyph_q, bg_q, rows, cols)) => format!(
+            "atlas_glyphs={},glyph_quads={},bg_quads={},rows={},cols={}",
+            atlas, glyph_q, bg_q, rows, cols
+        ),
+        None => String::new(),
+    };
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
 /// Returns a comma-separated diagnostic string:
 ///   "atlas_glyphs=N,glyphs_per_frame=N,rows=N,cols=N,text=…"
 /// or empty string if no grid attached. Used by the driver to round-trip
@@ -906,55 +968,61 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFram
         );
         return -1;
     }
-    let snap = terminal_model::snapshot_text();
-    if snap.is_empty() {
+
+    // M3-S08: route through the per-cell dynamic_grid renderer instead of
+    // the M3-S04 single-line static_grid projection. The dynamic grid:
+    //   * preserves per-cell SGR fg/bg colors (M3 Acceptance #1)
+    //   * draws line-wrapped output (each row of the model snapshot lands at
+    //     its own pixel-y, so wrapping is implicit)
+    //   * leaves the M2-S08 static_grid pipeline untouched (still drives the
+    //     `--ez grid_mode true` demo path)
+    let cells = terminal_model::snapshot_cells();
+    if cells.is_empty() {
         log::warn!(
             target: "WarpTerminalModel",
-            "terminalTakeDirtyAndPushFrame: empty snapshot; skipping"
+            "terminalTakeDirtyAndPushFrame: empty cells snapshot; skipping"
         );
         return 0;
     }
-    // M3-S04 baseline: the existing static_grid pipeline renders ONE text
-    // string replicated across every grid cell (M2-S08 acceptance). It
-    // doesn't natively support per-row text. We pick the first non-blank
-    // row of the snapshot as the renderable text — this proves the
-    // PTY→model→renderer pipeline end-to-end without requiring the M3-S05
-    // dynamic-grid extension.
-    //
-    // M3-S05 will introduce per-cell color attrs which mandates the
-    // dynamic-grid extension; at that point the renderer can consume
-    // multi-row snapshots directly. For M3-S04 the single-line projection
-    // is the defensible baseline.
-    let render_text: String = snap
-        .split('\n')
-        .map(|line| line.trim_end_matches(' '))
-        .find(|line| !line.is_empty())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-            // All-blank snapshot — render a placeholder dot so the static
-            // grid pipeline stays valid (it rejects zero-instance buffers).
-            ".".to_string()
-        });
-    let init_ok = vulkan::init_static_grid(
-        &render_text,
+    // Translate from `terminal_model::Cell` to `dynamic_grid::Cell` (same
+    // wire shape; the duplication exists to keep dynamic_grid free of the
+    // facade-layer Cargo dep). Sized at construction so we don't grow the
+    // outer/inner Vecs on the hot path.
+    let dyn_cells: Vec<Vec<crate::dynamic_grid::Cell>> = cells
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|c| crate::dynamic_grid::Cell {
+                    glyph: c.glyph,
+                    fg: c.fg,
+                    bg: c.bg,
+                    attrs: c.attrs,
+                })
+                .collect()
+        })
+        .collect();
+
+    let init_ok = vulkan::init_dynamic_grid(
+        &dyn_cells,
         font_size_px,
-        rows as u32,
-        cols as u32,
         cell_w_px,
         cell_h_px,
     );
     if !init_ok {
         log::error!(
             target: "WarpTerminalModel",
-            "terminalTakeDirtyAndPushFrame: init_static_grid failed; dropping frame"
+            "terminalTakeDirtyAndPushFrame: init_dynamic_grid failed; dropping frame"
         );
         return -1;
     }
-    let present_ok = vulkan::submit_grid_frame([1.0, 0.0, 1.0, 1.0]);
+    // Black clear color so non-default-bg cells stand out instead of being
+    // washed by the M2-S08 demo magenta.
+    let present_ok = vulkan::submit_dynamic_grid_frame([0.0, 0.0, 0.0, 1.0]);
+    let total_cells = dyn_cells.iter().map(|r| r.len()).sum::<usize>();
     log::info!(
         target: "WarpTerminalModel",
-        "terminal_push_frame ok={} render_text_len={} snapshot_len={} rows={} cols={} render_text={:?}",
-        present_ok, render_text.len(), snap.len(), rows, cols, render_text
+        "terminal_push_frame_dynamic ok={} cells={} rows={} cols={}",
+        present_ok, total_cells, rows, cols
     );
     if present_ok { 1 } else { -1 }
 }

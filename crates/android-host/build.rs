@@ -31,6 +31,8 @@ fn main() {
         // shader edits.
         println!("cargo:rerun-if-changed=shaders/grid.vert");
         println!("cargo:rerun-if-changed=shaders/grid.frag");
+        println!("cargo:rerun-if-changed=shaders/dynamic_grid.vert");
+        println!("cargo:rerun-if-changed=shaders/dynamic_grid.frag");
         return;
     }
 
@@ -50,6 +52,9 @@ fn main() {
     for (src_name, out_name) in &[
         ("grid.vert", "grid.vert.spv"),
         ("grid.frag", "grid.frag.spv"),
+        // M3-S08: per-cell dynamic grid shaders (runtime mirror).
+        ("dynamic_grid.vert", "dynamic_grid.vert.spv"),
+        ("dynamic_grid.frag", "dynamic_grid.frag.spv"),
     ] {
         let src = shader_dir.join(src_name);
         let dst = out_dir.join(out_name);

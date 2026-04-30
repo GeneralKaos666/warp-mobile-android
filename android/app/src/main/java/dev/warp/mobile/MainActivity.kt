@@ -107,8 +107,14 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                         gridFontSizePx, gridRows, gridCols, gridCellWPx, gridCellHPx
                     )
                     when (pushResult) {
-                        1 -> true // dirty; pushed
-                        0 -> NativeBridge.renderDrawGridFrame(1.0f, 0.0f, 1.0f, 1.0f)
+                        // M3-S08: dirty bit set; the JNI re-initialized the
+                        // dynamic_grid + presented one frame.
+                        1 -> true
+                        // No-dirty fallback: re-present the last dynamic_grid
+                        // snapshot so the user keeps seeing the per-cell text
+                        // instead of a clear-color frame between PTY chunks.
+                        // Black clear matches the bg of the in-flight cells.
+                        0 -> NativeBridge.renderDrawDynamicGridFrame(0.0f, 0.0f, 0.0f, 1.0f)
                         else -> false
                     }
                 }
@@ -517,30 +523,20 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             attachedWidth = width
             attachedHeight = height
             renderActive = true
-            // M3-S04: if terminal mode was requested before surface was
-            // ready, pre-init the grid with placeholder text. This
-            // guarantees the first vsync sees a usable pipeline even if no
-            // PTY chunk has arrived yet. Subsequent push_frame calls
-            // re-init the grid only on dirty.
-            //
-            // The placeholder must produce ≥1 non-zero-area glyph (the
-            // static grid pipeline rejects zero-instance buffers), so we
-            // use a single dot. The very first PTY chunk's dirty-vsync
-            // flips overwrites this with the real model snapshot.
+            // M3-S08: terminal_mode now uses the per-cell dynamic_grid
+            // pipeline driven by `terminalTakeDirtyAndPushFrame`. We do NOT
+            // pre-init a static_grid here — the very first PTY chunk's
+            // dirty-vsync triggers `init_dynamic_grid` from the real
+            // TerminalModel cell snapshot. Until that lands, the
+            // Choreographer fallback path renders a black clear (matching
+            // the eventual cell bg).
             if (terminalMode) {
-                val initOk = NativeBridge.renderInitStaticGrid(
-                    ".", gridFontSizePx, gridRows, gridCols, gridCellWPx, gridCellHPx
-                )
                 Log.i(
                     TAG,
-                    "terminal_mode init (post-surfaceCreated) ok=$initOk " +
+                    "terminal_mode ready (post-surfaceCreated) " +
                         "rows=$gridRows cols=$gridCols " +
                         "cell=${gridCellWPx}x${gridCellHPx}px font_size_px=$gridFontSizePx"
                 )
-                if (!initOk) {
-                    Log.w(TAG, "terminal_mode init failed; falling back to clear-frame")
-                    terminalMode = false
-                }
             }
             // M2-S08: if grid mode was requested before surface was ready, do
             // the init now while we have a valid swapchain. The Rust side

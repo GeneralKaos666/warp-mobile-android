@@ -508,6 +508,18 @@ impl TerminalModel {
         out
     }
 
+    /// M3-S08: clone the full per-cell grid for the dynamic_grid renderer.
+    /// Returns `rows × cols` of [`Cell`] preserving glyph + fg/bg/attrs.
+    /// Bounded copy (24×80 = 1920 cells × 16 bytes = ~30KB per frame on the
+    /// hot path; flagship S24U can absorb this at 60Hz).
+    pub fn snapshot_cells(&self) -> Vec<Vec<Cell>> {
+        let state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        state.cells.clone()
+    }
+
     pub fn dims(&self) -> (usize, usize) {
         let state = match self.inner.lock() {
             Ok(g) => g,
@@ -1214,6 +1226,12 @@ pub fn take_dirty() -> bool {
 
 pub fn snapshot_text() -> String {
     global_model().snapshot_text()
+}
+
+/// M3-S08: process-wide accessor returning the full cell grid for the
+/// dynamic_grid renderer.
+pub fn snapshot_cells() -> Vec<Vec<Cell>> {
+    global_model().snapshot_cells()
 }
 
 pub fn dims() -> (usize, usize) {

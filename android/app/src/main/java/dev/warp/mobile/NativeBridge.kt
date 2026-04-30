@@ -155,6 +155,35 @@ object NativeBridge {
      */
     external fun renderStaticGridStats(): String
 
+    // ── M3-S08: per-cell dynamic grid (terminal_mode renderer) ──────────────
+    //
+    // Mirrors `renderDrawGridFrame` / `renderStaticGridAttached` /
+    // `renderStaticGridStats` but for the dynamic grid pipeline that
+    // `terminalTakeDirtyAndPushFrame` initializes from the per-cell terminal
+    // model (see `crates/android-host/src/dynamic_grid.rs`).
+    //
+    // The Choreographer frame callback (MainActivity.frameCallback) calls
+    // `renderDrawDynamicGridFrame` on the no-dirty-bit path so the surface
+    // keeps presenting the last per-cell snapshot instead of going to
+    // clear-color between dirty pushes.
+
+    /**
+     * Submit one dynamic-grid present (no re-init). Returns true on
+     * successful `vkQueuePresentKHR`; false on no-grid-attached or transient
+     * Vulkan failure (caller falls back to clear).
+     */
+    external fun renderDrawDynamicGridFrame(r: Float, g: Float, b: Float, a: Float): Boolean
+
+    /** True iff a dynamic grid has been initialized. */
+    external fun renderDynamicGridAttached(): Boolean
+
+    /**
+     * Returns "atlas_glyphs=N,glyph_quads=N,bg_quads=N,rows=N,cols=N" if a
+     * dynamic grid is attached, empty string otherwise. Used by the M3-S08
+     * driver to round-trip diagnostic info into the result JSON.
+     */
+    external fun renderDynamicGridStats(): String
+
     // ── IME composing-text state machine (M2-S10) ───────────────────────────
     //
     // Drives the state machine in `crates/android-host/src/ime.rs` (which

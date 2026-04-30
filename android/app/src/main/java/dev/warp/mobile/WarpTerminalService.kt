@@ -211,7 +211,21 @@ class WarpTerminalService : Service() {
 
     private fun handleWrite(intent: Intent) {
         val cmdId = intent.getStringExtra("cmd_id") ?: "default"
-        val data  = intent.getByteArrayExtra("data")
+        // Decoder precedence:
+        //   1. `data` byte-array extra (rare via adb; intra-process broadcasts).
+        //   2. `data_b64` base64-encoded string extra (M3-S08 — sidesteps the
+        //      `am broadcast` argument parser that treats any value containing
+        //      a `-l` / `-a`-shaped token as a flag).
+        //   3. `data` plain string extra (legacy / simple ASCII).
+        val data: ByteArray = intent.getByteArrayExtra("data")
+            ?: intent.getStringExtra("data_b64")?.let {
+                try {
+                    android.util.Base64.decode(it, android.util.Base64.DEFAULT)
+                } catch (e: IllegalArgumentException) {
+                    Log.e(LOG_TAG, "PTY_WRITE: invalid data_b64 ${e.message}")
+                    return
+                }
+            }
             ?: intent.getStringExtra("data")?.let {
                 val s = it.replace("\\n", "\n").replace("\\r", "\r")
                 val bytes = s.toByteArray()
