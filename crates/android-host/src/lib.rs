@@ -5,6 +5,9 @@ pub mod pty;
 mod font_render;
 
 #[cfg(target_os = "android")]
+mod static_grid;
+
+#[cfg(target_os = "android")]
 mod vulkan;
 
 use jni::objects::{JByteArray, JClass, JObjectArray, JString};
@@ -391,6 +394,112 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderCaptureFrameWithText(
         Some(_) => JNI_TRUE,
         None => JNI_FALSE,
     }
+}
+
+// ── M2-S08: static glyph grid renderer JNI bindings ────────────────────────
+
+/// M2-S08: initialize the static-grid GPU pipeline.
+///
+/// Builds the glyph atlas + per-instance vertex buffer + Vulkan pipeline once.
+/// All expensive work (cosmic-text shaping, swash rasterization, GPU upload,
+/// pipeline creation) happens synchronously in this call. Subsequent
+/// `renderDrawGridFrame` calls are pure GPU draws with zero per-frame
+/// allocations.
+///
+/// Returns `true` on success. The Rust side logs `static_grid_init_ok dt_ms=…
+/// text=… rows=… cols=… atlas_glyphs=… instances=…` which the test driver
+/// greps for.
+///
+/// Idempotent: if a grid is already attached, the old one is destroyed first.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderInitStaticGrid(
+    mut env: JNIEnv,
+    _class: JClass,
+    text: JString,
+    font_size_px: jfloat,
+    rows: jint,
+    cols: jint,
+    cell_w_px: jfloat,
+    cell_h_px: jfloat,
+) -> jboolean {
+    init_logger();
+    let text_str: String = match env.get_string(&text) {
+        Ok(s) => s.into(),
+        Err(e) => {
+            log::error!(target: "warp-android-host",
+                "renderInitStaticGrid: could not extract text JString: {:?}", e);
+            return JNI_FALSE;
+        }
+    };
+    if rows <= 0 || cols <= 0 {
+        log::error!(target: "warp-android-host",
+            "renderInitStaticGrid: invalid grid dims rows={} cols={}", rows, cols);
+        return JNI_FALSE;
+    }
+    let ok = vulkan::init_static_grid(
+        &text_str,
+        font_size_px,
+        rows as u32,
+        cols as u32,
+        cell_w_px,
+        cell_h_px,
+    );
+    if ok { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// M2-S08: submit one grid frame (clear + grid draw + present).
+///
+/// Returns `true` on successful `vkQueuePresentKHR`. If no grid has been
+/// initialized, the call falls back to a clear-color frame.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderDrawGridFrame(
+    _env: JNIEnv,
+    _class: JClass,
+    r: jfloat,
+    g: jfloat,
+    b: jfloat,
+    a: jfloat,
+) -> jboolean {
+    let ok = vulkan::submit_grid_frame([r, g, b, a]);
+    if ok { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Returns true if a static grid is currently attached.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderStaticGridAttached(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jboolean {
+    if vulkan::static_grid_attached() { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Returns a comma-separated diagnostic string:
+///   "atlas_glyphs=N,glyphs_per_frame=N,rows=N,cols=N,text=…"
+/// or empty string if no grid attached. Used by the driver to round-trip
+/// diagnostic info into the result JSON.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_renderStaticGridStats(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let s = match vulkan::static_grid_stats() {
+        Some((atlas, ppf, rows, cols, text)) => format!(
+            "atlas_glyphs={},glyphs_per_frame={},rows={},cols={},text={}",
+            atlas, ppf, rows, cols, text
+        ),
+        None => String::new(),
+    };
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
 }
 
 // On non-Android Unix targets (host-side cargo test) the Vulkan symbols are

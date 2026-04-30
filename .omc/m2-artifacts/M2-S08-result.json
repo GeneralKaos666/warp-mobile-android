@@ -1,0 +1,57 @@
+{
+  "story": "M2-S08",
+  "device_serial": "R5CX10VFFBA",
+  "capture_seconds": 30,
+  "grid": {
+    "rows": 20,
+    "cols": 50,
+    "cell_w_px": 100.0,
+    "cell_h_px": 110.0,
+    "font_size_px": 20.0,
+    "text_per_cell": "Hello, World",
+    "glyphs_per_frame": 11000,
+    "atlas_glyphs": 9,
+    "init_dt_ms": 81
+  },
+  "frames_observed": 4172,
+  "first_frame_num": 1,
+  "last_frame_num": 4172,
+  "first_ts_ms": 120487191,
+  "last_ts_ms": 120521898,
+  "attach_ts_ms": 120486900,
+  "detach_ts_ms": null,
+  "frame_interval_ms": {
+    "p50": 8,
+    "p95": 9,
+    "p99": 10,
+    "count": 4171
+  },
+  "peak_fps_in_1s_window": 122,
+  "validation_layer": {
+    "clean": true,
+    "layer_loaded": true,
+    "warn_count": 0,
+    "err_count": 0,
+    "sample_lines": [
+      {
+        "severity": "D",
+        "line": "04-30 19:44:54.435 D/warp-android-host( 8023): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11109.bin for reading (it may not exist yet)"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 19:44:54.595 D/warp-android-host( 8023): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11109.bin for writing"
+      },
+      {
+        "severity": "D",
+        "line": "04-30 19:44:54.604 D/warp-android-host( 8023): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11109.bin for reading (it may not exist yet)"
+      }
+    ]
+  },
+  "acceptance_gate": {
+    "static_grid_init_ok_seen": true,
+    "fps_60_pass": true,
+    "fps_window_pass": true,
+    "validation_clean_pass": true,
+    "overall_pass": true
+  }
+}

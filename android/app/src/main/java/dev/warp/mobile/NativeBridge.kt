@@ -103,4 +103,55 @@ object NativeBridge {
         baselineX: Float,
         baselineY: Float
     ): Boolean
+
+    // ── Static glyph grid (M2-S08) ──────────────────────────────────────────
+    //
+    // Drives the GPU pipeline in `crates/android-host/src/static_grid.rs`
+    // which mirrors `warp-src/crates/warpui/src/platform/android/static_grid.rs`.
+    // The pipeline pre-rasterizes glyphs into a 1024×1024 R8 atlas, builds a
+    // per-instance vertex buffer (one entry per glyph in the grid), and
+    // draws all `rows × cols × glyphs_per_string` instances in a single
+    // `vkCmdDraw` call per frame. Targets 60fps p95<16.6ms on Galaxy S24
+    // Ultra (Adreno 750) for the M2a Acceptance #1 gate.
+
+    /**
+     * Initializes the static glyph grid. Pre-rasterizes glyphs into the GPU
+     * atlas + builds the per-instance vertex buffer + creates the pipeline.
+     * Idempotent — calling again replaces any prior grid.
+     *
+     * Synchronous; call from a non-rendering thread or before starting the
+     * Choreographer loop.
+     *
+     * Returns `true` on success; logs `static_grid_init_ok dt_ms=… text=…
+     * rows=… cols=… atlas_glyphs=… instances=…` which the test driver greps.
+     */
+    external fun renderInitStaticGrid(
+        text: String,
+        fontSizePx: Float,
+        rows: Int,
+        cols: Int,
+        cellWPx: Float,
+        cellHPx: Float
+    ): Boolean
+
+    /**
+     * Submits one grid frame: clear → draw all instances → present. Returns
+     * `true` on successful `vkQueuePresentKHR`. If no grid is initialized,
+     * falls back to a clear-color frame.
+     *
+     * The Rust side logs `present_ok frame=N ts=M` per successful present,
+     * the same schema as `renderClearFrame`, so the existing
+     * `tools/scripts/test-render-scene.sh` parser is reusable.
+     */
+    external fun renderDrawGridFrame(r: Float, g: Float, b: Float, a: Float): Boolean
+
+    /** True iff a static grid has been successfully attached. */
+    external fun renderStaticGridAttached(): Boolean
+
+    /**
+     * Returns "atlas_glyphs=N,glyphs_per_frame=N,rows=N,cols=N,text=…" if a
+     * grid is attached, empty string otherwise. Used by the M2-S08 driver to
+     * round-trip diagnostic info into the result JSON.
+     */
+    external fun renderStaticGridStats(): String
 }

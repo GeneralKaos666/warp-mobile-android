@@ -95,6 +95,10 @@ struct VulkanSurface {
     fence: vk::Fence,
     debug_utils_loader: Option<ash::ext::debug_utils::Instance>,
     debug_messenger: vk::DebugUtilsMessengerEXT,
+    /// M2-S08: optional static-glyph-grid renderer. Populated by
+    /// `attach_static_grid()` after surface init; consumed by
+    /// `submit_grid_frame()`. None ⇒ render path falls back to clear-color.
+    static_grid: Option<crate::static_grid::StaticGrid>,
 }
 
 // SAFETY: ANativeWindow* is ref-counted (NDK contract). Vulkan handles are
@@ -617,12 +621,24 @@ fn init_surface(
         fence,
         debug_utils_loader,
         debug_messenger,
+        static_grid: None,
     })
 }
 
 unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     let t0 = uptime_millis();
     s.device.device_wait_idle()?;
+
+    // M2-S08: the static-grid pipeline references the current render_pass and
+    // is no longer valid once we destroy it below. Drop it here so the next
+    // submit_grid_frame falls back to clear-color until JNI re-initializes.
+    // Java side observes the `static_grid_dropped` log line and may re-init.
+    if let Some(grid) = s.static_grid.take() {
+        log::warn!(target: "WarpStaticGrid",
+            "static_grid_dropped reason=swapchain_recreate atlas_glyphs={} instances={}",
+            grid.atlas_glyph_count, grid.glyphs_per_frame);
+        grid.destroy(&s.device);
+    }
 
     for fb in s.framebuffers.drain(..) {
         s.device.destroy_framebuffer(fb, None);
@@ -1513,10 +1529,16 @@ pub(crate) fn capture_to_png_with_text(
     })
 }
 
-fn destroy_surface(s: VulkanSurface) {
+fn destroy_surface(mut s: VulkanSurface) {
     // SAFETY: ordered RAII teardown — wait_idle, per-surface, device, instance, native_window.
     unsafe {
         let _ = s.device.device_wait_idle();
+        // M2-S08: tear down the static-grid pipeline + atlas BEFORE the
+        // device, so its image/buffer/pipeline handles are valid at destroy
+        // time.
+        if let Some(grid) = s.static_grid.take() {
+            grid.destroy(&s.device);
+        }
         for fb in &s.framebuffers {
             s.device.destroy_framebuffer(*fb, None);
         }
@@ -1660,4 +1682,270 @@ pub(crate) fn submit_clear_frame(clear_rgba: [f32; 4]) -> bool {
 #[allow(dead_code)]
 pub(crate) fn frames_presented() -> u64 {
     FRAME_COUNTER.lock().map(|g| *g).unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
+// M2-S08: static glyph grid render path
+// ---------------------------------------------------------------------------
+
+/// Initializes the static glyph grid renderer. Builds the atlas + per-instance
+/// vertex buffer + pipeline once; subsequent `submit_grid_frame` calls reuse
+/// these resources at zero per-frame allocation cost.
+///
+/// Returns true on success. Logs `static_grid_init_ok` with diagnostic
+/// counters; the test driver greps for these.
+///
+/// Idempotent: if a grid is already attached, the old one is destroyed first.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn init_static_grid(
+    text_per_cell: &str,
+    font_size_px: f32,
+    rows: u32,
+    cols: u32,
+    cell_w_px: f32,
+    cell_h_px: f32,
+) -> bool {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        log::error!(target: "WarpStaticGrid", "init_static_grid: no surface attached");
+        return false;
+    };
+    // SAFETY: device_wait_idle followed by static_grid drop avoids in-flight
+    // command buffers referencing the old grid.
+    unsafe {
+        let _ = s.device.device_wait_idle();
+        if let Some(old) = s.static_grid.take() {
+            old.destroy(&s.device);
+        }
+    }
+    let t0 = uptime_millis();
+    let grid = unsafe {
+        crate::static_grid::StaticGrid::new(
+            &s.instance,
+            &s.device,
+            s.phys_device,
+            s.graphics_queue,
+            s.command_pool,
+            s.render_pass,
+            text_per_cell,
+            font_size_px,
+            rows,
+            cols,
+            cell_w_px,
+            cell_h_px,
+        )
+    };
+    match grid {
+        Ok(g) => {
+            let dt = uptime_millis() - t0;
+            log::info!(
+                target: "WarpStaticGrid",
+                "static_grid_init_ok dt_ms={} text={:?} rows={} cols={} cell={}x{}px font_size_px={} \
+                 atlas_glyphs={} instances={}",
+                dt, text_per_cell, rows, cols, cell_w_px, cell_h_px, font_size_px,
+                g.atlas_glyph_count, g.glyphs_per_frame
+            );
+            s.static_grid = Some(g);
+            true
+        }
+        Err(e) => {
+            log::error!(
+                target: "WarpStaticGrid",
+                "static_grid_init_fail reason={:?}", e
+            );
+            false
+        }
+    }
+}
+
+unsafe fn record_and_present_grid(
+    s: &mut VulkanSurface,
+    clear_rgba: [f32; 4],
+) -> Result<FrameOutcome, vk::Result> {
+    let device = &s.device;
+
+    let (image_index, acquire_suboptimal) = match s.swapchain_loader.acquire_next_image(
+        s.swapchain,
+        u64::MAX,
+        s.image_available,
+        vk::Fence::null(),
+    ) {
+        Ok(pair) => pair,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => return Err(e),
+    };
+
+    let cmd_buf = s.command_buffers[image_index as usize];
+    let begin_info = vk::CommandBufferBeginInfo::default()
+        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    device.begin_command_buffer(cmd_buf, &begin_info)?;
+
+    let clear_values = [vk::ClearValue {
+        color: vk::ClearColorValue {
+            float32: clear_rgba,
+        },
+    }];
+    let rp_begin = vk::RenderPassBeginInfo::default()
+        .render_pass(s.render_pass)
+        .framebuffer(s.framebuffers[image_index as usize])
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D::default(),
+            extent: s.extent,
+        })
+        .clear_values(&clear_values);
+    device.cmd_begin_render_pass(cmd_buf, &rp_begin, vk::SubpassContents::INLINE);
+    if let Some(grid) = s.static_grid.as_ref() {
+        grid.record_draw(
+            device,
+            cmd_buf,
+            s.extent.width as f32,
+            s.extent.height as f32,
+        );
+    }
+    device.cmd_end_render_pass(cmd_buf);
+    device.end_command_buffer(cmd_buf)?;
+
+    let wait_semaphores = [s.image_available];
+    let signal_semaphores = [s.render_finished_per_image[image_index as usize]];
+    let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+    let cmd_bufs = [cmd_buf];
+    let submit_info = vk::SubmitInfo::default()
+        .wait_semaphores(&wait_semaphores)
+        .wait_dst_stage_mask(&wait_stages)
+        .command_buffers(&cmd_bufs)
+        .signal_semaphores(&signal_semaphores);
+    device.queue_submit(s.graphics_queue, &[submit_info], s.fence)?;
+
+    let swapchains = [s.swapchain];
+    let image_indices = [image_index];
+    let present_info = vk::PresentInfoKHR::default()
+        .wait_semaphores(&signal_semaphores)
+        .swapchains(&swapchains)
+        .image_indices(&image_indices);
+    let present_result = s
+        .swapchain_loader
+        .queue_present(s.graphics_queue, &present_info);
+
+    let present_suboptimal = match present_result {
+        Ok(suboptimal) => suboptimal,
+        Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            device.queue_wait_idle(s.graphics_queue)?;
+            device.reset_fences(&[s.fence])?;
+            device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
+            return Ok(FrameOutcome::OutOfDate);
+        }
+        Err(e) => {
+            let _ = device.queue_wait_idle(s.graphics_queue);
+            let _ = device.reset_fences(&[s.fence]);
+            let _ = device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty());
+            return Err(e);
+        }
+    };
+
+    device.queue_wait_idle(s.graphics_queue)?;
+    device.reset_fences(&[s.fence])?;
+    device.reset_command_pool(s.command_pool, vk::CommandPoolResetFlags::empty())?;
+
+    if acquire_suboptimal || present_suboptimal {
+        Ok(FrameOutcome::PresentedSuboptimal)
+    } else {
+        Ok(FrameOutcome::Presented)
+    }
+}
+
+/// Submits a single frame consisting of a clear + the static grid draw.
+/// Returns `true` on successful present. If no grid is attached, this is
+/// equivalent to `submit_clear_frame`.
+pub(crate) fn submit_grid_frame(clear_rgba: [f32; 4]) -> bool {
+    let mut state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    let Some(s) = state.as_mut() else {
+        return false;
+    };
+    if s.static_grid.is_none() {
+        // Defensive: caller asked for grid but it isn't initialized — log
+        // ONCE per JNI call (the loop continues, just clears).
+        log::debug!(target: "WarpStaticGrid",
+            "submit_grid_frame called with no grid attached; falling back to clear");
+    }
+    match unsafe { record_and_present_grid(s, clear_rgba) } {
+        Ok(FrameOutcome::Presented) => {
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            let ts = uptime_millis();
+            // Same `present_ok` schema as submit_clear_frame so the existing
+            // test-render-scene driver can be reused.
+            log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
+            true
+        }
+        Ok(FrameOutcome::PresentedSuboptimal) => {
+            let n = if let Ok(mut c) = FRAME_COUNTER.lock() {
+                *c += 1;
+                *c
+            } else {
+                0
+            };
+            let ts = uptime_millis();
+            log::info!(target: "WarpVulkan", "present_ok frame={} ts={}", n, ts);
+            log::warn!(target: "WarpVulkan", "swapchain suboptimal — recreating before next frame");
+            if let Err(e) = unsafe { recreate_swapchain(s) } {
+                log::error!(target: "WarpVulkan", "recreate after suboptimal failed: {:?}", e);
+            }
+            true
+        }
+        Ok(FrameOutcome::OutOfDate) => {
+            log::warn!(target: "WarpVulkan", "swapchain out-of-date — recreating");
+            if let Err(e) = unsafe { recreate_swapchain(s) } {
+                log::error!(target: "WarpVulkan", "recreate failed: {:?}", e);
+            }
+            false
+        }
+        Err(e) => {
+            log::error!(target: "WarpVulkan", "grid present failed: {:?}", e);
+            false
+        }
+    }
+}
+
+/// Returns whether a static grid is currently attached. Used by JNI for
+/// diagnostic logging.
+#[allow(dead_code)]
+pub(crate) fn static_grid_attached() -> bool {
+    let state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    state.as_ref().map(|s| s.static_grid.is_some()).unwrap_or(false)
+}
+
+/// Returns (atlas_glyph_count, glyphs_per_frame, rows, cols) of the attached
+/// grid, if any. Used by the test driver to round-trip diagnostic info into
+/// the result JSON.
+pub(crate) fn static_grid_stats() -> Option<(u32, u32, u32, u32, String)> {
+    let state = match SURFACE_STATE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    state.as_ref().and_then(|s| {
+        s.static_grid.as_ref().map(|g| {
+            (
+                g.atlas_glyph_count,
+                g.glyphs_per_frame,
+                g.grid_rows,
+                g.grid_cols,
+                g.text_per_cell.clone(),
+            )
+        })
+    })
 }

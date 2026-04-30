@@ -36,18 +36,85 @@ import androidx.core.content.ContextCompat
 class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     private var renderActive = false
+    // M2-S08: when true, doFrame calls renderDrawGridFrame instead of
+    // renderClearFrame. Toggled by the START_STATIC_GRID broadcast (driver
+    // path) or by intent extras at launch.
+    @Volatile
+    private var gridMode = false
+    @Volatile
+    private var gridText: String = "Hello, World"
+    @Volatile
+    private var gridFontSizePx: Float = 32.0f
+    @Volatile
+    private var gridRows: Int = 20
+    @Volatile
+    private var gridCols: Int = 50
+    @Volatile
+    private var gridCellWPx: Float = 200.0f
+    @Volatile
+    private var gridCellHPx: Float = 60.0f
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!renderActive) return
-            // Magenta clear-color test (M2-S04 AC#2).
-            val ok = NativeBridge.renderClearFrame(1.0f, 0.0f, 1.0f, 1.0f)
+            // Magenta clear; if grid mode is active, the Rust side draws on
+            // top of the clear within the same render pass. Otherwise this is
+            // M2-S04's clear-only path.
+            val ok = if (gridMode) {
+                NativeBridge.renderDrawGridFrame(1.0f, 0.0f, 1.0f, 1.0f)
+            } else {
+                NativeBridge.renderClearFrame(1.0f, 0.0f, 1.0f, 1.0f)
+            }
             if (!ok) {
                 // VK_ERROR_OUT_OF_DATE_KHR or transient: skip + retry next vsync.
-                Log.d(TAG, "renderClearFrame returned false @ ${SystemClock.uptimeMillis()}")
+                Log.d(TAG, "render frame returned false @ ${SystemClock.uptimeMillis()}")
             }
             // Schedule next frame (Choreographer is one-shot).
             Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    /**
+     * M2-S08: initialize + start the static-grid render path.
+     *
+     * Called either from `onCreate` (when launched with `--ez grid_mode true`
+     * + grid params) or from the START_STATIC_GRID broadcast. The grid init
+     * is idempotent on the Rust side, so multiple calls are safe.
+     *
+     * Logs `static_grid_started rows=… cols=… text=…` for the driver to grep.
+     */
+    @Synchronized
+    fun startStaticGrid(
+        text: String,
+        fontSizePx: Float,
+        rows: Int,
+        cols: Int,
+        cellWPx: Float,
+        cellHPx: Float
+    ) {
+        gridText = text
+        gridFontSizePx = fontSizePx
+        gridRows = rows
+        gridCols = cols
+        gridCellWPx = cellWPx
+        gridCellHPx = cellHPx
+        if (!renderActive) {
+            Log.w(TAG, "startStaticGrid: renderActive=false — surface not yet attached; will retry on surfaceCreated")
+            gridMode = true
+            return
+        }
+        val initOk = NativeBridge.renderInitStaticGrid(
+            text, fontSizePx, rows, cols, cellWPx, cellHPx
+        )
+        Log.i(
+            TAG,
+            "renderInitStaticGrid ok=$initOk text=\"$text\" rows=$rows cols=$cols " +
+                "cell=${cellWPx}x${cellHPx}px font_size_px=$fontSizePx"
+        )
+        if (initOk) {
+            gridMode = true
+            val stats = NativeBridge.renderStaticGridStats()
+            Log.i(TAG, "static_grid_started $stats")
         }
     }
 
@@ -90,6 +157,52 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         setContentView(surfaceView)
 
         Log.i(TAG, "MainActivity ready ping=${NativeBridge.ping()}")
+
+        // M2-S08: optional grid mode via launch intent extras. Driver uses
+        //   am start -n dev.warp.mobile/.MainActivity \
+        //     --ez grid_mode true \
+        //     --es grid_text "Hello, World" \
+        //     --ef grid_font_size_px 32.0 \
+        //     --ei grid_rows 20 --ei grid_cols 50 \
+        //     --ef grid_cell_w_px 200.0 --ef grid_cell_h_px 60.0
+        if (intent.getBooleanExtra("grid_mode", false)) {
+            // Text precedence (CJK / space-resilient, mirrors M2-S07
+            // CaptureFrameReceiver):
+            //   1. `grid_text_b64` extra (base64-encoded UTF-8) — driver-friendly,
+            //      avoids `am start --es` losing whitespace/multi-byte chars
+            //      when relayed through adb shell.
+            //   2. `grid_text` extra (plain string) — works for ASCII tests
+            //      without spaces.
+            //   3. Default "Hello, World".
+            val textB64 = intent.getStringExtra("grid_text_b64")
+            val textExtra = intent.getStringExtra("grid_text")
+            val text = when {
+                textB64 != null -> {
+                    try {
+                        String(android.util.Base64.decode(textB64, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "grid_text_b64 decode failed (${e.message}); using default")
+                        "Hello, World"
+                    }
+                }
+                !textExtra.isNullOrBlank() -> textExtra
+                else -> "Hello, World"
+            }
+            val fontSize = intent.getFloatExtra("grid_font_size_px", 32.0f)
+            val rows = intent.getIntExtra("grid_rows", 20)
+            val cols = intent.getIntExtra("grid_cols", 50)
+            val cellW = intent.getFloatExtra("grid_cell_w_px", 200.0f)
+            val cellH = intent.getFloatExtra("grid_cell_h_px", 60.0f)
+            Log.i(TAG, "grid_mode requested at launch text=\"$text\" rows=$rows cols=$cols")
+            // Mark gridMode so surfaceCreated will init once the surface arrives.
+            gridText = text
+            gridFontSizePx = fontSize
+            gridRows = rows
+            gridCols = cols
+            gridCellWPx = cellW
+            gridCellHPx = cellH
+            gridMode = true
+        }
     }
 
     override fun onDestroy() {
@@ -110,6 +223,10 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         val ts = SystemClock.uptimeMillis()
         Log.i(TAG, "surfaceChanged_ts=$ts width=$width height=$height")
         // Re-attach: the Rust side replaces any prior swapchain in attach().
+        // M2-S08: the surface attach destroys the prior VulkanSurface and the
+        // attached static-grid along with it. attachAndStartRender will
+        // re-init the grid if `gridMode` is still set, so a rotation/resize
+        // self-heals.
         renderActive = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         attachAndStartRender(holder.surface)
@@ -130,6 +247,29 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         Log.i(TAG, "renderAttachSurface ok=$ok")
         if (ok) {
             renderActive = true
+            // M2-S08: if grid mode was requested before surface was ready, do
+            // the init now while we have a valid swapchain. The Rust side
+            // builds the atlas + pipeline against the current render_pass.
+            if (gridMode) {
+                val initOk = NativeBridge.renderInitStaticGrid(
+                    gridText, gridFontSizePx, gridRows, gridCols, gridCellWPx, gridCellHPx
+                )
+                Log.i(
+                    TAG,
+                    "renderInitStaticGrid (post-surfaceCreated) ok=$initOk " +
+                        "text=\"$gridText\" rows=$gridRows cols=$gridCols " +
+                        "cell=${gridCellWPx}x${gridCellHPx}px font_size_px=$gridFontSizePx"
+                )
+                if (initOk) {
+                    val stats = NativeBridge.renderStaticGridStats()
+                    Log.i(TAG, "static_grid_started $stats")
+                } else {
+                    // Disable grid mode; doFrame will fall back to clear so
+                    // we still drive the loop and the driver can detect the
+                    // failure via missing static_grid_started line.
+                    gridMode = false
+                }
+            }
             Choreographer.getInstance().postFrameCallback(frameCallback)
         }
     }

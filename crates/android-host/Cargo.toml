@@ -2,6 +2,10 @@
 name = "warp-mobile-android-host"
 version = "0.1.0"
 edition = "2021"
+# M2-S08: build.rs compiles GLSL -> SPIR-V via NDK's glslc on the host. The
+# target Android binary embeds the resulting .spv via include_bytes!. See
+# build.rs for rationale (shaderc-rs has Android cross-compile issues).
+build = "build.rs"
 
 [lib]
 name = "warp_mobile_android_host"
