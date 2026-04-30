@@ -83,7 +83,15 @@ struct VulkanSurface {
     command_buffers: Vec<vk::CommandBuffer>,
     graphics_queue: vk::Queue,
     image_available: vk::Semaphore,
-    render_finished: vk::Semaphore,
+    /// Round-3 (Codex round-2 blocker 2): per-swapchain-image present-wait
+    /// semaphore. Indexed by the `image_index` returned from
+    /// `vkAcquireNextImageKHR` so each presented image carries its own wait
+    /// semaphore — `queue_wait_idle` is NOT a portable substitute for
+    /// per-image semaphore reuse per the Vulkan guide:
+    ///   <https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html>
+    /// Vec length = framebuffers.len() (= swapchain image count). Recreated
+    /// alongside the swapchain in `recreate_swapchain`.
+    render_finished_per_image: Vec<vk::Semaphore>,
     fence: vk::Fence,
     debug_utils_loader: Option<ash::ext::debug_utils::Instance>,
     debug_messenger: vk::DebugUtilsMessengerEXT,
@@ -574,7 +582,13 @@ fn init_surface(
     let sem_info = vk::SemaphoreCreateInfo::default();
     let fence_info = vk::FenceCreateInfo::default();
     let image_available = unsafe { device.create_semaphore(&sem_info, None) }?;
-    let render_finished = unsafe { device.create_semaphore(&sem_info, None) }?;
+    // Round-3 (Codex round-2 blocker 2): per-image present-wait semaphores.
+    // <https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html>
+    let mut render_finished_per_image = Vec::with_capacity(framebuffers.len());
+    for _ in 0..framebuffers.len() {
+        let sem = unsafe { device.create_semaphore(&sem_info, None) }?;
+        render_finished_per_image.push(sem);
+    }
     let fence = unsafe { device.create_fence(&fence_info, None) }?;
 
     Ok(VulkanSurface {
@@ -599,7 +613,7 @@ fn init_surface(
         command_buffers,
         graphics_queue,
         image_available,
-        render_finished,
+        render_finished_per_image,
         fence,
         debug_utils_loader,
         debug_messenger,
@@ -615,6 +629,12 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     }
     for iv in s.image_views.drain(..) {
         s.device.destroy_image_view(iv, None);
+    }
+    // Round-3 (Codex round-2 blocker 2): tear down old per-image present-wait
+    // semaphores BEFORE creating new ones (image count can change across
+    // recreate, e.g. driver picks a different min_image_count post-rotation).
+    for sem in s.render_finished_per_image.drain(..) {
+        s.device.destroy_semaphore(sem, None);
     }
     s.device.destroy_render_pass(s.render_pass, None);
     s.device.free_command_buffers(s.command_pool, &s.command_buffers);
@@ -643,6 +663,14 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     )?;
     s.swapchain_loader.destroy_swapchain(old, None);
 
+    // Allocate fresh per-image semaphores matching the new image count.
+    let sem_info = vk::SemaphoreCreateInfo::default();
+    let mut render_finished_per_image = Vec::with_capacity(framebuffers.len());
+    for _ in 0..framebuffers.len() {
+        let sem = s.device.create_semaphore(&sem_info, None)?;
+        render_finished_per_image.push(sem);
+    }
+
     s.swapchain = swapchain;
     s.surface_format = format;
     s.extent = extent;
@@ -653,6 +681,7 @@ unsafe fn recreate_swapchain(s: &mut VulkanSurface) -> Result<(), vk::Result> {
     s.swapchain_supports_transfer_src = swapchain_supports_transfer_src;
     s.command_pool = command_pool;
     s.command_buffers = command_buffers;
+    s.render_finished_per_image = render_finished_per_image;
 
     let t1 = uptime_millis();
     log::info!(target: "WarpVulkan",
@@ -728,8 +757,10 @@ unsafe fn record_and_present_clear(
     device.end_command_buffer(cmd_buf)?;
 
     // ── Submit ──────────────────────────────────────────────────────────────
+    // Round-3 (Codex round-2 blocker 2): per-image present-wait semaphore.
+    // <https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html>
     let wait_semaphores = [s.image_available];
-    let signal_semaphores = [s.render_finished];
+    let signal_semaphores = [s.render_finished_per_image[image_index as usize]];
     let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
     let cmd_bufs = [cmd_buf];
     let submit_info = vk::SubmitInfo::default()
@@ -1072,10 +1103,11 @@ unsafe fn record_and_capture_raw(
         return Err(e.into());
     }
 
-    // Round-2 (Codex round-1 blocker 2): submit signals render_finished;
-    // queue_present_khr waits on it and recovers the WSI image.
+    // Round-3 (Codex round-2 blocker 2): per-image present-wait semaphore.
+    // queue_present_khr waits on the same per-image semaphore. Refs:
+    //   <https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html>
     let wait_semaphores = [s.image_available];
-    let signal_semaphores = [s.render_finished];
+    let signal_semaphores = [s.render_finished_per_image[image_index as usize]];
     let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
     let cmd_bufs = [cmd_buf];
     let submit_info = vk::SubmitInfo::default()
@@ -1273,7 +1305,11 @@ fn destroy_surface(s: VulkanSurface) {
             s.device.destroy_image_view(*iv, None);
         }
         s.device.destroy_semaphore(s.image_available, None);
-        s.device.destroy_semaphore(s.render_finished, None);
+        // Round-3 (Codex round-2 blocker 2): destroy ALL per-image present-wait
+        // semaphores.
+        for sem in &s.render_finished_per_image {
+            s.device.destroy_semaphore(*sem, None);
+        }
         s.device.destroy_fence(s.fence, None);
         s.device.destroy_command_pool(s.command_pool, None);
         s.swapchain_loader.destroy_swapchain(s.swapchain, None);

@@ -127,17 +127,47 @@ echo "=== launching $PACKAGE/$ACTIVITY ===" >&2
 START_TS=$(date +%s)
 sleep 1
 
-# Round-3 (Codex blocker 2): explicit focus check post-launch. If a permission
-# dialog or other system overlay stole focus, fail fast with the actual focus
-# window so we can diagnose. surfaceCreated_ts can fire BEHIND the dialog, so
-# the prior wait-only heuristic produced false positives.
-FOCUS_LINE=$("${ADB[@]}" shell dumpsys window 2>/dev/null | grep "mCurrentFocus" | head -1 || true)
+# Round-3 (Codex round-2 blocker 1): aggressive Bouncer dismissal BEFORE the
+# first focus check. See test-frame-capture-stress.sh for full rationale.
+"${ADB[@]}" shell wm dismiss-keyguard 2>&1 >&2 || true
+"${ADB[@]}" shell input keyevent KEYCODE_WAKEUP 2>&1 >&2 || true
+sleep 1
+
+# Round-3 (Codex round-2 blocker 1): STRICT focus assertion. Reject when
+# focus is Bouncer/keyguard/notification-shade/anything-not-dev.warp.mobile,
+# OR when mInputRestricted=true. Codex repro on R5CX10VFFBA showed the prior
+# weak check (only `GrantPermissionsActivity|PermissionController`) missed
+# the Knox-induced `mCurrentFocus=Bouncer mInputRestricted=true` state.
+WINDOW_DUMP=$("${ADB[@]}" shell dumpsys window 2>/dev/null || true)
+FOCUS_LINE=$(echo "$WINDOW_DUMP" | grep "mCurrentFocus" | head -1 || true)
+INPUT_RESTRICTED_LINE=$(echo "$WINDOW_DUMP" | grep "mInputRestricted" | head -1 || true)
+echo "=== focus probe: $FOCUS_LINE ===" >&2
+echo "=== input_restricted probe: $INPUT_RESTRICTED_LINE ===" >&2
+
 if echo "$FOCUS_LINE" | grep -qE "GrantPermissionsActivity|PermissionController"; then
     echo "ERROR: focus stolen by permission UI: ${FOCUS_LINE}" >&2
     echo "       The capture would not be valid (SurfaceView is not foreground)." >&2
     "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
     exit 5
 fi
+if echo "$FOCUS_LINE" | grep -qiE "Bouncer|Keyguard|StatusBar|NotificationShade"; then
+    echo "ERROR: focus stolen by lockscreen / Bouncer / status bar: ${FOCUS_LINE}" >&2
+    "${ADB[@]}" shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp|mInputRestricted|KeyguardController" | head -10 >&2 || true
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 11
+fi
+if ! echo "$FOCUS_LINE" | grep -q "dev.warp.mobile"; then
+    echo "ERROR: focus is NOT dev.warp.mobile: ${FOCUS_LINE}" >&2
+    "${ADB[@]}" shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp|mInputRestricted|KeyguardController" | head -10 >&2 || true
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 12
+fi
+if echo "$INPUT_RESTRICTED_LINE" | grep -q "mInputRestricted=true"; then
+    echo "ERROR: mInputRestricted=true (keyguard locked input): ${INPUT_RESTRICTED_LINE}" >&2
+    "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+    exit 13
+fi
+echo "=== focus confirmed: dev.warp.mobile, input not restricted ===" >&2
 
 # Round-2 (Codex blocker 3): fail-fast sanity check — wait up to 10 seconds
 # for MainActivity to log `surfaceCreated_ts=`. If it doesn't appear, the
@@ -145,11 +175,13 @@ fi
 # something stole focus (permission dialog, secure-screen, lock, etc.).
 echo "=== waiting for surfaceCreated_ts (up to 10s) ===" >&2
 SURFACE_READY=0
+SURFACE_CREATED_TS=""
 for i in $(seq 1 20); do
-    if "${ADB[@]}" logcat -d -s WarpRender:I 2>/dev/null \
-            | grep -q "surfaceCreated_ts="; then
+    SURF_LINE=$("${ADB[@]}" logcat -d -s WarpRender:I 2>/dev/null | grep "surfaceCreated_ts=" | tail -1 || true)
+    if [[ -n "$SURF_LINE" ]]; then
         SURFACE_READY=1
-        echo "=== SurfaceView ready after ${i}*0.5s ===" >&2
+        SURFACE_CREATED_TS=$(echo "$SURF_LINE" | sed -n 's/.*surfaceCreated_ts=\([0-9][0-9]*\).*/\1/p' | tail -1)
+        echo "=== SurfaceView ready after ${i}*0.5s (ts=${SURFACE_CREATED_TS}) ===" >&2
         break
     fi
     sleep 0.5
@@ -164,6 +196,22 @@ if [[ $SURFACE_READY -ne 1 ]]; then
     exit 2
 fi
 sleep 1
+
+# Round-3 (Codex round-2 blocker 1): reject runs where `surfaceDestroyed_ts`
+# appears AFTER the accepted `surfaceCreated_ts` before the capture loop
+# starts. See test-frame-capture-stress.sh for full rationale.
+DESTROYED_LINE=$("${ADB[@]}" logcat -d -s WarpRender:I 2>/dev/null | grep "surfaceDestroyed_ts=" | tail -1 || true)
+if [[ -n "$DESTROYED_LINE" ]]; then
+    DESTROYED_TS=$(echo "$DESTROYED_LINE" | sed -n 's/.*surfaceDestroyed_ts=\([0-9][0-9]*\).*/\1/p' | tail -1)
+    if [[ -n "$DESTROYED_TS" && -n "$SURFACE_CREATED_TS" ]] && (( DESTROYED_TS > SURFACE_CREATED_TS )); then
+        echo "ERROR: surface was DESTROYED at ts=${DESTROYED_TS} after creation at ts=${SURFACE_CREATED_TS}" >&2
+        echo "       (likely Knox / keyguard kicked in mid-init). Aborting." >&2
+        "${ADB[@]}" shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp|mInputRestricted|KeyguardController" | head -10 >&2 || true
+        "${ADB[@]}" shell am force-stop "$PACKAGE" 2>&1 >&2 || true
+        exit 14
+    fi
+fi
+echo "=== no post-creation surfaceDestroyed; proceeding to render-window ===" >&2
 
 echo "=== capturing logcat for $CAPTURE_SECONDS seconds ===" >&2
 LOGCAT_FILE=$(mktemp /tmp/m2-s04-logcat.XXXXXX)

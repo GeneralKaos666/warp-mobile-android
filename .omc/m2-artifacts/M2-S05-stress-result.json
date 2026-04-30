@@ -3,11 +3,11 @@
   "device_serial": "R5CX10VFFBA",
   "target_count": 10,
   "observed_count": 10,
-  "elapsed_ms": 6926,
+  "elapsed_ms": 7179,
   "captures": [
     {
-      "frame_num": 379,
-      "ts_ms": 111369778,
+      "frame_num": 532,
+      "ts_ms": 113202169,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -17,8 +17,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 392,
-      "ts_ms": 111370152,
+      "frame_num": 545,
+      "ts_ms": 113202553,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -28,8 +28,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 405,
-      "ts_ms": 111370549,
+      "frame_num": 559,
+      "ts_ms": 113202935,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -39,8 +39,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 418,
-      "ts_ms": 111370942,
+      "frame_num": 571,
+      "ts_ms": 113203308,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -50,8 +50,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 425,
-      "ts_ms": 111371287,
+      "frame_num": 583,
+      "ts_ms": 113203674,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -61,8 +61,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 443,
-      "ts_ms": 111371717,
+      "frame_num": 614,
+      "ts_ms": 113204218,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -72,8 +72,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 452,
-      "ts_ms": 111372071,
+      "frame_num": 628,
+      "ts_ms": 113204612,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -83,8 +83,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 464,
-      "ts_ms": 111372437,
+      "frame_num": 642,
+      "ts_ms": 113204998,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -94,8 +94,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 473,
-      "ts_ms": 111372781,
+      "frame_num": 656,
+      "ts_ms": 113205388,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -105,8 +105,8 @@
       "bgra_swizzled": false
     },
     {
-      "frame_num": 486,
-      "ts_ms": 111373170,
+      "frame_num": 670,
+      "ts_ms": 113205774,
       "width": 1080,
       "height": 2340,
       "bytes_logged": 57447,
@@ -124,15 +124,15 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 17:12:53.800 D/warp-android-host(23487): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11082.bin for reading (it may not exist yet)"
+        "line": "04-30 17:43:24.918 D/warp-android-host(13948): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11088.bin for reading (it may not exist yet)"
       },
       {
         "severity": "D",
-        "line": "04-30 17:12:53.805 D/warp-android-host(23487): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11082.bin for writing"
+        "line": "04-30 17:43:24.931 D/warp-android-host(13948): warp_mobile_android_host::vulkan: [VkVal] vkDestroyDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11088.bin for writing"
       },
       {
         "severity": "D",
-        "line": "04-30 17:12:53.814 D/warp-android-host(23487): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11082.bin for reading (it may not exist yet)"
+        "line": "04-30 17:43:24.940 D/warp-android-host(13948): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11088.bin for reading (it may not exist yet)"
       }
     ]
   },
