@@ -19,6 +19,9 @@ local.properties
 proguard/
 release/
 
+# Cargo-ndk .so outputs copied into jniLibs at build time — never commit binaries
+android/app/src/main/jniLibs/arm64-v8a/*.so
+
 # Android Studio
 .idea/
 *.iws

@@ -3,6 +3,86 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// ---------------------------------------------------------------------------
+// Rust / cargo-ndk integration
+//
+// Approach: plain Gradle Copy task — no third-party plugin required.
+//
+// Rationale (M2-S02, 2026-04-30):
+//   • The absolute symlink that used to sit in jniLibs/ pointed to the
+//     project-owner's machine (/Users/iml1s/...) and broke every other checkout.
+//   • willir/cargo-ndk-android-gradle is unmaintained (last release 2021,
+//     Maven Central v0.3.4).  The gemwallet fork (v0.5.2) has no public README.
+//   • For a single ABI (arm64-v8a) + single crate, a Gradle Copy task wired
+//     directly into the assemble lifecycle is the lightest idiomatic solution
+//     (ref: https://docs.gradle.org/current/userguide/more_about_tasks.html,
+//      https://developer.android.com/build/building-cmdline).
+//
+// How it works:
+//   1. rustTargetDir resolves to <repo-root>/target  (two levels up from here).
+//   2. copyRustLibsDebug   copies …/aarch64-linux-android/debug/lib*.so
+//   3. copyRustLibsRelease copies …/aarch64-linux-android/release/lib*.so
+//   Both tasks write into src/main/jniLibs/arm64-v8a/ which is already a
+//   standard AGP jniLibs source directory.  The directory + its *.so contents
+//   are gitignored (see root .gitignore).
+//
+// Pre-requisite for a clean checkout:
+//   PATH=$HOME/.cargo/bin:$PATH \
+//   ANDROID_NDK_ROOT=<ndk-path> \
+//   cargo ndk -t arm64-v8a build [-r] -p warp-mobile-android-host
+//   (or let the tasks below drive cargo-ndk via exec if ANDROID_NDK_ROOT is set)
+// ---------------------------------------------------------------------------
+
+// rootProject is android/ — the Cargo workspace root is one level up
+def repoRoot      = rootProject.file("..")
+def rustTargetDir = new File(repoRoot, "target")
+def jniLibsDir    = file("src/main/jniLibs/arm64-v8a")
+
+// Optional: automatically invoke cargo-ndk when ANDROID_NDK_ROOT is set.
+// If the env var is absent the task is a no-op copy (assumes .so already built).
+def ndkRoot   = System.getenv("ANDROID_NDK_ROOT") ?: ""
+def cargoPath = "${System.getenv('HOME')}/.cargo/bin/cargo"
+
+task buildRustDebug(type: Exec) {
+    description = "Invoke cargo ndk to build the debug .so for arm64-v8a."
+    onlyIf { ndkRoot != "" && new File(cargoPath).exists() }
+    workingDir repoRoot
+    environment "ANDROID_NDK_ROOT", ndkRoot
+    commandLine cargoPath, "ndk", "-t", "arm64-v8a", "build",
+                "-p", "warp-mobile-android-host"
+    // Tolerate a missing cargo-ndk binary so that CI can pre-build and
+    // pass only the copy step.
+    ignoreExitValue = false
+}
+
+task buildRustRelease(type: Exec) {
+    description = "Invoke cargo ndk to build the release .so for arm64-v8a."
+    onlyIf { ndkRoot != "" && new File(cargoPath).exists() }
+    workingDir repoRoot
+    environment "ANDROID_NDK_ROOT", ndkRoot
+    commandLine cargoPath, "ndk", "-t", "arm64-v8a", "build", "--release",
+                "-p", "warp-mobile-android-host"
+    ignoreExitValue = false
+}
+
+task copyRustLibsDebug(type: Copy) {
+    description = "Copy arm64-v8a debug .so into jniLibs before assembleDebug."
+    dependsOn buildRustDebug
+    from("${rustTargetDir}/aarch64-linux-android/debug") {
+        include "libwarp_mobile_android_host.so"
+    }
+    into jniLibsDir
+}
+
+task copyRustLibsRelease(type: Copy) {
+    description = "Copy arm64-v8a release .so into jniLibs before assembleRelease."
+    dependsOn buildRustRelease
+    from("${rustTargetDir}/aarch64-linux-android/release") {
+        include "libwarp_mobile_android_host.so"
+    }
+    into jniLibsDir
+}
+
 android {
     namespace 'dev.warp.mobile'
     compileSdk 36
@@ -29,6 +109,21 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+}
+
+// Wire copy tasks into the assemble lifecycle after the android block is
+// evaluated (tasks are created by AGP during afterEvaluate).
+//
+// Gradle 8 strict task-graph validation requires the *direct consumer* of the
+// jniLibs directory (mergeDebugJniLibFolders / mergeReleaseJniLibFolders) to
+// declare the dependency — wiring via assembleDebug alone is not sufficient.
+// Ref: https://docs.gradle.org/8.6/userguide/validation_problems.html#implicit_dependency
+afterEvaluate {
+    tasks.named("mergeDebugJniLibFolders").configure   { dependsOn copyRustLibsDebug }
+    tasks.named("mergeReleaseJniLibFolders").configure { dependsOn copyRustLibsRelease }
+    // Also wire assembleDebug/Release for completeness (belt-and-suspenders).
+    tasks.named("assembleDebug").configure   { dependsOn copyRustLibsDebug }
+    tasks.named("assembleRelease").configure { dependsOn copyRustLibsRelease }
 }
 
 dependencies {
