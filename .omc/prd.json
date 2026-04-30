@@ -82,7 +82,7 @@
       "id": "M1-S05",
       "title": "Android Service + AndroidManifest + FGS skeleton",
       "passes": false,
-      "verifiedBy": "codex round-1 17-25-42-845Z REVISE (AC#7 missing POST_NOTIFICATIONS, AC#6 .so loaded by Activity not Service) → fix f424be2 (perm + Service companion init load) → device verify pending in Task #32",
+      "verifiedBy": "codex round-1 17-25-42-845Z REVISE → fix f424be2 (perm + Service companion init load) → PTY plumbing chain Task#28→#33→#35 CODEX_PASS at 03-32-36-215Z (Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + tools:remove debug overlay) → device verify pending in Task #32",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "android/app/ project (or similar) created with build.gradle, AndroidManifest.xml, single Activity + WarpTerminalService extending Service",

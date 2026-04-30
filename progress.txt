@@ -84,3 +84,16 @@
 - Codex caught real production-grade lifetime bug (Box::from_raw UAF) that would have crashed under concurrent kill+read in Activity recreate flow
 - Worker-env auto-pivoted test path when receiver became signature-protected — good autonomous decision but should have notified team-lead before committing
 - "PostToolUse:Bash hook: Command failed" can fire even on success; ignore unless command output actually shows failure (re-confirmed pattern from M0)
+
+## Iteration 7 update (2026-04-30 ~03:33 UTC) — Codex Task #35 PASS
+
+Codex re-review verdict (artifact 03-32-36-215Z): **CODEX_PASS** on all 3 fixes:
+- Fix 1 (UAF): Arc<PtySession> at JNI boundary, ptyAcquire/Release bracketing readDirect under map lock, AtomicI32 master_fd with kill_eager. cargo test 3/3 (added test_arc_concurrent_read_kill stress test).
+- Fix 2 (cancellation): while(true) → while(isActive) + import.
+- Fix 3 (debug manifest): tools:remove="android:permission" verified in merged debug manifest; release retains PTY_CONTROL signature permission.
+
+Verified: cargo test + processDebugMainManifest + processReleaseMainManifest + compileDebugKotlin all pass.
+
+Task #28/#33/#35 PTY plumbing chain CLOSED. main @ 06f70bd.
+
+Worker-env Task #32 (device runs S05/S06/S07/S08 on S24 Ultra) still in flight. After artifacts arrive: bulk update prd.json S05-S08 + dispatch Task #34 to worker-spike for S09 30-min stress.
