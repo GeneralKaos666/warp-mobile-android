@@ -183,8 +183,8 @@
     {
       "id": "M2-S11",
       "title": "Touch input + gesture mapping",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex gpt-5.5 xhigh 2026-04-30 — PASS after 4 fixes (P1 security, P2 velocity, P3x2 monotonic+logcat)",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "warp-src/crates/warpui/src/platform/android/input.rs maps onTouchEvent → MouseDown/Up with screen coords",
