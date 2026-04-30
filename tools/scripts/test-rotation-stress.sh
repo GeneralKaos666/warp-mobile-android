@@ -391,7 +391,7 @@ text_per_cell  = sys.argv[14]
 # pattern (process gets killed + relaunched mid-loop, breaking pair lineage).
 # Pairs that span a PID boundary are dropped (would otherwise contaminate
 # the timing distribution with ~1000ms process startup latency).
-pid_re       = re.compile(r"\((\d+)\)")
+pid_re       = re.compile(r"\(\s*(\d+)\)")  # \s* tolerates padded logcat PID like "( 8089)" (codex round-1 nit)
 destroyed_re = re.compile(r"surfaceDestroyed_ts=(\d+)")
 created_re   = re.compile(r"surfaceCreated_ts=(\d+)")
 present_re   = re.compile(r"present_ok\s+frame=(\d+)\s+ts=(\d+)")
