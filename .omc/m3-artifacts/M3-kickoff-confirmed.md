@@ -6,7 +6,7 @@
 **前置 milestones**：
 - M0 close-out CONDITIONAL GO @ commit `24a2c1c` (Vulkan surface recreate p95 < 200ms on Adreno 6xx+)
 - M1 close-out CONDITIONAL GO @ commit `f7feb3f` (10/10 stories PASS — PTY/FGS pipeline on S24 Ultra)
-- M2 close-out CONDITIONAL GO @ commit `0506c35` (12/14 stories CODEX_PASS — warpui::platform::android backend verified; S13 low-end deferred; S14 Codex audit pending at time of M3 dispatch)
+- M2 close-out CONDITIONAL GO @ commit `0506c35` (12/14 stories CODEX_PASS — warpui::platform::android backend verified; M2-S14 Codex round-3 PASS; only M2-S13 low-end deferred per user choice)
 
 ---
 
@@ -19,7 +19,7 @@ M3 入場條件確認：
 | M2 CONDITIONAL GO @ `0506c35` | **PASS** | `.omc/m2-artifacts/M2-go-no-go.md` §6 verdict — 12/14 stories CODEX_PASS. All 5 Plan §6 M2 ACs satisfied on flagship pathway (AC#1 grid p95=9ms; AC#2 swapchain p95=155ms; AC#3 IME Gboard quirk; AC#4 WindowInsets; AC#5 cargo doc). |
 | warpui::platform::android backend ready (4 hand-written areas verified) | **PASS** | `warp-src/crates/warpui/src/platform/android/` @ warp-src `d7616e5`: `vulkan.rs` 88,690 bytes (render_scene @ `window.rs:313` + request_frame_capture @ `window.rs:325`); `font.rs` 39,821 bytes (FontDB 15 methods; ASystemFontIterator NDK API 29+ @ `font.rs:169`); `text_layout.rs` 20,017 bytes (TextLayoutSystem 2 methods @ `text_layout.rs:428,471`); `static_grid.rs` 45,408 bytes (11k-instance vkCmdDraw pipeline). |
 | M1 PTY plumbing ready (S04+ chain proven) | **PASS** | `.omc/m1-artifacts/M1-go-no-go.md` §6 — M1-S06 delta_ms=26, M1-S08 orphans=0, M1-S09 pwd 4ms at t=30min. `WarpTerminalService.kt` + `PtyManager.kt` + `NativeBridge.kt` M1 carry-forward intact in M2 close state. |
-| warp_terminal_mobile_facade scaffold in place (M0-S08) | **PASS** | Scaffolded in M0 at `crates/warp_terminal_mobile_facade/` (per M0 implementation table task #8); `cargo build -p warp_terminal_mobile_facade` passes host-side. M3-S02 fleshes out the real impl. |
+| warp_terminal_mobile_facade scaffold in place (M0-S08) | **PASS (with caveat)** | Scaffolded under **`warp-src/crates/warp_terminal_mobile_facade/`** (NOT main repo) per M0 implementation table task #8. **Already contains `lib.rs`, `terminal.rs`, `blocks.rs`, `ai.rs`** (worker M3-S01 review found this on M0-archeology re-check). `cargo build -p warp_terminal_mobile_facade` currently FAILS through warpui's Metal toolchain build script (matches M0-facade-scaffold.md:18 documented gap; resolves on Android target via cargo ndk). M3-S02 extracts/wires existing scaffolding rather than starting from zero. |
 | cargo test -p warp-mobile-android-host PASS | **PASS** | 18/18 tests (M2 final state — M2-S10 host tests 10/10 + M1 baseline 3 + M2-S06 text_layout 2 + M2-S11/S12 additions) per M2-S12 close-out evidence. |
 | M2-S13 low-end device gate | **USER CHOICE — DEFERRED** | Per user directive 「先跳過便宜手機」 2026-04-30: Pixel 4a / Galaxy A52s acquisition is NOT a P0 blocker for M3 start. This is an **explicit user decision** (not an overlooked obligation). See §1a below for full rationale. |
 
@@ -31,7 +31,7 @@ M3 入場條件確認：
 
 **Device matrix for M3**:
 - **Primary flagship (P0 mandatory)**: Galaxy S24 Ultra `R5CX10VFFBA` / Adreno 750 / API 36 — all M3 acceptance stories verified on this device
-- **Supplementary flagship (available, not mandated)**: Galaxy S21+ `RFCNC0WNT9H` / Adreno 660 / API 31 — online and connected; can be used for supplementary runs at executor discretion; mandate is flagship-only
+- **Mid-tier (optional / deferred)**: Galaxy S21+ `RFCNC0WNT9H` / Adreno 660 / API 31 — online and connected; per prd.json scope.out "deferred to post-M3 polish; flagship-only for M3"; can be used for supplementary runs at executor discretion but not mandated
 - **Secondary flagship (Galaxy S25 `RFCY71LAFYE`)**: Used in M2-S04 codex reproduction; available if needed
 - **Low-end (Pixel 4a / Galaxy A52s API 31)**: Remains an **M3 carry-over option** (no longer P0); can be absorbed by M3-S11 or surfaced as M4 carry-over depending on hardware acquisition timing
 - **Below-baseline**: Note 9 (serial `25c027b4...`) / SDK 29 — below minSdk 31 baseline per Plan Amendment 3; NOT used in any M3 verification
@@ -79,10 +79,10 @@ M3 目標用一句話：**PTY stream (M1) → terminal model (warp_terminal + fa
 
 | 工作域 | ralplan §6 M3 table row | 主要 file/path | Phase |
 |---|---|---|---|
-| 1. Facade real impl | Row #1 — `Session::spawn/write/read` + AppContext/FeatureFlag/SSH shims | `crates/warp_terminal_mobile_facade/src/{lib,app_context,feature_flag,ssh_noop}.rs` | Foundation (S02) |
+| 1. Facade real impl | Row #1 — `Session::spawn/write/read` + AppContext/FeatureFlag/SSH shims | `warp-src/crates/warp_terminal_mobile_facade/src/{lib,terminal,blocks,ai}.rs` (existing M0 scaffold) + new `{app_context,feature_flag,ssh_noop}.rs` | Foundation (S02) |
 | 2. cfg-gate app::terminal::* | Row #2 — desktop-only path gates at app crate edges | `app/src/terminal/model/session.rs`, `app/src/terminal/mod.rs`, `app/Cargo.toml`, `app/build.rs` | Foundation (S03) |
-| 3. Facade → warpui wiring | Row #3 — `render.rs` adapter: PTY bytes → model cells → `Window::push_frame` | `crates/warp_terminal_mobile_facade/src/render.rs` | Foundation (S04) |
-| 4. DCS hook parser | Row #4 — ESC P $ d ... 0x9c parser in warp_terminal | `crates/warp_terminal/src/dcs.rs` (verify path via M0 archeology) | DCS+Block (S05) |
+| 3. Facade → warpui wiring | Row #3 — `render.rs` adapter: PTY bytes → model cells → `Window::push_frame` | `warp-src/crates/warp_terminal_mobile_facade/src/render.rs` (NEW in M3-S04) | Foundation (S04) |
+| 4. DCS hook parser | Row #4 — ESC P $ d ... 0x9c parser; **already exists in upstream warp** at `app/src/terminal/model/ansi/dcs_hooks.rs` (4 anchor refs: lines 1, 14, 407, 487; dispatch at `ansi/mod.rs:771`) | M3-S05 = extract / route through facade, NOT discover from scratch | DCS+Block (S05) |
 | 5. zsh_body.sh DCS hook | Row #4 — modified bootstrap script ships in APK assets | `app/assets/bundled/bootstrap/zsh_body.sh` | DCS+Block (S06) |
 | 6. Block model | Row #4 extension — `Block` struct aggregation | `warp_terminal` side (verify struct location) | DCS+Block (S07) |
 
@@ -204,13 +204,13 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §Pre-mortem + M3 scope analysis:
 
 ### 死坑 #3 — Block detection brittleness: warp DCS hook format undocumented/unstable
 
-**描述**：M3-S05 requires parsing the warp-specific DCS hook payload format (`ESC P $ d <payload> ST`). The payload format between `ESC P $ d` and ST (0x9c) is warp-proprietary and may NOT be documented in public sources. M0 archeology (`M0-platform-trait-delta.md`) may not have reached deep enough into `crates/warp_terminal/src/` to enumerate the DCS parser file path. If `crates/warp_terminal/src/dcs.rs` does NOT exist (ralplan cites it as "or wherever upstream parses DCS — verify in M0 archeology re-check"), the executor must:
+**描述 (UPDATED post codex round-1 archeology)**：DCS hook parser **already exists upstream** at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (codex M0-archeology re-check confirmed: lines 1, 14, 407, 487; dispatch at `ansi/mod.rs:771`). `zsh_body.sh` already emits hex JSON DCS hooks at lines 80, 254, 301. **M3-S05 reframed**: extract + route the existing parser through `warp_terminal_mobile_facade`, NOT discover the format from scratch. **M3-S06 reframed**: ship existing `zsh_body.sh` asset, NOT write new hooks. Death-pit downgraded from "format undocumented" to "extraction & cfg-gating risk". If the existing parser has tight coupling to `app::terminal::model::*` desktop-only paths, executor must:
 1. Dump raw bytes from a live Warp desktop session producing DCS output
 2. Reverse-engineer the payload structure from byte inspection
 3. Verify against any available `warp_terminal` internal constants
 
 **量化預警**：
-- If DCS parser file does not exist at `warp_terminal/src/dcs.rs` after 1 hour of M0 archeology → dump raw bytes + reverse-engineer; flag to lead
+- Existing parser at `app/src/terminal/model/ansi/dcs_hooks.rs` has tight `app::*` desktop-only deps → wrap behind facade or carve out with cfg-gates (consistent with S03 strategy)
 - If payload format has changed across upstream versions → pin to the specific warp-src commit hash where format was established
 
 **緩解**：
@@ -251,7 +251,7 @@ per `.omc/m2-artifacts/M2-go-no-go.md` §5 + prd.json M3-S11 ACs:
 | 8.3.1 | Stale handle-ime-keyboard-visibility doc URL | `M2-S12-result.json:10` |
 | 8.3.2 | `WindowInsetsControllerCompat.show(Type.ime())` for ime_mode test hook | `MainActivity.kt` ime_mode launch path |
 | 8.3.3 | `START_STATIC_GRID` broadcast receiver comment with no impl | `MainActivity.kt` static-grid launch path |
-| 8.3.4 | SubpixelMask / Color rasterize_glyph branches — emoji smoke test missing | `warp-src/crates/warpui/src/platform/android/font.rs:864` |
+| 8.3.4 | SubpixelMask / Color rasterize_glyph branches — emoji smoke test missing | `warp-src/crates/warpui/src/platform/android/font.rs:904` |
 | 8.3.5 | Clippy lint cleanup (7+ nits: uninlined format args, let_unit_value) | `cargo clippy -p warp-mobile-android-host` |
 | 8.3.6 | android-activity / winit reorganization re-check | `warp-src/crates/warpui/Cargo.toml` |
 | 8.3.7 | CJK fallback span hack → file upstream cosmic-text PR | `warp-src/crates/warpui/src/platform/android/font.rs` other.rs emulation |
