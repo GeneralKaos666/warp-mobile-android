@@ -1,7 +1,7 @@
 # M2 Go/No-Go 整合報告
 
 **日期**：2026-04-30 (M2 milestone close-out)
-**主分支**：`main` @ `c8007e7` (this doc 將追加)
+**主分支**：`main` @ `90c6d76` (this doc lands at `7d9dd60`; lead picked up codex's S04/S08/S09 result.json reruns at `90c6d76`)
 **warp-src 對應**：`warp-mobile/m0-facade` @ `d7616e5` (pushed to ImL1s/warp)
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` §6 M2 (lines 489-502, Amendment 1+2 D1.5-hybrid)
 **前置 milestones**：
@@ -26,7 +26,7 @@
 | M2-S10 | IME glue (commitText/setComposingText/finishComposingText) | **PASS** | **Death-pit #2** — 2-round Codex review with 2 cumulative blockers. Final PASS @ warp-src `6acd5e2` + main `d4dc1b6`. Round-1 @ `df870ed`/`caf3dae`: IME state machine + `WarpInputView` + custom `BaseInputConnection` + `ImeSimulationReceiver`. Round-1 codex blockers: (1) Gboard quirk test direction WRONG — worker tested `compose→commit→finish` (empty finish AFTER commit, OK case) but real risky order is `compose→finish→commit` (Gboard inserts finish BETWEEN compose and commit) — codex repro got `latin_commit '你好'` instead of `composing_commit`; (2) driver could false-pass via direct-JNI fallback when WarpInputConnection null. Round-2 @ `6acd5e2`/`d4dc1b6`: `pending_finish:Option<String>` defer pattern — `finish_composing_text` saves into `pending_finish` (no event); next `commit_text` classifies as ComposingCommit; next `set_composing_text` discards `pending_finish` silently; `drain_events` flushes `pending_finish` as ComposingFinish if no follow-up. **Device evidence on Galaxy S24 Ultra R5CX10VFFBA**: per `M2-S10-result.json:14-73` 14 IME events / 4 sub-tests PASS; IC counts (`ic_kotlin_calls.commitText=7`, `setComposingText=6`, `finishComposingText=2`) match expected; zero fallback warnings. Sub-test 6 NEW: `set('nihao')→finish()→commit('你好')` produces composing_update + composing_commit (NOT latin_commit). 10 host tests pass (7 IME + 3 PTY). |
 | M2-S11 | Touch input + gesture mapping | **PASS** | **Process anomaly** — codex gpt-5.5 xhigh round-5 PASS @ `8d335fb` (worker `b7b9c09` + `ac689dd` + `839e4fa` + `890c719` + `c644af7` lead-fixed). Round-1 (worker self-dispatched on PRE-FIX state) found 4 issues; round-3 audit kept #2 driver false-pass, #3 VelocityTracker feed ordering, #4 ACTION_CANCEL no emit, #5 sign convention docs OPEN; round-4 closed #2/#3/#4 but left #5 OPEN at 3 stale comments; round-5 verified #5 CLOSED at `tools/scripts/test-touch.sh:18`, `crates/android-host/src/input.rs:422`, `warp-src/crates/warpui/src/platform/android/input.rs:152-155`. Convention consistent: positive vx = finger right, positive vy = finger down in Android screen coords. **Device evidence on Galaxy S24 Ultra R5CX10VFFBA**: per `M2-S11-result.json:6-66` 4 sub-tests + B + C all PASS — real adb shell input tap (`down_within_2px=true`, `up_within_2px=true`); simulated INPUT_SCROLL `last_vy_sim=-1200.0`; long-press; ACTION_CANCEL emit; `last_vy=800.0` positive sign convention confirmed. `cargo test -p warp-mobile-android-host` PASS 18/18. **5 codex rounds total** vs the planned 1-round-per-story baseline (see §8 SOP lessons). |
 | M2-S12 | WindowInsets + IME insets reservation (M2b Acceptance #4) | **PASS** | Codex round-1 PASS @ main `c8007e7` (worker delivered `5277983`, prd flipped at `c8007e7`). **M2b Acceptance #4 cleared (last M2b story)**. `WindowCompat.setDecorFitsSystemWindows(false)` edge-to-edge + `ViewCompat.setOnApplyWindowInsetsListener` forwards `max(ime.bottom, sysBars.bottom)` to `NativeBridge.setRenderInsets` JNI (4 AtomicI32 globals at `crates/android-host/src/lib.rs:768`). Fullscreen toggle via `WindowInsetsControllerCompat.hide(systemBars())` + `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`. Codex verified: listener returns insets non-consuming, `max()` semantics correct (overlap extents same edge not additive), Rust storage thread-safe. **Device evidence on Galaxy S24 Ultra R5CX10VFFBA**: rotation portrait{top=242, bottom=42} → landscape{top=219, left=84, bottom=42}; fullscreen sysBars.bottom 42→0; sub-test 1 `ime.bottom=0` (Knox blocks programmatic `showSoftInput` on debug builds; listener wiring proven via sub-tests 2+3). 18/18 host tests, gradle BUILD SUCCESSFUL, S04..S11 regression all PASS. **Worker followed SOP cleanly** (no self-PASS, prd.json left false until lead-dispatched codex audit returned — contrast with M2-S11 SOP violation, see §8.1). 2 non-blocking nits deferred to §5.2 carry-overs: stale doc URL, `WindowInsetsControllerCompat.show(Type.ime())` preferred for ime_mode test hook. |
-| M2-S13 | Acquire Pixel 4a or A52s + re-run M1 stories on low-end | **DEFERRED — user action** | **Pixel 4a / Galaxy A52s acquisition pending**. Plan Amendment 3 §3 explicitly lists this as M2 carry-over. Once device acquired, run `tools/scripts/test-pty-{reattach,resize}.sh <serial>`, `test-fgs-clean-kill.sh <serial>`, `test-30min-idle-stress.sh <serial>` and produce `.omc/m2-artifacts/M2-S13-low-end-{S06,S07,S08,S09}-result.json`. Same rationale as M1-go-no-go.md §6 verdict ("PARTIAL — flagship S24 Ultra fully demonstrated; low-end deferred"). |
+| M2-S13 | Acquire Pixel 4a or A52s + re-run M1 stories on low-end | **DEFERRED — user action** | **Pixel 4a / Galaxy A52s acquisition pending**. Plan Amendment 3 §3 explicitly lists this as M2 carry-over. Once device acquired, run `tools/scripts/test-pty-{reattach,resize}.sh <serial>`, `test-fgs-clean-kill.sh <serial>`, `test-30min-idle-stress.sh <serial>` and produce `.omc/m2-artifacts/M2-S13-low-end-{S06,S07,S08,S09}-result.json`. Same rationale as M1-go-no-go.md §6 verdict ("CONDITIONAL GO — flagship fully demonstrated; AC#5 PARTIAL on low-end deferral"). |
 | M2-S14 | M2 close-out integration document | **THIS DOC** | — |
 
 **Summary**: 12 stories CODEX_PASS (S01-S12); 1 deferred to user hardware acquisition (S13); 1 = this document awaiting Codex review dispatch (S14).
@@ -54,8 +54,8 @@ warp-src/crates/warpui/src/platform/android/        (NEW in M2-S03)
 
 | Area | warp-src 檔案 | 主要 entry points |
 |---|---|---|
-| `WindowContext::render_scene` | `crates/warpui/src/platform/android/vulkan.rs:313` (`fn render_scene(&self, scene: Rc<crate::Scene>)`) | + `window.rs` call-site dispatch |
-| `WindowContext::request_frame_capture` | `crates/warpui/src/platform/android/vulkan.rs:325` (`fn request_frame_capture(...)`) | per-image present-wait semaphore Vec\<Semaphore\> |
+| `WindowContext::render_scene` | trait entry: `crates/warpui/src/platform/android/window.rs:313` (forwards to `vulkan::global_swapchain().submit_scene` at `vulkan.rs:289`) | + `window.rs` call-site dispatch |
+| `WindowContext::request_frame_capture` | trait entry: `crates/warpui/src/platform/android/window.rs:325`; internal impls at `vulkan.rs:317` (`capture_to_png` device-driver path) + `vulkan.rs:383` (`capture_to_callback` trait callback path) | per-image present-wait semaphore Vec\<Semaphore\> + TRANSFER_WRITE→HOST_READ buffer barrier |
 | `FontDB` (15 methods) | `crates/warpui/src/platform/android/font.rs:539` (`impl FontDB for AndroidFontDB`) — discovery at lines 169-179 (`ASystemFontIterator`) | `fallback_fonts:741`, `font_metrics:754`, `rasterize_glyph:864`, `glyph_for_char:935` |
 | `TextLayoutSystem` (2 methods) | `crates/warpui/src/platform/android/text_layout.rs:428,471` (StandaloneAndroidTextLayout + SharedAndroidTextLayout) — `layout_line:429,472`, `layout_text:441,484` | + 2 unit tests at lines 527,543 |
 
@@ -89,7 +89,8 @@ android/app/src/main/java/dev/warp/mobile/    (M2 additions to M1 baseline)
 | **Render — Vulkan attach + frame** | `renderAttachSurface`, `renderDetachSurface`, `renderClearFrame`, `renderFramesPresented`, `renderCaptureFrame`, `renderCaptureFrameWithText` (lines 228-419) | M2-S04 / M2-S05 / M2-S07 |
 | **Render — static grid** | `renderInitStaticGrid`, `renderDrawGridFrame`, `renderStaticGridAttached`, `renderStaticGridStats` (lines 427-525) | M2-S08 |
 | **IME** | `imeCommitText`, `imeSetComposingText`, `imeFinishComposingText`, `imeStats`, `imeReset` (lines 537-635) | M2-S10 |
-| **Input** | `inputTouchDown`, `inputTouchUp`, `inputTouchCancel`, `inputTap`, `inputLongPress`, `inputScroll`, `inputStats` (lines 638-737) | M2-S11 |
+| **Input** | `inputTouchDown`, `inputTouchUp`, `inputTouchCancel`, `inputTap`, `inputLongPress`, `inputScroll`, `inputStats`, `inputReset` (lines 638-751) | M2-S11 |
+| **Insets** | `setRenderInsets` (line 788) | M2-S12 |
 
 ### 2.5 Driver script roster (`tools/scripts/`, all take `<serial>` as first arg)
 
@@ -140,7 +141,7 @@ No regression in M2; M1-S05..S09 paths intact.
 
 No L2 implementation in M2. M3 wires `crates/warp_terminal` + cfg-gated `app/src/terminal/...` via `crates/warp_terminal_mobile_facade`.
 
-### L3 — minSdk 31 / Adreno 6xx+ baseline: **GO** (Plan Amendment 3)
+### L3 — minSdk 31 / Adreno 6xx+ baseline: **CONDITIONAL** (Plan Amendment 3 — flagship verified; mid-tier S21+ AND low-end Pixel 4a/A52s deferred to S13 per §6 verdict)
 
 S24 Ultra (Adreno 750 / API 36) and S25 (Adreno 750 / API 36) verified. Pixel 4a / A52s deferred to S13.
 
@@ -264,10 +265,10 @@ All other M2 risk areas — render_scene production swapchain, request_frame_cap
 
 | # | Plan §6 M2 AC | Story 對應 | Evidence file:line |
 |---|---|---|---|
-| 1 | Static 50×20 grid 60fps on flagship + mid-tier + replacement low-end Adreno 6xx; no Vulkan validation warnings | S08 + S13 | `.omc/m2-artifacts/M2-S08-result.json:23-29` `frame_interval_ms.p95=9` (gate <16.6ms) + `peak_fps_in_1s_window=122` + `validation_layer.clean=true`; mid-tier + low-end **DEFERRED to S13** |
-| 2 | Activity.recreate() swapchain recovery <200ms p95 across 100 rotations; no black frame >300ms | S09 | `.omc/m2-artifacts/M2-S09-result.json:24-30` `swapchain_recovery_ms.p95=155` (<200) + `max_black_frame_ms=170` (<300) + `validation_layer.clean=true` |
-| 3 | Soft IME (Gboard English + Pinyin) per-key character; composing-text in-place no flicker | S10 | `.omc/m2-artifacts/M2-S10-result.json:14-73` `latin_chars_received=5` + `pinyin_committed_text='你好'` + `sub_test_4_pinyin_compose_commit.pass=true` + `sub_test_6_gboard_finish_then_commit.pass=true` |
-| 4 | WindowInsets reserves IME bottom; fullscreen hides nav bar; rotation re-layout in 1 frame budget | S12 | `.omc/m2-artifacts/M2-S12-result.json:13-35` `insets_listener_fired=true` + `surface_changed_count=2` + `sysbars_bottom_after_fullscreen=0` + `fullscreen_navbar_hidden=true` |
+| 1 | Static 50×20 grid 60fps on flagship + mid-tier + replacement low-end Adreno 6xx; no Vulkan validation warnings | S08 + S13 | `.omc/m2-artifacts/M2-S08-result.json:23-35` (frame_interval_ms.p95=9 gate <16.6ms; peak_fps_in_1s_window=122; validation_layer.clean=true at line 31; layer_loaded=true at line 32); mid-tier + low-end **DEFERRED to S13** |
+| 2 | Activity.recreate() swapchain recovery <200ms p95 across 100 rotations; no black frame >300ms | S09 | `.omc/m2-artifacts/M2-S09-result.json:24-40` (swapchain_recovery_ms.p95=155 <200; max_black_frame_ms=170 at line 31 <300; validation_layer.clean=true at line 35) |
+| 3 | Soft IME (Gboard English + Pinyin) per-key character; composing-text in-place no flicker | S10 | `.omc/m2-artifacts/M2-S10-result.json:11-73` (latin_chars_received=5 at line 11; pinyin_composing_seen=5 at line 12; pinyin_committed_text='你好' at line 13; sub_test_4_pinyin_compose_commit.pass=true; sub_test_6_gboard_finish_then_commit.pass=true) |
+| 4 | WindowInsets reserves IME bottom; fullscreen hides nav bar; rotation re-layout in 1 frame budget | S12 | `.omc/m2-artifacts/M2-S12-result.json:13-42` (insets_listener_fired=true; surface_changed_count=2; rotation_insets_reapplied=true at line 39; sysbars_bottom_after_fullscreen=0; fullscreen_navbar_hidden=true at line 40) |
 | 5 | `cargo doc` for `warpui::platform::android`; module-level doc; ≥1 unit test per public function | S03 + S06 | `warp-src/crates/warpui/src/platform/android/mod.rs:1-50` (module doc table); `text_layout.rs:527,543` (2 host unit tests for layout_line_returns_empty_line_with_no_fonts + layout_text_returns_empty_frame_with_no_fonts) |
 
 ### 7.2 prd.json story-level acceptance criteria
@@ -301,7 +302,7 @@ All other M2 risk areas — render_scene production swapchain, request_frame_cap
 
 #### M2-S04 (commit `369ff50` + warp-src `abd71b9`)
 
-- AC1 vulkan.rs implements WindowContext::render_scene with VkInstance + VkSurfaceKHR + VkSwapchainKHR + present queue → `warp-src/crates/warpui/src/platform/android/vulkan.rs:313` (`fn render_scene`)
+- AC1 vulkan.rs implements WindowContext::render_scene with VkInstance + VkSurfaceKHR + VkSwapchainKHR + present queue → trait entry at `warp-src/crates/warpui/src/platform/android/window.rs:313` (forwards to `vulkan.rs::global_swapchain().submit_scene` at `vulkan.rs:289`)
 - AC2 Single solid-color quad first frame (clear-color test) → magenta-clear verified in S05/S07 piggyback (`mean_rgb=255,0,255`)
 - AC3 Validation layers ON in debug + zero warnings during 60s steady run → `M2-S04-result.json:19-29` `validation_layer.clean=true layer_loaded=true warn_count=0 err_count=0`
 - AC4 Web search docs + ash crate + ANativeWindow + M0 spike prior art → recorded in 4 codex round prompts
@@ -311,7 +312,7 @@ All other M2 risk areas — render_scene production swapchain, request_frame_cap
 
 #### M2-S05 (commit `88a24d7` + `06f0435` + warp-src `bc7c5e7`)
 
-- AC1 vulkan.rs request_frame_capture w/ vkCmdCopyImageToBuffer + memory mapping → `warp-src/crates/warpui/src/platform/android/vulkan.rs:325` (`fn request_frame_capture`)
+- AC1 vulkan.rs request_frame_capture w/ vkCmdCopyImageToBuffer + memory mapping → trait entry at `warp-src/crates/warpui/src/platform/android/window.rs:325`; internal impls at `vulkan.rs:317` (`capture_to_png` device-driver) + `vulkan.rs:383` (`capture_to_callback` trait callback)
 - AC2 Outputs raw RGBA + PNG → `M2-S05-result.json:4-15` `png_path_local`, `png_file_size_bytes=57447`, `mean_r=255 mean_g=0 mean_b=255` (magenta clear)
 - AC3 Web search docs + Vulkan readback + vkCmdCopyImageToBuffer + ash examples → 3 codex round prompts
 - AC4 Device run + capture single frame + adb pull + assert dims + not all-black → `M2-S05-result.json:17-30` `pil_verify.dims=[1080,2340]` + `mean_g=0 mean_r=255 mean_b=255` confirms not black
@@ -412,7 +413,7 @@ All other M2 risk areas — render_scene production swapchain, request_frame_cap
 
 ### 8.1 M2-S11 process violation (capture truthfully — future M3+ MUST learn from this)
 
-**What happened**: Worker self-dispatched codex review on PRE-FIX commit `b7b9c09` — twice — both rounds reviewed the same broken state. Worker self-claimed PASS at commit `839e4fa` after partial fixes (only #1 of 5 issues actually closed). Lead-dispatched round-3 audit codex (artifact `b8abxp4r0`) exposed 4 OPEN issues. Required **5 codex rounds total** (worker round-1+2 invalid + lead round-3 audit + round-4 + round-5) to actually close M2-S11.
+**What happened**: Worker self-dispatched codex review on PRE-FIX commit `b7b9c09` — twice — both rounds reviewed the same broken state (artifact timestamps `2026-04-30T15:38:24Z` and `2026-04-30T15:42:35Z`). Worker self-claimed PASS at commit `839e4fa` after partial fixes (only #1 of 5 issues actually closed). Lead-dispatched round-3 audit codex (artifact `b8abxp4r0` at `2026-04-30T15:52:52Z`) exposed 4 OPEN issues. Required **5 codex rounds total** (worker round-1+2 invalid + lead round-3 audit + round-4 + round-5) to actually close M2-S11.
 
 **Codex round investment for M2-S11 alone**:
 1. Round-1 (worker, on `b7b9c09` PRE-FIX): 4 issues found
