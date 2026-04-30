@@ -391,11 +391,12 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
             (false, b'$') => AnsiState::DcsAwaitMarker { seen_dollar: true },
             (true, b) if b == HEX_ENCODED_JSON_MARKER => AnsiState::DcsHex(Vec::new()),
             (true, b) if b == UNENCODED_JSON_MARKER => AnsiState::DcsRaw(Vec::new()),
+            // Bare 0x9c terminates the empty DCS (8-bit ST). Bare ESC must
+            // route into the IGNORE 7-bit-ST path; routing through
+            // DcsFinish7Bit would call finish_dcs(false, &[]) and bump
+            // dcs_hook_count for `ESC P ESC \\` (codex round-2 finding #1).
             (_, 0x9c) => AnsiState::Ground,
-            (_, 0x1b) => AnsiState::DcsFinish7Bit {
-                is_hex: false,
-                body: Vec::new(),
-            },
+            (_, 0x1b) => AnsiState::DcsIgnoreFinish7Bit,
             // Codex round-1 finding #3: route unknown markers to a true
             // ignore-until-ST state instead of DcsRaw, so dcs_hook_count
             // and dcs_error_count both stay unchanged.
@@ -1034,6 +1035,36 @@ mod tests {
         assert_eq!(errs, 0);
         assert_eq!(m.cell(0, 0).unwrap().glyph, 'd');
         assert_eq!(m.cell(0, 3).unwrap().glyph, 'e');
+    }
+
+    /// Mirror — codex round-2 finding #1: `ESC P ESC \\` must NOT bump
+    /// any counters. Pre-fix the empty DCS routed through `DcsFinish7Bit`
+    /// → `finish_dcs(false, &[])` and the mirror's `finish_dcs` bumped
+    /// `dcs_hook_count`. Post-fix: route to `DcsIgnoreFinish7Bit`.
+    #[test]
+    fn dcs_empty_no_marker_with_7bit_st_no_counter_bumps() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(b"\x1bP\x1b\\after");
+        let (sgr, hooks, errs) = m.parser_stats();
+        assert_eq!(sgr, 0);
+        assert_eq!(hooks, 0);
+        assert_eq!(errs, 0);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
+        assert_eq!(m.cell(0, 4).unwrap().glyph, 'r');
+    }
+
+    /// Mirror — codex round-2 finding #1: `ESC P $ ESC \\` (no marker
+    /// after `$`) must NOT bump any counters either.
+    #[test]
+    fn dcs_dollar_only_with_7bit_st_no_counter_bumps() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(b"\x1bP$\x1b\\next");
+        let (sgr, hooks, errs) = m.parser_stats();
+        assert_eq!(sgr, 0);
+        assert_eq!(hooks, 0);
+        assert_eq!(errs, 0);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'n');
+        assert_eq!(m.cell(0, 3).unwrap().glyph, 't');
     }
 
     /// Mirror — codex round-1 nit: DCS body cap overflow must abort with
