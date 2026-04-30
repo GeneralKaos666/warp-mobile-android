@@ -181,7 +181,7 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §Pre-mortem + M3 scope analysis:
 
 ### 死坑 #1 — Pre-mortem C: cfg-gate budget overshoot (app/ diff >500 lines)
 
-**描述**：M3-S03 要求 cfg-gate `app::terminal::*` desktop-only paths so `cargo build --target aarch64-linux-android -p app` succeeds. The 5 dependency edges to cut (app::ai / app::feature_flag / app::ssh / app::app_context / mio/nix paths) may require more than 500 lines of `#[cfg(...)]` annotations if `app/src/terminal/model/session.rs` has deep nested call chains into these deps.
+**描述**：M3-S03 要求 cfg-gate `app::terminal::*` desktop-only paths so `cargo build --target aarch64-linux-android -p app` succeeds. The 5 dependency edges to cut (app::ai / app::feature_flag / app::ssh / app::app_context / mio/nix paths) may require more than 500 lines of `#[cfg(...)]` annotations if `warp-src/app/src/terminal/model/session.rs` has deep nested call chains into these deps.
 
 **量化預警**：
 - `git diff main warp-mobile/m0-facade -- '*.rs' | grep -E '^\+\s*#\[cfg' | wc -l` measurement in S03
@@ -192,7 +192,7 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §Pre-mortem + M3 scope analysis:
 
 ### 死坑 #2 — Pre-mortem cherry-pick velocity: app/ conflict resolution >2hr
 
-**描述**：M3-S11 cherry-pick dry-run from `warpdotdev/Warp@HEAD` onto our `warp-mobile/m0-facade` or `warp-mobile/main` will expose how much semantic drift has accumulated since our branch point (M0 `afc74ec`). The `app/` layer is the danger zone — it's the tangled Layer 2b that already has OUR cfg-gates; any upstream changes to `app/src/terminal/model/session.rs` or adjacent files will produce conflicts. If `app/` conflicts take >2hr to resolve, this is a signal that the upstream HEAD has drifted beyond our cherry-pick recovery budget.
+**描述**：M3-S11 cherry-pick dry-run from `warpdotdev/Warp@HEAD` onto our `warp-mobile/m0-facade` or `warp-mobile/main` will expose how much semantic drift has accumulated since our branch point (M0 `afc74ec`). The `warp-src/app/` layer is the danger zone — it's the tangled Layer 2b that already has OUR cfg-gates; any upstream changes to `warp-src/app/src/terminal/model/session.rs` or adjacent files will produce conflicts. If `warp-src/app/` conflicts take >2hr to resolve, this is a signal that the upstream HEAD has drifted beyond our cherry-pick recovery budget.
 
 **量化預警**：
 - `git cherry-pick` total time tracked; per-crate conflict count recorded
@@ -205,18 +205,18 @@ per `.omc/plans/ralplan-warp-on-mobile.md` §Pre-mortem + M3 scope analysis:
 ### 死坑 #3 — DCS extraction & cfg-gating risk (NOT format-undocumented; codex round-1 archeology confirmed parser exists)
 
 **描述 (UPDATED post codex round-1 archeology)**：DCS hook parser **already exists upstream** at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (codex M0-archeology re-check confirmed: lines 1, 14, 407, 487; dispatch at `warp-src/app/src/terminal/model/ansi/mod.rs:771`). `warp-src/app/assets/bundled/bootstrap/zsh_body.sh` already emits hex JSON DCS hooks at lines 80, 254, 301. **M3-S05 reframed**: extract + route the existing parser through `warp_terminal_mobile_facade`, NOT discover the format from scratch. **M3-S06 reframed**: ship existing `zsh_body.sh` asset, NOT write new hooks. Death-pit downgraded from "format undocumented" to "extraction & cfg-gating risk". The existing parser likely has tight coupling to `app::terminal::model::*` desktop-only paths, so executor must:
-1. Dump raw bytes from a live Warp desktop session producing DCS output
-2. Reverse-engineer the payload structure from byte inspection
-3. Verify against any available `warp_terminal` internal constants
+1. Read existing `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` end-to-end to map dependency edges
+2. Identify which `app::*` types/traits the parser uses; route them through `warp_terminal_mobile_facade` shims (consistent with S03)
+3. Validate extraction by feeding `warp-src/app/assets/bundled/bootstrap/zsh_body.sh` DCS emissions through the facade-wrapped parser; assert Block events match expected boundaries
 
 **量化預警**：
 - Existing parser at `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` has tight `app::*` desktop-only deps → wrap behind facade or carve out with cfg-gates (consistent with S03 strategy)
 - If payload format has changed across upstream versions → pin to the specific warp-src commit hash where format was established
 
 **緩解**：
-1. Web search for warp DCS hook format documentation (ECMA-48 §5.6 + xterm DCS + any warp OSS references)
-2. Grep `warp-src/crates/warp_terminal/src/` for `DCS`, `\x1bP`, `0x9c`, `ESC_P` patterns before assuming file path
-3. `M0-platform-trait-delta.md` archeology re-check as first step in S05
+1. Read `warp-src/app/src/terminal/model/ansi/dcs_hooks.rs` (lines 1, 14, 407, 487) + `ansi/mod.rs:771` dispatch as the canonical references — they ARE the format spec
+2. Use `warp-src/app/assets/bundled/bootstrap/zsh_body.sh` (lines 80, 254, 301) as live test fixtures for the extracted parser
+3. Cross-check ECMA-48 §5.6 DCS framing only as protocol-level sanity (warp uses ESC P $ d ... ST per ralplan §6 M3 row #4); upstream impl is authoritative
 
 ---
 
@@ -332,10 +332,10 @@ warp-src/crates/warp_terminal_mobile_facade/src/
 └── render.rs           (NEW S04 — PTY bytes → model → Window::push_frame adapter)
 
 warp-src/app/src/terminal/model/ansi/
-└── dcs_hooks.rs        (EXISTING upstream — S05 extract/route through facade; DO NOT create new warp_terminal/src/dcs.rs)
+└── dcs_hooks.rs        (EXISTING upstream — S05 extract/route through facade; DO NOT create a new DCS module under warp_terminal — DCS lives in app/ via facade extraction)
 
 warp-src/app/assets/bundled/bootstrap/
-└── zsh_body.sh         (modified with DCS precmd/preexec hooks — S06)
+└── zsh_body.sh         (EXISTING upstream — S06 ship/integrate existing asset; already emits DCS hooks at lines 80, 254, 301)
 
 tools/scripts/
 ├── test-ls-la.sh       (S08 driver — PTY → renderer → frame capture → golden PNG diff)
