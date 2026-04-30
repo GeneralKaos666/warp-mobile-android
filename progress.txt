@@ -125,3 +125,34 @@ Worker-env did not respond to status ping for 15+ min. APK was building locally 
 - logcat regex: extracting trailing numbers via `grep -oE '[0-9]+ [0-9]+'` matches PID/TID columns. Always end-anchor `$` to message portion only.
 - Samsung One UI: suppresses FGS notification drawer display via importance=NONE; check isForeground=true from dumpsys activity services as proxy for FGS state correctness.
 - Worker autonomy: workers can stall silently. Lead should not wait > 5 min after status ping with no response — take over and complete personally.
+
+## Iteration 9 (2026-04-30 ~04:20 UTC) — S09 PASS + M1 CONDITIONAL GO
+
+### S09 30-min stress run completed
+- All 4 checkpoints PASS: alive=1, isForeground=true, PID 24008 constant 30-min
+- pwd response latency 4ms (way under 500ms threshold)
+- 0 warp-app anomalies (script's broad regex over-counted unrelated system Zygote kills for OTHER apps)
+- Script bugs found: macOS BSD `date +%s%3N` returns literal N (line 163 arithmetic crash); anomaly regex too broad (line 101). Both → M2 carry-overs.
+
+### M1 verdict: CONDITIONAL GO ✅
+- 9/10 stories formally PASS (S01-S09)
+- Plan §6 M1 ACs 5/5 satisfied for S24 Ultra flagship pathway
+- AC#5 partially deferred to M2 (low-end device acquisition pending Pixel 4a / A52s purchase per Plan Amendment 3)
+- Code-quality + architecture risks fully retired
+
+### Codex M1-S10 review dispatched (background be0wdtaua)
+- Reviewing close-out doc against prd.json M1-S10 acceptance criteria
+- Wakeup at 12:28 CST to read verdict
+
+### State (commit 81ec72a)
+- main @ 81ec72a
+- prd.json: 9/10 passes:true
+- All 9 stories have device/Codex evidence in verifiedBy field
+- M1-go-no-go.md verdict §6 finalized
+- 7 M2 carry-overs documented (low-end device, gradle copy task, D1.5-hybrid, android-activity dep, notification customization, clippy lint, S09 script bugs combined as carry-over #8 implicitly)
+
+### Lessons learned (iteration 9)
+- macOS host scripts running adb tests must use python3 for ms-precision timestamps (BSD date %3N broken)
+- Anomaly counting must filter to app UID; device-wide system events should NOT count toward app health
+- Script trap should write FINAL artifact (not partial) when reaching the trap-clear point — current script has the partial-only writer; M2 should refactor to share artifact-writing logic
+- 30-min idle test on flagship is genuinely uneventful — Android did not even recycle the PID over 30 minutes
