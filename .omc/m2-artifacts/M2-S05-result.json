@@ -4,8 +4,8 @@
   "png_path_local": "/tmp/m2-s05-capture.png",
   "png_file_size_bytes": 57447,
   "capture": {
-    "frame_num": 547,
-    "ts_ms": 129666133,
+    "frame_num": 524,
+    "ts_ms": 132316861,
     "width": 1080,
     "height": 2340,
     "bytes_logged": 57447,
@@ -36,7 +36,7 @@
     "sample_lines": [
       {
         "severity": "D",
-        "line": "04-30 22:17:48.800 D/warp-android-host( 6670): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11153.bin for reading (it may not exist yet)"
+        "line": "04-30 23:01:59.678 D/warp-android-host( 4976): warp_mobile_android_host::vulkan: [VkVal] vkCreateDevice(): Cannot open shader validation cache at /tmp/shader_validation_cache-11159.bin for reading (it may not exist yet)"
       }
     ]
   },
