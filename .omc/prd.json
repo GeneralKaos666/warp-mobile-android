@@ -60,8 +60,8 @@
     {
       "id": "M3-S03",
       "title": "Extract app::terminal::model::* into facade modules (Plan Amendment 5; replaces cfg-gate approach)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 PASS @ c76f876 (warp-src) + Amendment 5 reframe",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Per Plan Amendment 5: original cfg-gate-app/ approach REPLACED with extraction. app/ stays out of Android build graph.",
