@@ -119,9 +119,8 @@ adb_cmd logcat -c 2>/dev/null || true
 adb_cmd shell am start -n "${PKG}/.MainActivity" > /dev/null 2>&1
 sleep 3
 
-log "Spawning bash PTY via broadcast..."
-adb_cmd shell am broadcast -a dev.warp.mobile.PTY_SPAWN \
-    --es cmd "bash" 2>/dev/null || true
+log "Spawning sh PTY via FGS direct (debug overlay exposes Service)..."
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_SPAWN --es cmd 'sh'" 2>/dev/null || true
 sleep 2
 
 # t=0 snapshot
@@ -145,14 +144,15 @@ take_snapshot "t30"
 log "Sending 'pwd' command to PTY..."
 adb_cmd logcat -c 2>/dev/null || true
 T_SEND=$(date +%s%3N)
-adb_cmd shell am broadcast -a dev.warp.mobile.PTY_WRITE \
-    --es data "pwd\n" 2>/dev/null || true
+adb_cmd shell "am start-foreground-service -n '${PKG}/.WarpTerminalService' -a dev.warp.mobile.PTY_WRITE --es data 'pwd'" 2>/dev/null || true
 
+# Match the response line that starts with '/' (cwd output) — anchor at the
+# message portion after the PtyOutput tag, NOT the date/PID columns.
 PWD_RESPONSE_MS="-1"
 COUNT=0
 while [[ $COUNT -lt 20 ]]; do
     RAW=$(adb_cmd logcat -d 2>/dev/null || true)
-    FOUND=$(print "$RAW" | grep "$LOGCAT_TAG" | grep "/" | tail -1 || true)
+    FOUND=$(printf '%s\n' "$RAW" | grep -E "WarpTerminal:PtyOutput:[[:space:]]+/" | tail -1 || true)
     if [[ -n "$FOUND" ]]; then
         T_RECV=$(date +%s%3N)
         PWD_RESPONSE_MS=$(( T_RECV - T_SEND ))

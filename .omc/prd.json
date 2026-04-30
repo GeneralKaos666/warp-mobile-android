@@ -81,8 +81,8 @@
     {
       "id": "M1-S05",
       "title": "Android Service + AndroidManifest + FGS skeleton",
-      "passes": false,
-      "verifiedBy": "codex round-1 17-25-42-845Z REVISE → fix f424be2 (perm + Service companion init load) → PTY plumbing chain Task#28→#33→#35 CODEX_PASS at 03-32-36-215Z (Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + tools:remove debug overlay) → device verify pending in Task #32",
+      "passes": true,
+      "verifiedBy": "codex round-1 17-25-42-845Z REVISE → fix f424be2 → PTY plumbing chain Task#28→#33→#35 CODEX_PASS at 03-32-36-215Z → device run on S24 Ultra (R5CX10VFFBA) 7/8 ACs PASS, 1/8 PARTIAL (Samsung One UI drawer suppression; isForeground=true confirms framework state). Evidence: .omc/m1-artifacts/M1-S05-evidence-v2.md @ commit 1b737f3.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "android/app/ project (or similar) created with build.gradle, AndroidManifest.xml, single Activity + WarpTerminalService extending Service",
@@ -98,8 +98,8 @@
     {
       "id": "M1-S06",
       "title": "Activity recreate -> PTY reattach within 1s",
-      "passes": false,
-      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
+      "passes": true,
+      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — delta_ms=36 (under 1000ms threshold), PTY survived 5 device rotations. Evidence: .omc/m1-artifacts/M1-S06-result.json @ commit 1b737f3. Driver fixes during run: && quoting + anchor t_expected on PTY_WRITE log + end-anchor token regex.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Service holds the PTY session (Service-process-bound) so it survives Activity destroy/recreate",
@@ -111,8 +111,8 @@
     {
       "id": "M1-S07",
       "title": "PTY resize via TIOCSWINSZ -> stty size in shell",
-      "passes": false,
-      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
+      "passes": true,
+      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — observed='24 80' exact match. Evidence: .omc/m1-artifacts/M1-S07-result.json @ commit 1b737f3. Driver fix during run: switched broadcast→FGS direct path + end-anchor stty regex.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Java side reads view dims and calls NativeBridge.ptyResize(cols, rows) on layout change",
@@ -124,8 +124,8 @@
     {
       "id": "M1-S08",
       "title": "FGS persistence + clean kill",
-      "passes": false,
-      "structuralPassNote": "see top-level note — drivers structurally PASS round-5; device run pending Task #32",
+      "passes": true,
+      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — pid_before=1, pid_after=0, orphans=0. Evidence: .omc/m1-artifacts/M1-S08-result.json @ commit 1b737f3.",
       "ownerHint": "worker-spike",
       "acceptanceCriteria": [
         "Notification visible continuously during PTY session",
