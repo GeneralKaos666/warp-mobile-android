@@ -135,6 +135,10 @@ class WarpInputView @JvmOverloads constructor(
 
     /// Reset scroll state (live tail). Called on terminal_mode launch + when
     /// the surface is recreated (rotation, IME show/hide).
+    ///
+    /// M3-S09 round-2: terminalSetScrollOffset now returns the actual clamped
+    /// offset (always 0 here since we requested 0); we ignore the return so
+    /// the accumulator is locally reset to 0 above and stays consistent.
     fun resetScroll() {
         currentScrollOffsetRows = 0
         pixelAccumulator = 0f
@@ -226,11 +230,20 @@ class WarpInputView @JvmOverloads constructor(
                 val rowsDelta = (pixelAccumulator / cellHeightPx).toInt()
                 if (rowsDelta != 0) {
                     pixelAccumulator -= rowsDelta * cellHeightPx
-                    val newOffset = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
-                    if (newOffset != currentScrollOffsetRows) {
-                        currentScrollOffsetRows = newOffset
-                        NativeBridge.terminalSetScrollOffset(newOffset)
-                    }
+                    val requested = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
+                    // M3-S09 round-2: capture the **actual clamped offset**
+                    // returned by Rust (Rust caps to `scrollback.len()`) and
+                    // assign it back into `currentScrollOffsetRows`.
+                    // Without this, an over-scroll past the scrollback cap
+                    // (1000 lines) lets `currentScrollOffsetRows` drift to
+                    // 1500+ while Rust sits at 1000; the user then has to
+                    // scroll back the overflow before the viewport visibly
+                    // moves. The unconditional call also drains the
+                    // accumulator on no-op clamps so a sustained
+                    // upward drag past the top doesn't keep producing
+                    // "delta but Rust unchanged" cycles.
+                    val clamped = NativeBridge.terminalSetScrollOffset(requested)
+                    currentScrollOffsetRows = clamped
                 }
             }
             return true
@@ -275,11 +288,15 @@ class WarpInputView @JvmOverloads constructor(
                     val rowsDelta = (pixelAccumulator / cellHeightPx).toInt()
                     if (rowsDelta != 0) {
                         pixelAccumulator -= rowsDelta * cellHeightPx
-                        val newOffset = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
-                        if (newOffset != currentScrollOffsetRows) {
-                            currentScrollOffsetRows = newOffset
-                            NativeBridge.terminalSetScrollOffset(newOffset)
-                        }
+                        val requested = (currentScrollOffsetRows + rowsDelta).coerceAtLeast(0)
+                        // M3-S09 round-2: same as onScroll — capture the
+                        // actual clamped offset from Rust to prevent
+                        // top-boundary state drift. A fling past
+                        // scrollback.len() would otherwise leave
+                        // `currentScrollOffsetRows` ahead of Rust by the
+                        // overshoot until the user scrolls back.
+                        val clamped = NativeBridge.terminalSetScrollOffset(requested)
+                        currentScrollOffsetRows = clamped
                     }
                     // Decay velocity. Reference iOS UIScrollView momentum
                     // model + Android OverScroller default decel: ~0.9 per

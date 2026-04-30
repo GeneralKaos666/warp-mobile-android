@@ -441,8 +441,16 @@ object NativeBridge {
      * M3-S09: set viewport scroll offset (rows back into history).
      * 0 = live tail; >0 = scrolled up. Negative values are clamped to 0;
      * over-scroll is clamped to the actual scrollback length on the Rust side.
+     *
+     * M3-S09 round-2: returns the **actual clamped offset** Rust applied,
+     * after Rust caps the request to `scrollback.len()`. Callers that
+     * accumulate scroll deltas (drag/fling in [WarpInputView]) MUST
+     * assign this return value back into their local `currentScrollOffsetRows`
+     * accumulator — otherwise an over-scroll request lets the local state
+     * drift above the Rust state and the user has to scroll back the
+     * overflow before the viewport visibly moves (codex round-1 finding #1).
      */
-    external fun terminalSetScrollOffset(offsetRows: Int)
+    external fun terminalSetScrollOffset(offsetRows: Int): Int
 
     /**
      * M3-S09: returns scrollback state as a CSV string for the device driver:

@@ -1146,21 +1146,30 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalResize(
 ///
 /// Negative values from Java are saturated to 0 (a finger drag past the
 /// live tail can't unscroll the future).
+///
+/// M3-S09 round-2: returns the actual clamped offset (after Rust clamps to
+/// `scrollback.len()`) so the Kotlin caller (`WarpInputView.gestureListener`
+/// `onScroll` / fling decay) can sync `currentScrollOffsetRows` against the
+/// real value. Without this, an over-scroll request leaves the Kotlin
+/// accumulator drifting above the Rust state, forcing the user to scroll
+/// back the overflow before the viewport visibly moves (see codex round-1
+/// finding #1).
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalSetScrollOffset(
     _env: JNIEnv,
     _class: JClass,
     offset_rows: jint,
-) {
+) -> jint {
     init_logger();
-    let clamped = if offset_rows < 0 { 0usize } else { offset_rows as usize };
-    terminal_model::set_scroll_offset(clamped);
+    let requested = if offset_rows < 0 { 0usize } else { offset_rows as usize };
+    let clamped = terminal_model::set_scroll_offset(requested);
     log::info!(
         target: "WarpTerminalModel",
-        "terminal_set_scroll_offset offset={} actual={}",
-        clamped, terminal_model::scroll_offset()
+        "terminal_set_scroll_offset requested={} clamped={}",
+        requested, clamped
     );
+    clamped as jint
 }
 
 /// M3-S09: returns scrollback state as a CSV string for the JNI driver:

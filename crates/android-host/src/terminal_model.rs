@@ -507,7 +507,11 @@ impl TerminalModel {
     /// Mirror of `facade::render::TerminalModel::set_scroll_offset`. Updates
     /// the viewport offset (0 = live tail) and sets the dirty flag so the
     /// Choreographer re-inits the GPU grid on the next vsync.
-    pub fn set_scroll_offset(&self, offset: usize) {
+    ///
+    /// M3-S09 round-2: returns the actual clamped offset (mirror of facade
+    /// signature change) so the JNI export can return it to Kotlin and
+    /// `currentScrollOffsetRows` stays in sync with `scrollback.len()`.
+    pub fn set_scroll_offset(&self, offset: usize) -> usize {
         let mut state = match self.inner.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -517,6 +521,7 @@ impl TerminalModel {
             state.scroll_offset = clamped;
             self.dirty.store(true, Ordering::Release);
         }
+        clamped
     }
 
     pub fn scroll_offset(&self) -> usize {
@@ -1358,8 +1363,12 @@ pub fn blocks_dump_json() -> String {
 
 /// Set the global terminal model's viewport offset. Surfaced for the JNI
 /// `terminalSetScrollOffset` export.
-pub fn set_scroll_offset(offset: usize) {
-    global_model().set_scroll_offset(offset);
+///
+/// M3-S09 round-2: returns the actual clamped offset (after Rust clamps to
+/// `scrollback.len()`) so the JNI export can hand it back to the Kotlin
+/// caller, preventing top-boundary state drift in `currentScrollOffsetRows`.
+pub fn set_scroll_offset(offset: usize) -> usize {
+    global_model().set_scroll_offset(offset)
 }
 
 /// Get the current viewport scroll offset (0 = live tail).
@@ -1767,10 +1776,14 @@ mod tests {
         assert_eq!(snap[1][0].glyph, 'B');
 
         // Over-scroll clamps.
-        m.set_scroll_offset(999);
+        // M3-S09 round-2: returns the clamped value so the JNI export can
+        // hand it back to Kotlin (no top-boundary drift).
+        let clamped = m.set_scroll_offset(999);
+        assert_eq!(clamped, 2);
         assert_eq!(m.scroll_offset(), 2);
 
-        m.set_scroll_offset(0);
+        let zero = m.set_scroll_offset(0);
+        assert_eq!(zero, 0);
         let snap = m.snapshot_cells();
         assert_eq!(snap[0][0].glyph, 'C');
         assert_eq!(snap[1][0].glyph, 'D');
@@ -1784,7 +1797,12 @@ mod tests {
         }
         assert!(m.scrollback_len() >= 1000);
         assert!(m.scrollback_len() <= SCROLLBACK_MAX_LINES);
-        m.set_scroll_offset(1000);
+        let clamped_at_cap = m.set_scroll_offset(1000);
+        assert_eq!(clamped_at_cap, m.scrollback_len().min(1000));
         assert_eq!(m.scroll_offset(), m.scrollback_len().min(1000));
+        // Round-2 boundary check — over-scroll past the cap returns the cap.
+        let over = m.set_scroll_offset(SCROLLBACK_MAX_LINES + 500);
+        assert_eq!(over, m.scrollback_len());
+        assert!(over <= SCROLLBACK_MAX_LINES);
     }
 }
