@@ -76,8 +76,8 @@
     {
       "id": "M3-S04",
       "title": "Facade → warpui Android push_frame wiring (PTY bytes → terminal model → renderer)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 PASS @ warp-src 71f5c73 + main c6574f3",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp_terminal_mobile_facade/src/render.rs implements adapter: PTY bytes (via M1 PTY backend) → warp_terminal model (cells/lines/cursor) → warpui::platform::android::Window::push_frame",
