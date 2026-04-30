@@ -94,6 +94,30 @@
             </intent-filter>
         </receiver>
 
+        <!-- M2-S11: touch-input simulation receiver. `adb shell input tap` delivers
+             real MotionEvents to WarpInputView.onTouchEvent. For swipe-velocity
+             and long-press sub-tests where adb shell input's timing is non-
+             deterministic, the driver broadcasts these intents which call the
+             Rust JNI entry points directly (disclosed in result JSON).
+             No android:permission attribute so `adb shell am broadcast` from
+             uid=2000 (shell) can reach this receiver during device testing.
+             The adb input commands require a connected host anyway, so the
+             security boundary is physical device access, not app signing.
+             (PTY_CONTROL is a signature-level restriction that blocks shell uid=2000
+             on Android 14+, tested on Galaxy S24 Ultra API 36.) -->
+        <receiver
+            android:name=".TouchSimulationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.INPUT_TOUCH_DOWN" />
+                <action android:name="dev.warp.mobile.INPUT_TOUCH_UP" />
+                <action android:name="dev.warp.mobile.INPUT_TAP" />
+                <action android:name="dev.warp.mobile.INPUT_LONG_PRESS" />
+                <action android:name="dev.warp.mobile.INPUT_SCROLL" />
+                <action android:name="dev.warp.mobile.INPUT_RESET" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

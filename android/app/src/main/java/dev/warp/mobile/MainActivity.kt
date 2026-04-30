@@ -186,14 +186,20 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             )
         )
         warpInputView = WarpInputView(this).apply {
-            // 1x1 px in the top-left corner; alpha 0 so it doesn't obscure
-            // anything but the framework still considers it visible (alpha
-            // 0 on Android 5+ does not skip layout/measurement).
+            // alpha=0: transparent so it doesn't obscure the SurfaceView render
+            // output (alpha=0 on Android 5+ doesn't skip layout/measurement).
+            // M2-S11: MATCH_PARENT so the View covers the full screen and
+            // receives all touch events (WarpInputView.onTouchEvent). A 1x1
+            // size would only capture taps in the top-left pixel; MATCH_PARENT
+            // captures taps anywhere on screen and is still invisible.
             alpha = 0f
         }
         frame.addView(
             warpInputView,
-            FrameLayout.LayoutParams(1, 1)
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         )
         setContentView(frame)
         warpInputView!!.requestFocus()

@@ -9,6 +9,11 @@ mod font_render;
 // to exercise the state-machine tests without cross-compilation).
 pub mod ime;
 
+// M2-S11 touch input state machine. Same host-build policy as IME — no NDK
+// deps so `cargo test -p warp-mobile-android-host` exercises the unit tests
+// without cross-compilation.
+pub mod input;
+
 #[cfg(target_os = "android")]
 mod static_grid;
 
@@ -613,6 +618,123 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_imeReset(
 ) {
     init_logger();
     ime::reset();
+}
+
+// ── M2-S11: Touch input + gesture JNI bindings ──────────────────────────────
+//
+// Drives `crates/android-host/src/input.rs::global_input()` (which mirrors the
+// canonical state machine in `warp-src/crates/warpui/src/platform/android/
+// input.rs` per M2-S11 AC#1). Java side is `WarpInputView` in
+// `android/app/src/main/java/dev/warp/mobile/WarpInputView.kt`.
+//
+// JNI call thread: View's UI thread (Android touch dispatch contract).
+// All five event entry points + the stats/reset pair are guarded by the
+// process-wide `Mutex` inside `input::global_input()`.
+
+/// M2-S11: Java `WarpInputView.onTouchEvent ACTION_DOWN` → Rust state.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputTouchDown(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+) {
+    init_logger();
+    input::touch_down(x, y);
+}
+
+/// M2-S11: Java `WarpInputView.onTouchEvent ACTION_UP` → Rust state.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputTouchUp(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+) {
+    init_logger();
+    input::touch_up(x, y);
+}
+
+/// M2-S11: Java `GestureDetector.onSingleTapConfirmed` → Rust state.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputTap(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+) {
+    init_logger();
+    input::tap(x, y);
+}
+
+/// M2-S11: Java `GestureDetector.onLongPress` → Rust state.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputLongPress(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+) {
+    init_logger();
+    input::long_press(x, y);
+}
+
+/// M2-S11: Java `GestureDetector.onScroll` + VelocityTracker → Rust state.
+///
+/// `dx`/`dy`: distance moved since last scroll event (from `onScroll` distanceX/Y).
+/// `vx`/`vy`: instantaneous velocity in px/s from `VelocityTracker` (computed
+/// at ACTION_MOVE time on Java side and forwarded here).
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputScroll(
+    _env: JNIEnv,
+    _class: JClass,
+    x: jfloat,
+    y: jfloat,
+    dx: jfloat,
+    dy: jfloat,
+    vx: jfloat,
+    vy: jfloat,
+) {
+    init_logger();
+    input::scroll(x, y, dx, dy, vx, vy);
+}
+
+/// M2-S11: returns current input stats as a comma-separated string:
+///   "touch_down=N,touch_up=N,tap=N,long_press=N,scroll=N,events=N,
+///    last_down_x=F,last_down_y=F,last_up_x=F,last_up_y=F,
+///    last_scroll_vx=F,last_scroll_vy=F"
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputStats(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let s = input::stats_string();
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
+/// M2-S11: reset the input state (clear counters + events). Driver calls
+/// between sub-tests so each sub-test's counters are independent.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_inputReset(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    init_logger();
+    input::reset();
 }
 
 // ── Logger ──────────────────────────────────────────────────────────────────

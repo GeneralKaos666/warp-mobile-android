@@ -198,4 +198,60 @@ object NativeBridge {
     /** Reset IME state (clear counters + composing region). Driver uses
      *  this between sub-tests. */
     external fun imeReset()
+
+    // ── Touch input + gesture mapping (M2-S11) ──────────────────────────────
+    //
+    // Drives the state machine in `crates/android-host/src/input.rs` (which
+    // mirrors `warp-src/crates/warpui/src/platform/android/input.rs`). Called
+    // from `WarpInputView.onTouchEvent` + `GestureDetector.SimpleOnGestureListener`
+    // on the View's UI thread.
+    //
+    // Raw down/up arrive from onTouchEvent ACTION_DOWN / ACTION_UP directly,
+    // while tap / long_press / scroll arrive from GestureDetector callbacks.
+    // VelocityTracker computes instantaneous velocity on the Java side and
+    // forwards it alongside the scroll distance.
+    //
+    // Logcat tag: `WarpInput` (Rust). The M2-S11 driver greps these.
+
+    /** Raw ACTION_DOWN: finger first touches screen. */
+    external fun inputTouchDown(x: Float, y: Float)
+
+    /** Raw ACTION_UP: finger lifts from screen. */
+    external fun inputTouchUp(x: Float, y: Float)
+
+    /**
+     * GestureDetector `onSingleTapConfirmed`: confirmed single tap (fires
+     * ~300 ms after ACTION_UP, after double-tap window expires).
+     */
+    external fun inputTap(x: Float, y: Float)
+
+    /**
+     * GestureDetector `onLongPress`: sustained press ≥ long-press timeout.
+     * Equivalent to right-click / context-menu trigger.
+     */
+    external fun inputLongPress(x: Float, y: Float)
+
+    /**
+     * GestureDetector `onScroll` + VelocityTracker: drag scroll event.
+     *
+     * @param x  Current finger X position (px).
+     * @param y  Current finger Y position (px).
+     * @param dx Distance scrolled on X axis since last scroll event (px).
+     * @param dy Distance scrolled on Y axis since last scroll event (px).
+     * @param vx Instantaneous X velocity from VelocityTracker (px/s).
+     * @param vy Instantaneous Y velocity from VelocityTracker (px/s).
+     *           Negative vy = finger moved down (content scrolls up).
+     */
+    external fun inputScroll(x: Float, y: Float, dx: Float, dy: Float, vx: Float, vy: Float)
+
+    /**
+     * Returns input state machine counters as a comma-separated string:
+     * "touch_down=N,touch_up=N,tap=N,long_press=N,scroll=N,events=N,
+     *  last_down_x=F,last_down_y=F,last_up_x=F,last_up_y=F,
+     *  last_scroll_vx=F,last_scroll_vy=F"
+     */
+    external fun inputStats(): String
+
+    /** Reset input state (clear counters + event queue). Driver uses between sub-tests. */
+    external fun inputReset()
 }

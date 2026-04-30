@@ -4,6 +4,9 @@ import android.content.Context
 import android.text.Spanned
 import android.util.AttributeSet
 import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
@@ -34,7 +37,44 @@ import android.view.inputmethod.InputConnection
  * `BaseInputConnection`'s own bookkeeping — relevant for delete/getTextBefore
  * etc. on subsequent IME queries — stays consistent).
  *
- * ## Web docs consulted (2026-04-30):
+ * ## M2-S11 addition: onTouchEvent + GestureDetector
+ *
+ * WarpInputView is 1×1 px overlaying the SurfaceView; however, in the
+ * FrameLayout composite layout it sits at the top of the Z-order and
+ * `isClickable = true` means it receives touch events first (before
+ * SurfaceView). We override `onTouchEvent` here to:
+ *
+ *   1. Emit raw `ACTION_DOWN` / `ACTION_UP` → `NativeBridge.inputTouchDown/Up`.
+ *   2. Feed the event to a `GestureDetector` for tap/long-press detection.
+ *   3. Feed the event to `VelocityTracker` so scroll events carry instantaneous
+ *      velocity.
+ *
+ * **Why WarpInputView gets touch, not SurfaceView**: SurfaceView is on a
+ * separate Z-layer (window-manager-hosted surface). Touch dispatch walks the
+ * View hierarchy, not the Z-order of surfaces. WarpInputView is a regular View
+ * at z-position 1 (added second to FrameLayout), so it sits above SurfaceView
+ * for hit-testing purposes. `isClickable=true` ensures it doesn't pass through.
+ *
+ * **Focus + touch tension**: WarpInputView must have `isFocusableInTouchMode`
+ * for IME (S10 requirement). Touch dispatch calls `requestFocus()` on the
+ * target view when `isFocusableInTouchMode = true`, which is idempotent here
+ * since it already has focus. No conflict.
+ *
+ * **GestureDetector timing**: `onSingleTapConfirmed` fires ~300 ms after
+ * ACTION_UP (double-tap window). Raw `inputTouchDown`/`inputTouchUp` fire
+ * immediately for latency-sensitive paths.
+ *
+ * **VelocityTracker**: initialized on ACTION_DOWN, fed on ACTION_MOVE,
+ * velocity computed at ACTION_MOVE and forwarded with each `inputScroll` call.
+ * Released on ACTION_UP / ACTION_CANCEL.
+ *
+ * ## Web docs consulted (M2-S11, 2026-04-30):
+ * - <https://developer.android.com/reference/android/view/MotionEvent>
+ * - <https://developer.android.com/reference/android/view/GestureDetector>
+ * - <https://developer.android.com/reference/android/view/GestureDetector.SimpleOnGestureListener>
+ * - <https://developer.android.com/reference/android/view/VelocityTracker>
+ * - <https://developer.android.com/training/gestures/detector>
+ * ## Web docs consulted (M2-S10, 2026-04-30):
  * - <https://developer.android.com/reference/android/view/inputmethod/InputConnection>
  * - <https://developer.android.com/reference/android/view/inputmethod/BaseInputConnection>
  * - <https://developer.android.com/develop/ui/views/touch-and-input/creating-input-method>
@@ -62,6 +102,71 @@ class WarpInputView @JvmOverloads constructor(
 
     fun warpInputConnectionOrNull(): WarpInputConnection? = lastInputConnection
 
+    // M2-S11: GestureDetector for tap / long-press / scroll detection.
+    private val gestureListener = object : GestureDetector.SimpleOnGestureListener() {
+        /**
+         * Fires ~300 ms after ACTION_UP once the double-tap window expires.
+         * More reliable for "single tap intent" than raw ACTION_UP which could
+         * be the start of a double-tap.
+         */
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            Log.i(TAG, "gesture_tap x=${e.x} y=${e.y}")
+            NativeBridge.inputTap(e.x, e.y)
+            return true
+        }
+
+        /**
+         * Long-press: sustained contact ≥ ViewConfiguration.getLongPressTimeout
+         * (~500 ms). Equivalent to right-click / context-menu trigger.
+         */
+        override fun onLongPress(e: MotionEvent) {
+            Log.i(TAG, "gesture_long_press x=${e.x} y=${e.y}")
+            NativeBridge.inputLongPress(e.x, e.y)
+        }
+
+        /**
+         * Scroll: drag gesture (finger moves while touching). `distanceX`/`Y`
+         * are the pixels moved since the previous call (positive = scrolled
+         * up / left). We forward these alongside the instantaneous velocity
+         * from `velocityTracker` so the Rust side can drive deceleration.
+         *
+         * `e1` is the initial ACTION_DOWN; `e2` is the current ACTION_MOVE.
+         */
+        override fun onScroll(
+            e1: MotionEvent?,
+            e2: MotionEvent,
+            distanceX: Float,
+            distanceY: Float
+        ): Boolean {
+            val vx: Float
+            val vy: Float
+            val vt = velocityTracker
+            if (vt != null) {
+                vt.addMovement(e2)
+                // Units: pixels per second (default). Positive = moving right/down.
+                vt.computeCurrentVelocity(1000)
+                vx = vt.xVelocity
+                vy = vt.yVelocity
+            } else {
+                vx = 0f
+                vy = 0f
+            }
+            Log.d(TAG, "gesture_scroll x=${e2.x} y=${e2.y} dx=$distanceX dy=$distanceY vx=$vx vy=$vy")
+            NativeBridge.inputScroll(e2.x, e2.y, distanceX, distanceY, vx, vy)
+            return true
+        }
+
+        // Return true so GestureDetector tracks scroll state from the initial
+        // ACTION_DOWN. Without this, onScroll is never called.
+        override fun onDown(e: MotionEvent): Boolean = true
+    }
+
+    private val gestureDetector = GestureDetector(context, gestureListener)
+
+    // M2-S11: VelocityTracker — initialized on ACTION_DOWN, released on ACTION_UP.
+    // The Java VelocityTracker pool is small; always recycle.
+    private var velocityTracker: VelocityTracker? = null
+
     init {
         // Critical for IME attachment:
         //   isFocusable = true        — System.requestFocus may target us.
@@ -72,6 +177,51 @@ class WarpInputView @JvmOverloads constructor(
         isFocusable = true
         isFocusableInTouchMode = true
         isClickable = true
+    }
+
+    /**
+     * M2-S11: touch event handler.
+     *
+     * Routes raw ACTION_DOWN / ACTION_UP to Rust JNI immediately (low latency),
+     * and feeds every event through the GestureDetector for higher-level gesture
+     * recognition (tap, long-press, scroll).
+     *
+     * We always return `true` so the View consumes the event and Android does
+     * not propagate it further down the view tree.
+     */
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // Feed GestureDetector first (needs the raw event).
+        gestureDetector.onTouchEvent(event)
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                Log.i(TAG, "touch_down x=${event.x} y=${event.y}")
+                // Acquire a fresh VelocityTracker for this touch sequence.
+                velocityTracker?.recycle()
+                velocityTracker = VelocityTracker.obtain()
+                velocityTracker!!.addMovement(event)
+                NativeBridge.inputTouchDown(event.x, event.y)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                // Feed VelocityTracker so onScroll can query instantaneous velocity.
+                velocityTracker?.addMovement(event)
+            }
+            MotionEvent.ACTION_UP -> {
+                Log.i(TAG, "touch_up x=${event.x} y=${event.y}")
+                NativeBridge.inputTouchUp(event.x, event.y)
+                velocityTracker?.recycle()
+                velocityTracker = null
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                Log.d(TAG, "touch_cancel")
+                velocityTracker?.recycle()
+                velocityTracker = null
+            }
+        }
+        // Returning true is required for GestureDetector to detect scroll and
+        // long-press: if we return false on ACTION_DOWN the detector won't
+        // receive subsequent ACTION_MOVE events.
+        return true
     }
 
     override fun onCheckIsTextEditor(): Boolean = true

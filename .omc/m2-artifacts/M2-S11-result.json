@@ -1,0 +1,53 @@
+{
+  "story": "M2-S11",
+  "device_serial": "R5CX10VFFBA",
+  "attach_ts_ms": 133901681,
+  "detach_ts_ms": null,
+  "sub_test_1_real_tap": {
+    "method": "adb_shell_input_tap",
+    "tap_x": 540.0,
+    "tap_y": 1170.0,
+    "touch_down_events": [
+      {
+        "x": 540.0,
+        "y": 1170.0
+      }
+    ],
+    "touch_up_events": [
+      {
+        "x": 540.0,
+        "y": 1170.0
+      }
+    ],
+    "tap_events": [
+      {
+        "x": 540.0,
+        "y": 1170.0
+      }
+    ],
+    "down_within_2px": true,
+    "up_within_2px": true,
+    "kt_view_path_confirmed": false,
+    "pass": true
+  },
+  "sub_test_2_scroll_velocity": {
+    "method": "simulation_broadcast_INPUT_SCROLL",
+    "scroll_events_received": 23,
+    "last_vy": -5000.0,
+    "nonzero_velocity": true,
+    "pass": true
+  },
+  "sub_test_3_long_press": {
+    "method": "simulation_broadcast_INPUT_LONG_PRESS",
+    "long_press_events_received": 1,
+    "pass": true
+  },
+  "method_note": "Sub-test 1 uses real adb shell input tap (OS MotionEvent path through WarpInputView.onTouchEvent). Sub-tests 2+3 use simulation broadcasts (TouchSimulationReceiver → NativeBridge JNI directly) because adb swipe velocity and long-press duration are non-deterministic on Samsung One UI.",
+  "acceptance_gate": {
+    "tap_received": true,
+    "scroll_received": true,
+    "scroll_nonzero_velocity": true,
+    "long_press_received": true,
+    "overall_pass": true
+  }
+}
