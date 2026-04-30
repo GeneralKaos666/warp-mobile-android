@@ -230,8 +230,8 @@
     {
       "id": "M2-S14",
       "title": "M2 close-out integration document",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-3 CODEX_PASS at main 5e306b1 (worker delivered 7d9dd60 → lead picked up codex's S04/S08/S09 reruns at 90c6d76 → round-2 fixes at c71421e → round-3 polish at 5e306b1). M2-go-no-go.md 508 lines / 6,904 words. Round-1 found 4 blockers (wrong Vulkan trait file refs / §7 citation ranges incomplete / JNI table missing 2 exports / stale HEAD commit) + 3 nits (S11 SOP timestamps / M1 verdict label / L3 GO inconsistency). Round-2 found 4 polish issues (header still stale / §2.1 still bad refs / 2 stale 'PARTIAL — flagship' hits / §6 path-to-GO count off-by-one). Round-3 verified all closed. M2 milestone officially CLOSED CONDITIONAL GO modulo S13 hardware acquisition. Cumulative across M2 14 stories: 21+ codex review rounds, 30+ blockers caught + fixed. Death-pit #1 (S04 Vulkan) 4 rounds 8 blockers; death-pit #2 (S10 IME) 2 rounds 2 blockers; M2-S11 process anomaly 5 rounds (worker self-PASS SOP violation, lead audit exposed 4/5 OPEN — captured as §8.1 lesson for M3). M2a (S03-S09) 9 stories all PASS including M2a-font sub-gate and Acceptance #1 (60fps p95=9ms 11k glyphs/frame) + Acceptance #2 (swapchain p95=155ms over 100 rotations). M2b (S10-S12) 3 stories all PASS including IME composing-text + touch + WindowInsets. Path to full M2 GO: acquire Pixel 4a/A52s API 31 + re-run M1-S06/S07/S08/S09 + M2-S04/S08/S09 drivers (M2-S13 user action).",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         ".omc/m2-artifacts/M2-go-no-go.md exists per M1-go-no-go.md template",
