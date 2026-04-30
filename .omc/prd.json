@@ -141,8 +141,8 @@
     {
       "id": "M3-S08",
       "title": "Per-cell dynamic_grid renderer + Live ls -la /system on S24U (M3 Acceptance #1, post-amend)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-1 PASS @ warp-src 6dedd95 + main 83c548b",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Build warp-src/crates/warpui/src/platform/android/dynamic_grid.rs (NEW): per-cell renderer that reads from TerminalModel.cells() with SGR fg/bg/attrs honored. Reuses M2-S07 glyph atlas + cosmic-text shaping. The static_grid M2-S08 path stays untouched (M2 acceptance held).",
