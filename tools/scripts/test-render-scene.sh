@@ -161,6 +161,11 @@ tail -30 "$LOGCAT_FILE" >&2
 
 echo "=== parsing results ===" >&2
 
+# Round-4 (Codex round-3 nit): with `set -euo pipefail`, the parser exiting
+# non-zero would bypass the cleanup paths below (force-stop, stay-on
+# restore). Disable errexit just around the parser invocation so we can
+# capture PARSE_RC into a variable and decide policy ourselves.
+set +e
 python3 - "$LOGCAT_FILE" "$SERIAL" "$RESULT_JSON" "$CAPTURE_SECONDS" <<'PYEOF'
 import sys, re, json, statistics
 
@@ -335,16 +340,24 @@ print(f"GATE:                      fps_60_pass={fps_60_pass} validation_clean={v
 # just the validation-layer-loaded check. Round-2 only failed when the layer
 # was absent — a real validation W/E or an FPS regression would still exit 0
 # and the result.json would silently report overall_pass=false to nobody.
+#
+# Round-4 (Codex round-3 blocker): layer-absent must exit 3, not 4. Earlier
+# round-3 used `not validation_clean` for the exit-4 case, but
+# validation_clean is computed as `layer_loaded AND no W/E lines`, which
+# means a missing layer would falsely upgrade the exit code to 4. Codex's
+# repro fed a synthetic "60fps, no marker" log and got `no_layer_rc=4`
+# instead of the documented 3. Decouple: exit 4 only on actual W/E lines.
 exit_code = 0
 if not validation_layer_loaded:
-    exit_code = max(exit_code, 3)   # blocker 4c (round-1)
-if not validation_clean:
-    exit_code = max(exit_code, 4)   # blocker 3 (round-2)
+    exit_code = max(exit_code, 3)              # blocker 4c (round-1)
+if warn_count > 0 or err_count > 0:
+    exit_code = max(exit_code, 4)              # blocker 3 (round-2) — only on real W/E
 if not fps_60_pass:
-    exit_code = max(exit_code, 5)   # blocker 3 (round-2)
+    exit_code = max(exit_code, 5)              # blocker 3 (round-2)
 sys.exit(exit_code)
 PYEOF
 PARSE_RC=$?
+set -e
 
 echo "=== done ===" >&2
 
