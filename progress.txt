@@ -156,3 +156,34 @@ Worker-env did not respond to status ping for 15+ min. APK was building locally 
 - Anomaly counting must filter to app UID; device-wide system events should NOT count toward app health
 - Script trap should write FINAL artifact (not partial) when reaching the trap-clear point — current script has the partial-only writer; M2 should refactor to share artifact-writing logic
 - 30-min idle test on flagship is genuinely uneventful — Android did not even recycle the PID over 30 minutes
+
+## Iteration 10 (2026-04-30 ~04:41 UTC) — M1 MILESTONE CLOSED 🎉
+
+### M1-S10 Codex review final verdict
+- 5 rounds iterative Codex review on M1-go-no-go.md close-out doc
+- Round-1 REVISE (5 issues) → fix 7513445
+- Round-2 REVISE (4 issues) → fix ad3d0cc
+- Round-3 REVISE (5 issues) → fix fc0a892
+- Round-4 REVISE (1 minor) → fix 4f37601
+- **Round-5 CODEX_PASS** at 04-41-13-401Z
+
+### M1 final state (commit af863aa)
+- prd.json: 10/10 stories formally PASS
+- M1-go-no-go.md §6 verdict: CONDITIONAL GO ✅
+- §7 per-criterion citation table: ~50 ACs with file:line refs
+- §5 M2 carry-overs: 6 items
+- Plan §6 M1 acceptance criteria 5/5 satisfied for S24 Ultra flagship
+
+### M2 carry-overs (deferred from M1)
+1. Acquire low-end device (Pixel 4a / A52s API 31), re-run S06-S09
+2. Gradle copy task replacing jniLibs symlink
+3. D1.5-hybrid M2 impl (warpui::platform::android backend)
+4. android-activity / winit reorganization
+5. Notification customization (session count, command preview)
+6. Clippy lint cleanup (7 style nits)
+
+### Lessons learned (iteration 10)
+- Codex iterative review can spiral on minor citation precision; 5 rounds is reasonable for a major milestone close-out doc but 3 should suffice for routine code review
+- File:line citations in close-out docs require stable underlying files; result.json with stdout contamination makes line refs unstable across cleanups
+- "am kill" vs "am force-stop" semantics on Android FGS apps: empirically only force-stop kills FGS, am kill is no-op (verified PID 5942 stays alive). Plan AC text needs Amendment 4 in M2.
+- Boulder hook firing repeatedly during wall-clock waits (S09 30-min, Codex 3-5min) is noise; the actual blocker is wall-clock not work-availability
