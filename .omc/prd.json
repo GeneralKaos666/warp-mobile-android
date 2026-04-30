@@ -152,8 +152,8 @@
     {
       "id": "M1-S10",
       "title": "M1 close-out integration document",
-      "passes": false,
-      "verifiedBy": "draft skeleton .omc/m1-artifacts/M1-go-no-go.md committed at a91e6b8; verdict §6 TBD, fill in once S05/S06/S07/S08/S09 device runs close",
+      "passes": true,
+      "verifiedBy": "Codex 5-round iterative review CODEX_PASS at 04-41-13-401Z. Final commit 4f37601. M1-go-no-go.md §6 verdict CONDITIONAL GO with documented am force-stop vs am kill deviation + low-end device deferral to M2. §7 per-criterion citation table covers all ~50 prd.json ACs with file:line refs. 6 M2 carry-overs in §5 (low-end device, gradle copy task, D1.5-hybrid impl, android-activity dep cleanup, notification customization, clippy lint). Round history: round-1/2/3/4 REVISE addressed in commits 7513445/ad3d0cc/fc0a892/4f37601 → round-5 PASS.",
       "ownerHint": "worker-env",
       "acceptanceCriteria": [
         ".omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories with PASS evidence + commit hashes",
