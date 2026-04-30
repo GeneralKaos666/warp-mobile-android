@@ -57,6 +57,12 @@ echo "=== device: $SERIAL ===" >&2
     exit 1
 }
 
+# Anti-Knox-idle keep-awake — see tools/scripts/lib/keep-awake.sh.
+source "$SCRIPT_DIR/lib/keep-awake.sh"
+keep_awake_setup "$SERIAL"
+keep_awake_start "$SERIAL"
+trap 'keep_awake_stop; keep_awake_restore "$SERIAL"' EXIT
+
 echo "=== uninstall any prior debug install ===" >&2
 "${ADB[@]}" uninstall "$PACKAGE" 2>&1 | tail -1 >&2 || true
 
@@ -178,7 +184,7 @@ LOGCAT_FILE=$(mktemp /tmp/m2-s05-logcat.XXXXXX)
     "WarpVulkan:V" \
     "warp-android-host:V" \
     "*:S" > "$LOGCAT_FILE"
-trap "rm -f $LOGCAT_FILE" EXIT
+trap 'rm -f $LOGCAT_FILE; keep_awake_stop; keep_awake_restore "$SERIAL"' EXIT
 
 if ! grep -q "capture_ok" "$LOGCAT_FILE"; then
     echo "ERROR: no 'capture_ok' line in logcat after capture trigger." >&2
