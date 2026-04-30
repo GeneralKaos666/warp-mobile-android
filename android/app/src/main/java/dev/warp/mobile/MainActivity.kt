@@ -72,6 +72,13 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     @Volatile
     private var gridCellHPx: Float = 60.0f
 
+    // M3-S04: when true, doFrame consumes the dirty bit on the Rust
+    // TerminalModel and pushes a frame whenever PTY output changed. Falls
+    // back to renderClearFrame when no dirty buffer (so vsync keeps ticking
+    // for swapchain health). Toggled at launch via --ez terminal_mode true.
+    @Volatile
+    private var terminalMode = false
+
     // M2-S10: input focus target for IME attachment. SurfaceView cannot
     // receive `onCreateInputConnection`, so we overlay a 1x1 transparent
     // focusable View on top.
@@ -80,13 +87,33 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!renderActive) return
-            // Magenta clear; if grid mode is active, the Rust side draws on
-            // top of the clear within the same render pass. Otherwise this is
-            // M2-S04's clear-only path.
-            val ok = if (gridMode) {
-                NativeBridge.renderDrawGridFrame(1.0f, 0.0f, 1.0f, 1.0f)
-            } else {
-                NativeBridge.renderClearFrame(1.0f, 0.0f, 1.0f, 1.0f)
+            // M3-S04 — Choreographer-driven push_frame.
+            //
+            // Mode precedence (most-specific first):
+            //   1. terminalMode → consume the Rust TerminalModel dirty bit;
+            //      if dirty, push a frame from the snapshot text. Otherwise
+            //      drop through to a clear-frame so vsync keeps the
+            //      swapchain healthy (per Choreographer.FrameCallback
+            //      contract: <https://developer.android.com/reference/android/view/Choreographer.FrameCallback>).
+            //   2. gridMode → static grid (M2-S08 baseline; unchanged).
+            //   3. neither → clear-only (M2-S04 baseline).
+            //
+            // The terminalMode path falls back to gridMode if dirty=0 AND
+            // a static grid was previously initialized, so the user always
+            // sees text not just a magenta wash between PTY chunks.
+            val ok = when {
+                terminalMode -> {
+                    val pushResult = NativeBridge.terminalTakeDirtyAndPushFrame(
+                        gridFontSizePx, gridRows, gridCols, gridCellWPx, gridCellHPx
+                    )
+                    when (pushResult) {
+                        1 -> true // dirty; pushed
+                        0 -> NativeBridge.renderDrawGridFrame(1.0f, 0.0f, 1.0f, 1.0f)
+                        else -> false
+                    }
+                }
+                gridMode -> NativeBridge.renderDrawGridFrame(1.0f, 0.0f, 1.0f, 1.0f)
+                else -> NativeBridge.renderClearFrame(1.0f, 0.0f, 1.0f, 1.0f)
             }
             if (!ok) {
                 // VK_ERROR_OUT_OF_DATE_KHR or transient: skip + retry next vsync.
@@ -323,6 +350,72 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             gridMode = true
         }
 
+        // M3-S04: optional terminal_mode at launch. Driver uses
+        //   am start -n dev.warp.mobile/.MainActivity \
+        //     --ez terminal_mode true \
+        //     --ef grid_font_size_px 32.0 \
+        //     --ei grid_rows 24 --ei grid_cols 80 \
+        //     --ef grid_cell_w_px 24.0 --ef grid_cell_h_px 40.0
+        //
+        // This activates the M3-S04 push_frame path: PTY output → Rust
+        // TerminalModel → Vulkan static grid re-init per dirty vsync.
+        // Grid params overlap with grid_mode parsing above; if both are
+        // set, terminal_mode wins at frame-callback time but both grid
+        // params and the Rust resize are applied here.
+        if (intent.getBooleanExtra("terminal_mode", false)) {
+            terminalMode = true
+            // Default grid params optimized for ~24×80 readable text on a
+            // flagship 1080×2400 portrait surface (S24 Ultra ~ 3120×1440 in
+            // landscape). M3-S08 will tune these via runtime ANativeWindow
+            // dims; for M3-S04 we let the launch intent override.
+            gridFontSizePx = intent.getFloatExtra("grid_font_size_px", 32.0f)
+            gridRows = intent.getIntExtra("grid_rows", 24)
+            gridCols = intent.getIntExtra("grid_cols", 80)
+            gridCellWPx = intent.getFloatExtra("grid_cell_w_px", 24.0f)
+            gridCellHPx = intent.getFloatExtra("grid_cell_h_px", 40.0f)
+            // Reshape the Rust model so PTY chunks land in the right grid
+            // size from the start (the model's dirty bit will trigger the
+            // first push_frame on the next dirty vsync).
+            NativeBridge.terminalResize(gridRows, gridCols)
+            Log.i(
+                TAG,
+                "terminal_mode requested rows=$gridRows cols=$gridCols " +
+                    "font_size_px=$gridFontSizePx cell=${gridCellWPx}x${gridCellHPx}px"
+            )
+
+            // Optional auto-spawn: --es terminal_cmd "/system/bin/sh"
+            // with --es terminal_initial_input "echo hello\n". Useful for
+            // M3-S04 device verification without needing a separate adb
+            // broadcast for PTY_SPAWN. The driver may set both extras to
+            // get a one-shot end-to-end smoke test.
+            val terminalCmd = intent.getStringExtra("terminal_cmd")
+            if (!terminalCmd.isNullOrBlank()) {
+                val cmdId = intent.getStringExtra("terminal_cmd_id") ?: "terminal_mode"
+                val initialInput = intent.getStringExtra("terminal_initial_input")
+                val spawnIntent = Intent(WarpTerminalService.ACTION_SPAWN).apply {
+                    setPackage(packageName)
+                    putExtra("cmd_id", cmdId)
+                    putExtra("program", terminalCmd)
+                }
+                sendBroadcast(spawnIntent)
+                Log.i(TAG, "terminal_mode auto-spawn cmd_id=$cmdId program=$terminalCmd")
+                if (!initialInput.isNullOrEmpty()) {
+                    // Allow a brief delay so the PTY child has time to start
+                    // before we feed it stdin. 200ms is conservative for
+                    // sh/bash startup on flagship.
+                    warpInputView?.postDelayed({
+                        val writeIntent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+                            setPackage(packageName)
+                            putExtra("cmd_id", cmdId)
+                            putExtra("data", initialInput)
+                        }
+                        sendBroadcast(writeIntent)
+                        Log.i(TAG, "terminal_mode auto-input cmd_id=$cmdId bytes=${initialInput.length}")
+                    }, 200)
+                }
+            }
+        }
+
         // M2-S10: optional auto-show IME on launch. Driver uses
         //   am start --ez ime_mode true
         // to request the soft keyboard popup so logcat captures
@@ -424,6 +517,31 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             attachedWidth = width
             attachedHeight = height
             renderActive = true
+            // M3-S04: if terminal mode was requested before surface was
+            // ready, pre-init the grid with placeholder text. This
+            // guarantees the first vsync sees a usable pipeline even if no
+            // PTY chunk has arrived yet. Subsequent push_frame calls
+            // re-init the grid only on dirty.
+            //
+            // The placeholder must produce ≥1 non-zero-area glyph (the
+            // static grid pipeline rejects zero-instance buffers), so we
+            // use a single dot. The very first PTY chunk's dirty-vsync
+            // flips overwrites this with the real model snapshot.
+            if (terminalMode) {
+                val initOk = NativeBridge.renderInitStaticGrid(
+                    ".", gridFontSizePx, gridRows, gridCols, gridCellWPx, gridCellHPx
+                )
+                Log.i(
+                    TAG,
+                    "terminal_mode init (post-surfaceCreated) ok=$initOk " +
+                        "rows=$gridRows cols=$gridCols " +
+                        "cell=${gridCellWPx}x${gridCellHPx}px font_size_px=$gridFontSizePx"
+                )
+                if (!initOk) {
+                    Log.w(TAG, "terminal_mode init failed; falling back to clear-frame")
+                    terminalMode = false
+                }
+            }
             // M2-S08: if grid mode was requested before surface was ready, do
             // the init now while we have a valid swapchain. The Rust side
             // builds the atlas + pipeline against the current render_pass.

@@ -291,4 +291,80 @@ object NativeBridge {
      *               but IME still encroaches from the bottom).
      */
     external fun setRenderInsets(top: Int, left: Int, right: Int, bottom: Int)
+
+    // ── Terminal model + push_frame (M3-S04) ────────────────────────────────
+    //
+    // Bridges PTY bytes (M1 backend) → facade-shaped TerminalModel → Vulkan
+    // static-grid pipeline (M2 renderer). The model lives in Rust in
+    // `crates/android-host/src/terminal_model.rs` (mirror of
+    // `warp-src/crates/warp_terminal_mobile_facade/src/render.rs`). The Java
+    // side is split into two distinct call sites:
+    //
+    //   1. `WarpTerminalService.startReadLoop` invokes `terminalInputBytes`
+    //      from a coroutine on Dispatchers.IO each time the PTY emits a
+    //      chunk. This sets the model dirty bit (atomic).
+    //   2. `MainActivity.frameCallback` (Choreographer doFrame, UI thread)
+    //      invokes `terminalTakeDirtyAndPushFrame` once per vsync. If the
+    //      bit is set, the call snapshots the grid + drives a Vulkan
+    //      init_static_grid + submit_grid_frame; otherwise it returns 0
+    //      and the existing clear-frame path runs.
+    //
+    // Logcat tag: `WarpTerminalModel` (Rust). Test drivers grep these:
+    //   * `terminalInputBytes cmd_id=… bytes=… ingested=…`
+    //   * `terminal_push_frame ok=… text_len=… rows=… cols=…`
+    //   * `terminal_resize rows=… cols=…`
+
+    /**
+     * M3-S04: forward a PTY chunk to the Rust terminal model. Sets the
+     * model's dirty bit so the next Choreographer doFrame call picks it up.
+     *
+     * @param cmdId  Session identifier (forwarded for logging only — M3-S04
+     *               baseline routes ALL chunks into a single global model).
+     * @param bytes  Raw PTY output bytes (UTF-8 best-effort decoded inside
+     *               Rust; control bytes \r \n \t \b are honored, ESC is
+     *               dropped pending M3-S05 ANSI parser).
+     * @return Number of bytes ingested (always equals bytes.size on success).
+     *         Returns -1 on conversion failure (rare; only on JVM heap
+     *         pressure during JByteArray copy).
+     */
+    external fun terminalInputBytes(cmdId: String, bytes: ByteArray): Int
+
+    /**
+     * M3-S04: Choreographer-driven push_frame.
+     *
+     * If the model dirty bit is set, snapshots the current grid text, calls
+     * renderInitStaticGrid (replacing the previous grid), and submits a
+     * single Vulkan frame. Returns:
+     *   *  1 → frame pushed successfully
+     *   *  0 → no dirty buffer; caller falls back to renderClearFrame
+     *   * -1 → init/submit failed
+     *
+     * `fontSizePx`, `rows`, `cols`, `cellWPx`, `cellHPx` mirror the
+     * `renderInitStaticGrid` parameters. The Choreographer side reads
+     * current grid params from MainActivity state (set at launch via
+     * --ef grid_font_size_px / --ei grid_rows etc.).
+     */
+    external fun terminalTakeDirtyAndPushFrame(
+        fontSizePx: Float,
+        rows: Int,
+        cols: Int,
+        cellWPx: Float,
+        cellHPx: Float
+    ): Int
+
+    /**
+     * M3-S04: returns terminal model state as a CSV string for the device
+     * driver to round-trip into result JSON without parsing logcat.
+     *
+     * Schema:
+     *   "rows=N,cols=N,cursor_row=N,cursor_col=N,bytes_ingested=N,dirty=B"
+     */
+    external fun terminalModelStats(): String
+
+    /**
+     * M3-S04: reshape the terminal model. Called when the SurfaceView
+     * dimensions change (rotation, IME show/hide). Existing in-bounds cells
+     * are preserved; out-of-bounds cells are dropped. Cursor is clamped.
+     */
+    external fun terminalResize(rows: Int, cols: Int)
 }

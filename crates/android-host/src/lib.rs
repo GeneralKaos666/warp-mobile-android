@@ -17,6 +17,11 @@ pub mod input;
 #[cfg(target_os = "android")]
 mod static_grid;
 
+// M3-S04: terminal model. Pure Rust + atomics (mirrors the canonical facade
+// `warp_terminal_mobile_facade::render::TerminalModel`); built on host targets
+// too so `cargo test -p warp-mobile-android-host` exercises ingest/dirty/snapshot.
+pub mod terminal_model;
+
 #[cfg(target_os = "android")]
 mod vulkan;
 
@@ -803,6 +808,207 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_setRenderInsets(
         target: "WarpRender",
         "render_insets top={} left={} right={} bottom={}",
         top, left, right, bottom
+    );
+}
+
+// ── M3-S04: Terminal model + push_frame JNI bindings ───────────────────────
+//
+// Pipeline: PTY bytes (M1 backend) → terminalInputBytes JNI → facade-shaped
+// TerminalModel.ingest_pty_bytes → Choreographer-side terminalPushFrame JNI
+// → vulkan::push_frame (which chains init_static_grid + submit_grid_frame).
+//
+// Java side flow:
+//   1. WarpTerminalService.kt PTY read coroutine forwards every chunk to
+//      `NativeBridge.terminalInputBytes(cmdId, bytes)`. This is fire-and-forget;
+//      the model handles its own dirty bit.
+//   2. MainActivity Choreographer per-vsync callback calls
+//      `NativeBridge.terminalTakeDirtyAndPushFrame(font_size_px, rows, cols,
+//      cell_w_px, cell_h_px)`. If the model is dirty, it snapshots the text
+//      and re-inits the GPU grid + submits a frame; otherwise it falls back
+//      to `renderClearFrame` so the loop keeps presenting at vsync rate.
+//
+// Logcat tag: `WarpTerminalModel` (Rust). Test drivers grep these.
+
+/// M3-S04: Java `WarpTerminalService.startReadLoop` → Rust state.
+///
+/// Forwards the PTY chunk to the process-global [`terminal_model::TerminalModel`].
+/// Returns the number of bytes ingested (always equals `bytes.len`) so the
+/// Java side can spot-check the round-trip count via stats.
+///
+/// `cmd_id` is forwarded for logging only — the M3-S04 baseline routes ALL
+/// PTY chunks into the single global model. M3 future work may key per-tab.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalInputBytes(
+    mut env: JNIEnv,
+    _class: JClass,
+    cmd_id: JString,
+    data: JByteArray,
+) -> jint {
+    init_logger();
+    // cmd_id is informational; if extraction fails we still process bytes.
+    let cmd_id_str: String = match env.get_string(&cmd_id) {
+        Ok(s) => s.into(),
+        Err(_) => String::from("<unknown>"),
+    };
+    let bytes: Vec<u8> = match env.convert_byte_array(&data) {
+        Ok(b) => b,
+        Err(e) => {
+            log::error!(
+                target: "WarpTerminalModel",
+                "terminalInputBytes: convert_byte_array failed: {:?}", e
+            );
+            return -1;
+        }
+    };
+    let n = terminal_model::ingest_pty_bytes(&bytes);
+    log::debug!(
+        target: "WarpTerminalModel",
+        "terminalInputBytes cmd_id={} bytes={} ingested={}",
+        cmd_id_str, bytes.len(), n
+    );
+    n as jint
+}
+
+/// M3-S04: Choreographer-driven push_frame.
+///
+/// If the model dirty bit is set, snapshots the current text + drives the
+/// Vulkan static-grid pipeline (re-init + submit). Returns:
+///   *  1 → frame pushed successfully
+///   *  0 → no dirty buffer; caller should fall back to clear-frame
+///   * -1 → init/submit failed
+///
+/// The grid params (`font_size_px`, `rows`, `cols`, `cell_w_px`, `cell_h_px`)
+/// mirror `renderInitStaticGrid`. They are passed per-call rather than stored
+/// in a global because they may differ per orientation / Activity recreate.
+///
+/// Tagged `WarpTerminalModel` for log scraping; the M3-S04 driver greps
+/// `terminal_push_frame ok=… text_len=…` to verify the pipeline ran.
+#[cfg(target_os = "android")]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFrame(
+    _env: JNIEnv,
+    _class: JClass,
+    font_size_px: jfloat,
+    rows: jint,
+    cols: jint,
+    cell_w_px: jfloat,
+    cell_h_px: jfloat,
+) -> jint {
+    if !terminal_model::take_dirty() {
+        return 0;
+    }
+    if rows <= 0 || cols <= 0 {
+        log::error!(
+            target: "WarpTerminalModel",
+            "terminalTakeDirtyAndPushFrame: invalid grid dims rows={} cols={}", rows, cols
+        );
+        return -1;
+    }
+    let snap = terminal_model::snapshot_text();
+    if snap.is_empty() {
+        log::warn!(
+            target: "WarpTerminalModel",
+            "terminalTakeDirtyAndPushFrame: empty snapshot; skipping"
+        );
+        return 0;
+    }
+    // M3-S04 baseline: the existing static_grid pipeline renders ONE text
+    // string replicated across every grid cell (M2-S08 acceptance). It
+    // doesn't natively support per-row text. We pick the first non-blank
+    // row of the snapshot as the renderable text — this proves the
+    // PTY→model→renderer pipeline end-to-end without requiring the M3-S05
+    // dynamic-grid extension.
+    //
+    // M3-S05 will introduce per-cell color attrs which mandates the
+    // dynamic-grid extension; at that point the renderer can consume
+    // multi-row snapshots directly. For M3-S04 the single-line projection
+    // is the defensible baseline.
+    let render_text: String = snap
+        .split('\n')
+        .map(|line| line.trim_end_matches(' '))
+        .find(|line| !line.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            // All-blank snapshot — render a placeholder dot so the static
+            // grid pipeline stays valid (it rejects zero-instance buffers).
+            ".".to_string()
+        });
+    let init_ok = vulkan::init_static_grid(
+        &render_text,
+        font_size_px,
+        rows as u32,
+        cols as u32,
+        cell_w_px,
+        cell_h_px,
+    );
+    if !init_ok {
+        log::error!(
+            target: "WarpTerminalModel",
+            "terminalTakeDirtyAndPushFrame: init_static_grid failed; dropping frame"
+        );
+        return -1;
+    }
+    let present_ok = vulkan::submit_grid_frame([1.0, 0.0, 1.0, 1.0]);
+    log::info!(
+        target: "WarpTerminalModel",
+        "terminal_push_frame ok={} render_text_len={} snapshot_len={} rows={} cols={} render_text={:?}",
+        present_ok, render_text.len(), snap.len(), rows, cols, render_text
+    );
+    if present_ok { 1 } else { -1 }
+}
+
+/// M3-S04: returns terminal model dimensions/cursor/byte-count as a CSV
+/// string for the device driver to read out without parsing logcat.
+///
+/// Schema:
+///   `rows=N,cols=N,cursor_row=N,cursor_col=N,bytes_ingested=N,dirty=B`
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalModelStats(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let model = terminal_model::global_model();
+    let (rows, cols) = model.dims();
+    let cur = model.cursor();
+    let bytes = model.bytes_ingested();
+    // Non-destructive peek so the stats accessor doesn't accidentally swallow
+    // a pending Choreographer re-init.
+    let dirty = model.peek_dirty();
+    let s = format!(
+        "rows={},cols={},cursor_row={},cursor_col={},bytes_ingested={},dirty={}",
+        rows, cols, cur.row, cur.col, bytes, dirty
+    );
+    env.new_string(s)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
+/// M3-S04: resize the terminal model. Called from the Java side when the
+/// surface dimensions change (e.g. rotation, IME show/hide). The grid is
+/// reshaped; existing in-bounds cells are preserved.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalResize(
+    _env: JNIEnv,
+    _class: JClass,
+    rows: jint,
+    cols: jint,
+) {
+    init_logger();
+    if rows <= 0 || cols <= 0 {
+        log::error!(
+            target: "WarpTerminalModel",
+            "terminalResize: invalid dims rows={} cols={}", rows, cols
+        );
+        return;
+    }
+    terminal_model::resize(rows as usize, cols as usize);
+    log::info!(
+        target: "WarpTerminalModel",
+        "terminal_resize rows={} cols={}", rows, cols
     );
 }
 

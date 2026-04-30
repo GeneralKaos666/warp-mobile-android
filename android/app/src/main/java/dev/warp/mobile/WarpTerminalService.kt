@@ -168,6 +168,21 @@ class WarpTerminalService : Service() {
                     kotlinx.coroutines.delay(20)
                     continue
                 }
+                // M3-S04: forward each PTY chunk to the Rust terminal model.
+                // Fire-and-forget: the model handles its own dirty bit. The
+                // MainActivity Choreographer per-vsync callback consumes the
+                // bit and pushes a frame.
+                //
+                // Refs:
+                //   * Choreographer.FrameCallback / View.invalidate dirty
+                //     pattern: https://developer.android.com/reference/android/view/Choreographer.FrameCallback
+                //   * JNI byte-array passing perf guidance:
+                //     https://developer.android.com/training/articles/perf-jni
+                val ingested = NativeBridge.terminalInputBytes(cmdId, chunk)
+                if (ingested < 0) {
+                    Log.w(LOG_TAG, "terminalInputBytes failed cmdId=$cmdId chunk_size=${chunk.size}")
+                }
+
                 val text = chunk.toString(Charsets.UTF_8)
                 // Log each line tagged WarpTerminal:PtyOutput as expected by test drivers
                 for (line in text.lines()) {
