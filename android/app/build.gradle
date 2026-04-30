@@ -30,10 +30,13 @@ plugins {
 //   1. rustTargetDir resolves to <repo-root>/target  (two levels up from here).
 //   2. buildRust{Debug,Release} invoke cargo-ndk if cargo binary exists.
 //   3. verifyRustLib{Debug,Release} fail-fast if expected .so absent.
-//   4. copyRustLibs{Debug,Release} stage the .so into jniLibs/.
-//   Tasks write into src/main/jniLibs/arm64-v8a/ which is already a standard
-//   AGP jniLibs source directory. The directory + its *.so contents are
-//   gitignored (see root .gitignore).
+//   4. copyRustLibs{Debug,Release} stage the .so into PER-VARIANT
+//      intermediate dirs: build/intermediates/rust-jnilibs/{variant}/jniLibs/arm64-v8a/.
+//      AGP picks each up via per-variant sourceSets.{debug,release}.jniLibs.srcDirs.
+//      This avoids Gradle 8 strict-mode "two tasks write to same path" errors
+//      and prevents cross-variant pollution (a release build cannot package
+//      the debug .so by accident). The src/main/jniLibs/arm64-v8a/ tree is
+//      no longer written to; its gitignore entry stays as defense-in-depth.
 //
 // Pre-requisite for a clean checkout (if cargo not auto-invoked here):
 //   PATH=$HOME/.cargo/bin:$PATH \
