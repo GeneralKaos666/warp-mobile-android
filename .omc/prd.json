@@ -135,8 +135,8 @@
     {
       "id": "M2-S08",
       "title": "Static MxN grid 60fps on flagship (M2a Acceptance #1)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src 20eaf1a + main f581575. M2a Acceptance #1 gate CLEARED. 50×20 grid = 11,000 glyph instances/frame on Galaxy S24 Ultra R5CX10VFFBA (Adreno 750, API 36): 4,195 frames in 30s, peak 122fps (vsync 120Hz), p95=9ms (gate <16.6ms — 44% margin), p99=10ms, validation clean (W=0/E=0). Visually inspected screenshot: real white 'Hello, World' glyphs on magenta, no tofu. Architecture: shelf-pack 1024×1024 R8_UNORM atlas (9 unique glyphs), per-instance vertex buffer (11k×32B=352KB), single vkCmdDraw(4, 11000), SPIR-V pre-compiled at build time via NDK glslc + Vec<u32> alignment fix for Rust 1.83+, alpha-blend pipeline. Init 81ms one-shot. Codex extra stress: 100×40 grid (44k instances) also p95=9ms over 10s; rotation recreated surface + reinitialized grid cleanly. 7 honest pivots: perf overpowered on S24U (M2-S13 low-end will be real test); title bar visible (M2b/M3 fullscreen); SPIR-V alignment Vec<u32> copy; am start --es space-split → grid_text_b64; android_logger ignores target:; cross-workspace dup (M3 unification); cells overlap (text 120px > 100px cell). Regression: S04 7614 frames p95=9ms; S05 single capture clean; S07 Hello, 世界 9 glyphs/0 missing all OK. 1 non-blocking nit: START_STATIC_GRID broadcast receiver comment but no impl (launch-intent driven, cosmetic).",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Render fixed 50x20 grid of \"Hello, World\" glyphs (per ralplan §6 M2 Acceptance #1) using S04 render_scene + S07 FontDB + S06 TextLayoutSystem",
