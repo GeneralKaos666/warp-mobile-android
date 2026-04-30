@@ -54,6 +54,9 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
+
+use serde::{Deserialize, Serialize};
 
 /// Default grid size when the renderer hasn't reported the surface dimensions.
 pub const DEFAULT_ROWS: usize = 24;
@@ -167,6 +170,224 @@ pub struct TerminalModel {
     dirty: AtomicBool,
 }
 
+// ── M3-S07 — Block aggregation (mirror) ─────────────────────────────────────
+//
+// The canonical `warp_terminal_mobile_facade::app_terminal::model::{Block,
+// BlockList, BlockEvent}` lives in the warp-src facade crate. The mirror
+// here is a hand-shaped reimplementation that stays Cargo-edge-free
+// (otherwise we'd pull in the entire facade rlib into the cdylib —
+// M3-S11 unification scope). The wire shapes are bit-compatible so the
+// device-test driver `tools/scripts/test-block-model.sh` produces the
+// same JSON dump output regardless of which path runs.
+
+/// Mirror-side Block — the M3-essential subset of upstream
+/// `app::terminal::model::Block` per Plan Amendment 5 + AC#1. Wire-compatible
+/// with `warp_terminal_mobile_facade::app_terminal::model::block::Block`.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct Block {
+    id: String,
+    /// UNIX millis (the canonical facade uses `SystemTime`; mirror stores
+    /// the converted u64 directly so the JNI dump path is zero-cost).
+    start_time_unix_ms: u64,
+    command: String,
+    exit_code: Option<i32>,
+    end_time_unix_ms: Option<u64>,
+    /// Half-open [start, end) over the cell stream. M3-S07 leaves this
+    /// `0..0`; M3-S08 (per-cell renderer) populates it.
+    output_range_start: usize,
+    output_range_end: usize,
+}
+
+impl Block {
+    pub fn new_pending(id: String, start_time_unix_ms: u64) -> Self {
+        Self {
+            id,
+            start_time_unix_ms,
+            command: String::new(),
+            exit_code: None,
+            end_time_unix_ms: None,
+            output_range_start: 0,
+            output_range_end: 0,
+        }
+    }
+
+    pub fn set_command(&mut self, command: String) {
+        self.command = command;
+    }
+
+    pub fn finalize(&mut self, exit_code: i32, end_time_unix_ms: u64) {
+        self.exit_code = Some(exit_code);
+        self.end_time_unix_ms = Some(end_time_unix_ms);
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+    pub fn exit_code(&self) -> Option<i32> {
+        self.exit_code
+    }
+    pub fn start_time_unix_ms(&self) -> u64 {
+        self.start_time_unix_ms
+    }
+    pub fn end_time_unix_ms(&self) -> Option<u64> {
+        self.end_time_unix_ms
+    }
+}
+
+/// Mirror-side BlockList — `Vec<Block>` aggregator with `to_dump_json` for
+/// the JNI debug accessor.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BlockList {
+    blocks: Vec<Block>,
+}
+
+impl BlockList {
+    pub fn new() -> Self {
+        Self { blocks: Vec::new() }
+    }
+    pub fn push(&mut self, b: Block) {
+        self.blocks.push(b);
+    }
+    pub fn last_mut(&mut self) -> Option<&mut Block> {
+        self.blocks.last_mut()
+    }
+    pub fn len(&self) -> usize {
+        self.blocks.len()
+    }
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
+    }
+
+    /// JSON array of `{id, start_time_unix_ms, command, exit_code,
+    /// end_time_unix_ms}`. Wire-format identical to the canonical facade
+    /// `BlockList::to_dump_json`.
+    pub fn to_dump_json(&self) -> String {
+        let mut out = String::with_capacity(64 + 80 * self.blocks.len());
+        out.push('[');
+        for (i, b) in self.blocks.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            let id = json_escape(&b.id);
+            let cmd = json_escape(&b.command);
+            let exit = match b.exit_code {
+                Some(ec) => format!("{}", ec),
+                None => "null".to_string(),
+            };
+            let end = match b.end_time_unix_ms {
+                Some(t) => format!("{}", t),
+                None => "null".to_string(),
+            };
+            out.push_str(&format!(
+                "{{\"id\":\"{}\",\"start_time_unix_ms\":{},\"command\":\"{}\",\"exit_code\":{},\"end_time_unix_ms\":{}}}",
+                id, b.start_time_unix_ms, cmd, exit, end
+            ));
+        }
+        out.push(']');
+        out
+    }
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Mirror-side BlockEvent — same enum shape as the canonical facade
+/// `app_terminal::model::BlockEvent`. Mirror tests assert against this.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BlockEvent {
+    Start { block_id: String, start_time_unix_ms: u64 },
+    Preexec { block_id: String, command: String },
+    End { block_id: String, exit_code: i32, end_time_unix_ms: u64 },
+}
+
+impl BlockEvent {
+    pub fn name(&self) -> &'static str {
+        match self {
+            BlockEvent::Start { .. } => "Start",
+            BlockEvent::Preexec { .. } => "Preexec",
+            BlockEvent::End { .. } => "End",
+        }
+    }
+    pub fn block_id(&self) -> &str {
+        match self {
+            BlockEvent::Start { block_id, .. } => block_id,
+            BlockEvent::Preexec { block_id, .. } => block_id,
+            BlockEvent::End { block_id, .. } => block_id,
+        }
+    }
+}
+
+/// Hand-decoded subset of upstream `DProtoHook` covering only the three
+/// variants that drive Block aggregation. The canonical facade
+/// (`warp_terminal_mobile_facade::app_terminal::ansi::dcs_hooks`) carries
+/// the full ~17 variants; the mirror stays slim by parsing only what M3-S07
+/// needs and ignoring everything else.
+///
+/// Wire format matches upstream's `#[serde(tag = "hook", content = "value")]`
+/// adjacent tagging so the same JSON payloads round-trip in both paths.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "hook", content = "value")]
+enum MirrorHook {
+    Precmd(MirrorPrecmd),
+    Preexec(MirrorPreexec),
+    CommandFinished(MirrorCommandFinished),
+    /// All other hook variants (Bootstrapped, SSH, InputBuffer, …) parse
+    /// into this catchall via `serde::de::IgnoredAny` so the mirror
+    /// doesn't error on M5+ payloads.
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct MirrorPrecmd {
+    #[serde(default)]
+    session_id: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct MirrorPreexec {
+    #[serde(default)]
+    command: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct MirrorCommandFinished {
+    #[serde(default)]
+    exit_code: i32,
+    /// We accept this field for wire-format completeness (matches upstream
+    /// `CommandFinishedValue`) but the mirror aggregator doesn't currently
+    /// consume it — the *next* Precmd creates the next Block, so the
+    /// hint here is redundant. Tagged `#[allow(dead_code)]` so future
+    /// reviewers don't drop the field thinking it's unused; the canonical
+    /// facade carries it identically.
+    #[serde(default)]
+    #[allow(dead_code)]
+    next_block_id: String,
+}
+
+/// Parse the JSON body from a successful `finish_dcs` decode into a
+/// `MirrorHook`. Returns `None` on parse failure (caller bumps
+/// `dcs_error_count`).
+fn parse_dcs_hook(json: &[u8]) -> Option<MirrorHook> {
+    serde_json::from_slice::<MirrorHook>(json).ok()
+}
+
 struct TerminalState {
     rows: usize,
     cols: usize,
@@ -181,6 +402,10 @@ struct TerminalState {
     sgr_apply_count: u64,
     dcs_hook_count: u64,
     dcs_error_count: u64,
+
+    // ── M3-S07: Block aggregation (mirror) ──────────────────────────────
+    blocks: BlockList,
+    block_events: Vec<BlockEvent>,
 }
 
 impl TerminalModel {
@@ -204,6 +429,8 @@ impl TerminalModel {
                 sgr_apply_count: 0,
                 dcs_hook_count: 0,
                 dcs_error_count: 0,
+                blocks: BlockList::new(),
+                block_events: Vec::new(),
             }),
             dirty: AtomicBool::new(false),
         }
@@ -335,6 +562,38 @@ impl TerminalModel {
             state.dcs_hook_count,
             state.dcs_error_count,
         )
+    }
+
+    // ── M3-S07: Block aggregation accessors (mirror) ───────────────────────
+
+    /// Returns the number of Blocks aggregated. Surfaced via JNI for the
+    /// `tools/scripts/test-block-model.sh` driver.
+    pub fn block_count(&self) -> usize {
+        let state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        state.blocks.len()
+    }
+
+    /// Serialize the BlockList as JSON; consumed by the JNI accessor
+    /// `Java_dev_warp_mobile_NativeBridge_terminalBlocksDump` and the
+    /// `test-block-model.sh` device driver.
+    pub fn blocks_dump_json(&self) -> String {
+        let state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        state.blocks.to_dump_json()
+    }
+
+    /// Drain the BlockEvent log for tests / M3-S08 renderer invalidation.
+    pub fn drain_block_events(&self) -> Vec<BlockEvent> {
+        let mut state = match self.inner.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        std::mem::take(&mut state.block_events)
     }
 }
 
@@ -805,6 +1064,103 @@ fn finish_dcs(state: &mut TerminalState, is_hex: bool, body: &[u8]) {
         // Truncate large bodies in the log so logcat stays readable.
         String::from_utf8_lossy(&json_bytes[..json_bytes.len().min(256)])
     );
+
+    // M3-S07 — Block aggregation. Hand-decode the M3-essential variants
+    // (Precmd / Preexec / CommandFinished) and drive the BlockList.
+    // Other variants (Bootstrapped, SSH, …) parse into MirrorHook::Other
+    // and are no-ops here.
+    if let Some(hook) = parse_dcs_hook(&json_bytes) {
+        handle_block_hook(state, hook);
+    } else {
+        log::trace!(
+            target: "WarpTerminalModel",
+            "block aggregator: hook JSON did not match MirrorHook schema (ignored)"
+        );
+    }
+}
+
+/// M3-S07 mirror — Block aggregation reducer. Functional twin of the
+/// canonical facade `render::handle_dcs_hook`.
+fn handle_block_hook(state: &mut TerminalState, hook: MirrorHook) {
+    let now_ms = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    match hook {
+        MirrorHook::Precmd(p) => {
+            let id = match p.session_id {
+                Some(sid) => format!("session-{}-{}", sid, state.blocks.len()),
+                None => format!("manual-{:016x}", state.blocks.len() as u64),
+            };
+            state
+                .blocks
+                .push(Block::new_pending(id.clone(), now_ms));
+            push_block_event(
+                state,
+                BlockEvent::Start {
+                    block_id: id,
+                    start_time_unix_ms: now_ms,
+                },
+            );
+        }
+        MirrorHook::Preexec(p) => {
+            if let Some(b) = state.blocks.last_mut() {
+                b.set_command(p.command.clone());
+                let id = b.id().to_string();
+                push_block_event(
+                    state,
+                    BlockEvent::Preexec {
+                        block_id: id,
+                        command: p.command,
+                    },
+                );
+            } else {
+                log::warn!(
+                    target: "WarpTerminalModel",
+                    "Preexec received with no pending block; ignoring (command={:?})",
+                    p.command
+                );
+            }
+        }
+        MirrorHook::CommandFinished(p) => {
+            if let Some(b) = state.blocks.last_mut() {
+                b.finalize(p.exit_code, now_ms);
+                let id = b.id().to_string();
+                push_block_event(
+                    state,
+                    BlockEvent::End {
+                        block_id: id,
+                        exit_code: p.exit_code,
+                        end_time_unix_ms: now_ms,
+                    },
+                );
+            } else {
+                log::warn!(
+                    target: "WarpTerminalModel",
+                    "CommandFinished received with no pending block; ignoring (exit_code={})",
+                    p.exit_code
+                );
+            }
+        }
+        MirrorHook::Other => {}
+    }
+}
+
+/// Push a [`BlockEvent`] onto the bounded log + emit logcat.
+fn push_block_event(state: &mut TerminalState, ev: BlockEvent) {
+    log::info!(
+        target: "WarpTerminalModel",
+        "block_event name={} block_id={}",
+        ev.name(),
+        ev.block_id(),
+    );
+    const BLOCK_EVENT_CAP: usize = 128;
+    if state.block_events.len() >= BLOCK_EVENT_CAP {
+        state.block_events.remove(0);
+    }
+    state.block_events.push(ev);
 }
 
 fn hex_decode(hex_chars: &[u8]) -> Result<Vec<u8>, &'static str> {
@@ -866,6 +1222,11 @@ pub fn dims() -> (usize, usize) {
 
 pub fn resize(rows: usize, cols: usize) {
     global_model().resize(rows, cols);
+}
+
+/// M3-S07: process-wide accessor for the JNI `terminalBlocksDump` export.
+pub fn blocks_dump_json() -> String {
+    global_model().blocks_dump_json()
 }
 
 #[cfg(test)]
@@ -1086,5 +1447,130 @@ mod tests {
         m.ingest_pty_bytes(b"after");
         assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
         assert_eq!(m.cell(0, 4).unwrap().glyph, 'r');
+    }
+
+    // ── M3-S07 NEW: Block aggregation mirror tests ─────────────────────
+
+    /// Helper — build a hex-encoded DCS frame for a JSON payload (mirrors
+    /// the upstream `warp_send_json_message` wire format at
+    /// `zsh_body.sh:90`).
+    fn build_dcs_frame_local(json: &str) -> Vec<u8> {
+        let mut frame = Vec::new();
+        frame.extend_from_slice(b"\x1bP$d");
+        for &b in json.as_bytes() {
+            frame.extend_from_slice(format!("{:02x}", b).as_bytes());
+        }
+        frame.push(0x9c);
+        frame
+    }
+
+    /// Mirror AC#3 #1 — Three Precmd+Preexec+CommandFinished triplets via
+    /// real DCS frames produce three Blocks with the right command +
+    /// exit_code.
+    #[test]
+    fn block_aggregation_three_triplets_via_dcs_frames_mirror() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/d","ps1":"$","session_id":7}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"ls"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0,"next_block_id":"session-7-1"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/d","ps1":"$","session_id":7}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"whoami"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0,"next_block_id":"session-7-2"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/d","ps1":"$","session_id":7}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"false"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"CommandFinished","value":{"exit_code":1,"next_block_id":"session-7-3"}}"#,
+        ));
+
+        assert_eq!(m.block_count(), 3);
+        let json = m.blocks_dump_json();
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let arr = v.as_array().expect("array");
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["command"], "ls");
+        assert_eq!(arr[0]["exit_code"], 0);
+        assert_eq!(arr[1]["command"], "whoami");
+        assert_eq!(arr[1]["exit_code"], 0);
+        assert_eq!(arr[2]["command"], "false");
+        assert_eq!(arr[2]["exit_code"], 1);
+    }
+
+    /// Mirror AC#3 #2 — Bootstrapped + Clear hooks do NOT push Blocks.
+    /// Confirms `MirrorHook::Other` catchall works.
+    #[test]
+    fn block_aggregation_ignores_non_block_hooks_mirror() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Bootstrapped","value":{"histfile":"/h/.zsh_history","shell":"zsh","home_dir":"/h","path":"/u/b","editor":"vim","aliases":"","abbreviations":"","function_names":"","env_var_names":"","builtins":"","keywords":"","shell_version":"5.9"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Clear","value":{}}"#,
+        ));
+
+        assert_eq!(m.block_count(), 0);
+        let (_sgr, hooks, _errs) = m.parser_stats();
+        assert_eq!(hooks, 2, "both hooks decoded");
+    }
+
+    /// Mirror AC#3 #3 — Preexec without prior Precmd is dropped (no Block
+    /// pushed, no panic).
+    #[test]
+    fn block_aggregation_preexec_without_precmd_is_dropped_mirror() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"orphan"}}"#,
+        ));
+        assert_eq!(m.block_count(), 0);
+        assert_eq!(m.drain_block_events().len(), 0);
+        let (_sgr, hooks, _errs) = m.parser_stats();
+        assert_eq!(hooks, 1);
+    }
+
+    /// Mirror AC#3 #4 — `blocks_dump_json` shape matches the canonical
+    /// facade dump format (id / start_time_unix_ms / command / exit_code
+    /// / end_time_unix_ms).
+    #[test]
+    fn blocks_dump_json_shape_matches_canonical_facade() {
+        let m = TerminalModel::new(2, 16);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/x","ps1":"$","session_id":99}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"echo hello"}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0,"next_block_id":"session-99-1"}}"#,
+        ));
+
+        let json = m.blocks_dump_json();
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let entry = &v[0];
+        for key in [
+            "id",
+            "start_time_unix_ms",
+            "command",
+            "exit_code",
+            "end_time_unix_ms",
+        ] {
+            assert!(entry.get(key).is_some(), "missing key: {}", key);
+        }
+        assert_eq!(entry["command"], "echo hello");
+        assert_eq!(entry["exit_code"], 0);
     }
 }

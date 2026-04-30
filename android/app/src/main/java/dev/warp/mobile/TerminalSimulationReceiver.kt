@@ -47,8 +47,19 @@ class TerminalSimulationReceiver : BroadcastReceiver() {
         }
         when (intent.action) {
             ACTION_TERM_INJECT_RAW -> handleInjectRaw(intent)
+            ACTION_TERM_BLOCKS_DUMP -> handleBlocksDump()
             else -> Log.w(TAG, "onReceive: unknown action ${intent.action}")
         }
+    }
+
+    /**
+     * M3-S07: dump the current `Vec<Block>` to logcat as a single JSON
+     * line. The device-test driver `tools/scripts/test-block-model.sh`
+     * greps for the `TERM_BLOCKS_DUMP json=...` line.
+     */
+    private fun handleBlocksDump() {
+        val json = NativeBridge.terminalBlocksDump()
+        Log.i(TAG, "TERM_BLOCKS_DUMP json=$json")
     }
 
     private fun handleInjectRaw(intent: Intent) {
@@ -90,6 +101,7 @@ class TerminalSimulationReceiver : BroadcastReceiver() {
         private const val TAG = "WarpTerminal"
 
         const val ACTION_TERM_INJECT_RAW = "dev.warp.mobile.TERM_INJECT_RAW"
+        const val ACTION_TERM_BLOCKS_DUMP = "dev.warp.mobile.TERM_BLOCKS_DUMP"
 
         const val EXTRA_CMD_ID = "cmd_id"
         const val EXTRA_BYTES_B64 = "bytes_b64"

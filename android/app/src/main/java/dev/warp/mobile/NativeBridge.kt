@@ -378,4 +378,21 @@ object NativeBridge {
      *    cur_fg=0xRRGGBBAA,cur_bg=0xRRGGBBAA,cur_attrs=0xNN"
      */
     external fun terminalSgrSummary(): String
+
+    /**
+     * M3-S07: returns the current `Vec<Block>` as a JSON array.
+     *
+     * Schema (each array entry):
+     *   {
+     *     "id": "session-{n}-{i}",
+     *     "start_time_unix_ms": <u64>,
+     *     "command": "<string>",
+     *     "exit_code": <i32 | null>,
+     *     "end_time_unix_ms": <u64 | null>
+     *   }
+     *
+     * Consumed by `tools/scripts/test-block-model.sh` to gate M3 Acceptance
+     * #3 (block model start_time + command + exit_code populated correctly).
+     */
+    external fun terminalBlocksDump(): String
 }

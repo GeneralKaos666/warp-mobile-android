@@ -1010,6 +1010,24 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalSgrSummary(
         .into_raw()
 }
 
+/// M3-S07: returns the current `Vec<Block>` as a JSON array. Each entry
+/// has `{id, start_time_unix_ms, command, exit_code, end_time_unix_ms}`
+/// — wire-format identical to the canonical facade `BlockList::to_dump_json`.
+///
+/// Consumed by `tools/scripts/test-block-model.sh` to gate M3 Acceptance
+/// #3 (start_time/command/exit_code populated correctly).
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalBlocksDump(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let json = terminal_model::blocks_dump_json();
+    env.new_string(json)
+        .expect("failed to create Java string")
+        .into_raw()
+}
+
 /// M3-S04: resize the terminal model. Called from the Java side when the
 /// surface dimensions change (e.g. rotation, IME show/hide). The grid is
 /// reshaped; existing in-bounds cells are preserved.

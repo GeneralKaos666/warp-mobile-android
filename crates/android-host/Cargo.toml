@@ -15,6 +15,13 @@ crate-type = ["cdylib"]
 jni = "0.21"
 log = "0.4"
 android_logger = "0.13"
+# M3-S07: hand-decode of the M3-essential DProtoHook variants (Precmd,
+# Preexec, CommandFinished) for Block aggregation in the mirror runtime.
+# The canonical facade in warp-src already pulls these in; the mirror does
+# its own hand-decode to avoid the Cargo edge to the facade rlib (which
+# would re-introduce the cross-workspace dup tracked under M3-S11).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

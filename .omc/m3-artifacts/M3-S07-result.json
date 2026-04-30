@@ -1,0 +1,24 @@
+{
+  "story": "M3-S07",
+  "device_serial": "R5CX10VFFBA",
+  "block_count": 3,
+  "expected_block_count": 3,
+  "commands": ["ls", "whoami", "false"],
+  "expected_commands": ["ls", "whoami", "false"],
+  "command_match": [true, true, true],
+  "exit_codes": [0, 0, 1],
+  "expected_exit_codes": [0, 0, 1],
+  "exit_code_match": [true, true, true],
+  "evidence": {
+    "blocks_dump_path": "/tmp/m3-s07-blocks-dump.json",
+    "logcat": "/tmp/m3-s07-logcat.txt",
+    "block_event_lines_in_logcat": 9,
+    "last_dcs_summary_line": "05-01 06:13:10.198 13104 13104 I WarpTerminal: TERM_INJECT_RAW summary=sgr_apply_count=0,dcs_hook_count=9,dcs_error_count=0,cur_fg=0xFFFFFFFF,cur_bg=0x000000FF,cur_attrs=0x00",
+    "dcs_hook_count": "9",
+    "dcs_error_count": "0"
+  },
+  "gate": {
+    "overall_pass": true,
+    "criteria": "block_count == 3 AND commands == [ls,whoami,false] AND exit_codes == [0,0,1] AND dcs_error_count == 0"
+  }
+}
