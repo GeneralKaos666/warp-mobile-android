@@ -14,7 +14,7 @@
 | M1-S01 | Plan Amendment 3 — minSdk 26 → 31 | **PASS** | Codex round-1 PASS @ `2ccc0f7`. Drops S8/Mali-G71 from primary device matrix per M0 Task #8 evidence (S8 100-cycle p95=326ms FAIL). |
 | M1-S02 | android-activity Cargo feature fix | **PASS** | Codex round-1 PASS. warp-src Cargo.toml winit gains `android-native-activity` feature; warpui/Cargo.toml adds explicit android-activity dep block. Commit `afc74ec` on warp-mobile/m0-facade pushed to fork ImL1s/warp. |
 | M1-S03 | crates/android-host/ Rust skeleton | **PASS** | Codex round-1 REVISE (AC#5 missing .so info) → fix `5b1424e` (README addendum) → round-2 PASS. Cargo skeleton + JNI ping export + cdylib build. .so 16.7MB sha256 6e6960002e... |
-| M1-S04 | PTY backend openpty/setsid/TIOCSCTTY | **TBD** | Codex round-1 REJECT (6 safety issues) → round-2 REVISE (putenv+execvp not AS-safe; E0597 borrow-check) → round-3 fix `d9bf0d4` (execve+pre-built envp + E0597 fix). cargo test 2/2 PASS. Codex round-3 verdict pending. |
+| M1-S04 | PTY backend openpty/setsid/TIOCSCTTY | **PASS** | Codex round-1 REJECT (6 safety issues) → round-2 REVISE (putenv+execvp not AS-safe; E0597 borrow-check) → round-3 fix `d9bf0d4` (execve+pre-built envp + E0597 fix) → Codex round-3 PASS. Subsequent PTY plumbing chain Task#28→#33→#35 closed: Arc<PtySession> + AtomicI32 fd + ANR-safe scope.launch + tools:remove debug overlay; Codex Task#35 PASS at 03-32-36-215Z @ commit `06f70bd`. cargo test 3/3 PASS. |
 | M1-S05 | Android Service + AndroidManifest + FGS | **TBD** | Codex round-1 REVISE (AC#7 POST_NOTIFICATIONS missing; AC#6 .so loaded by Activity not Service) → fix `f424be2` (POST_NOTIFICATIONS perm + Service companion init { System.loadLibrary }). Device verification pending. |
 | M1-S06 | Activity recreate → PTY reattach < 1s | **TBD** | Drivers code committed `9268de7` + bug-fix rounds (`fc763b3`, `c6469db`). Device run pending Task #32. |
 | M1-S07 | PTY resize via TIOCSWINSZ | **TBD** | Driver `test-pty-resize.sh`. Service-side broadcast handlers landed Task #28 (`9479316`). Device run pending Task #32. |
@@ -23,7 +23,7 @@
 | M1-S10 | M1 close-out doc | **THIS DOC** | — |
 
 Out-of-prd-but-essential:
-- **Task #28**: WarpTerminalService BroadcastReceivers + PtyManager + read-coroutine. Commits `9479316` + `a6f08ef`. Codex review pending. Required for S06/S07/S08 to be testable.
+- **Task #28 → #33 → #35 PTY plumbing chain**: WarpTerminalService BroadcastReceivers + PtyManager + read-coroutine. Initial commit `9479316`; Codex Task #28 review found 4 issues (lifecycle deadlock, cmd_id collision, exported receiver, output broadcast leak) → Task #33 fix `8d34a29` resolved 4/5 → Codex Task #33 found 3 residual (UAF Box→Arc, while(true)→isActive, debug overlay tools:remove) → Task #35 fix `06f70bd` resolved all → Codex Task #35 **PASS** at 03-32-36-215Z. Final state: Arc<PtySession> Java-map ownership; AtomicI32 master_fd; ANR-safe scope.launch dispatch; signature-level PTY_CONTROL permission with debug-overlay strip. Required for S06/S07/S08 to be testable; **closure cleared S05/S06 dependency on PTY service plumbing**.
 
 ---
 
@@ -110,9 +110,9 @@ No L4 work in M1. Verified path B1 (symlink-jniLibs) carries over from M0.
 
 ## 6. M1 Verdict (filled in once all stories PASS)
 
-**Verdict**: TBD — currently 3/10 stories PASS, 7/10 awaiting Codex verdicts or device runs.
+**Verdict**: TBD — currently **4/10 stories formally PASS** (S01-S04); structural drivers PASS round-5; Task #28→#33→#35 PTY plumbing chain CLOSED with Codex Task #35 PASS at 03-32-36-215Z. Remaining gates: Task #32 device runs (S05/S06/S07/S08 on S24 Ultra) + Task #34 30-min idle stress (S09) + S10 close-out doc finalize.
 
-**Decision deadline**: Once Tasks #32 (device runs S05/S06/S07/S08) + #34 (S09 30-min stress) complete and Codex round-3 verdicts on S04/drivers/Task #28 land, fill in this section with GO / CONDITIONAL GO / NO-GO and one-paragraph rationale.
+**Decision deadline**: Once Task #32 device-run JSON artifacts land in `.omc/m1-artifacts/M1-S0[5678]-result.json` and Task #34 30-min stress completes, fill in this section with GO / CONDITIONAL GO / NO-GO and one-paragraph rationale. Expected: GO with 1 carry-over (low-end device matrix per Plan Amendment 3).
 
 ---
 
