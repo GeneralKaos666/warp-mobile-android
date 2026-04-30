@@ -1,0 +1,253 @@
+{
+  "task": "M2 milestone — warpui::platform::android backend per .omc/plans/ralplan-warp-on-mobile.md §6 M2 (D1.5-hybrid, Amendment 1+2 split into M2a/M2b). 4 hand-written areas + headless-derived base. 8-12 weeks.",
+  "scope": {
+    "in": [
+      "warp-src submodule clone + cargo config rendered for this machine (P0 setup)",
+      "Gradle copy task replacing absolute jniLibs symlink (M1 carry-over #2)",
+      "warpui::platform::android scaffold derived from headless backend, gated by cfg(target_os = \"android\")",
+      "render_scene hand-written with ash + ANativeWindow (Vulkan production swapchain, scaled from M0 50-line spike)",
+      "request_frame_capture hand-written (ash readback for visual regression testing)",
+      "TextLayoutSystem 2 hand-written methods (per M0 platform-trait-delta)",
+      "FontDB 15 hand-written methods (cosmic-text wrap + Android system font discovery via NDK)",
+      "Static M×N grid render at 60fps p95 < 16.6ms on flagship (M2a Acceptance #1)",
+      "Activity recreate swapchain p95 < 200ms over 100 rotations (M2a Acceptance #2)",
+      "IME glue (commitText/setComposingText/finishComposingText) → Rust input events (M2b Acceptance #3)",
+      "Touch + gesture mapping (onTouchEvent → MouseDown/Up/scroll)",
+      "WindowInsets + IME insets reservation (M2b Acceptance #4)",
+      "Pixel 4a or Galaxy A52s API 31 acquisition + re-run M1-S06/S07/S08/S09 on low-end (M1 carry-over #1, Plan Amendment 3 §3 requirement)",
+      "M2 close-out doc per M1-go-no-go.md template with file:line evidence"
+    ],
+    "out": [
+      "Block-based UI integration with terminal stream (M3)",
+      "Termux package bootstrap (M4)",
+      "Mobile UX polish — selection, accessory row, gestures-on-blocks (M5)",
+      "AI integration Haiku ghost-text + Sonnet agent (M6)",
+      "Notification customization session count + command preview (M3 carry-over)",
+      "Clippy 7 lint cleanup (M3 carry-over, low priority)"
+    ]
+  },
+  "stories": [
+    {
+      "id": "M2-S01",
+      "title": "M2 kickoff doc + Plan section update",
+      "passes": true,
+      "verifiedBy": "codex round-3 CODEX_PASS at afa17ad; single round-2 blocker resolved. No new factual errors introduced; M2 kickoff doc internally consistent with M0 Vulkan 100-cycle results and E1 trigger spec.",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m2-artifacts/M2-kickoff-confirmed.md exists documenting M2a/M2b split, 4 hand-written areas, entry criteria satisfied (M0 Vulkan + M1 PTY+FGS), exit criteria from Plan §6 M2",
+        "References ralplan §6 M2 lines 470-500 with Amendment 1+2 D1.5-hybrid context",
+        "Lists this prd.json 14 stories with M2a/M2b assignment per story",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S02",
+      "title": "Gradle copy task replacing jniLibs symlink",
+      "passes": true,
+      "verifiedBy": "codex round-1 06-20-11Z REVISE (2 blockers + 1 nit: release packaged stale debug .so via NO-SOURCE; onlyIf gate too narrow; willir rationale incomplete) → fix 419d7a0 (per-variant intermediate dirs build/intermediates/rust-jnilibs/{debug,release}/jniLibs/, fail-fast verifyRustLib{Debug,Release} tasks, hasCargoNdk gate accepts either ANDROID_HOME/ANDROID_NDK_ROOT, willir rationale updated) → codex round-2 06-35-13Z CODEX_PASS. Verified: missing release .so → fails at verifyRustLibRelease; debug build untouched release staging; release APK packaged 716344 bytes (not 17MB debug). Non-blocking nits: build.gradle:34 stale comment fixed at 9c73441, ANDROID_NDK_HOME not in gate (deferred).",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "android/app/src/main/jniLibs/arm64-v8a/libwarp_mobile_android_host.so absolute symlink removed and added to .gitignore if not already",
+        "android/app/build.gradle gains a Gradle task that copies $rustTargetDir/aarch64-linux-android/{debug,release}/libwarp_mobile_android_host.so to jniLibs/arm64-v8a/ before assembleDebug/assembleRelease",
+        "Web search docs consulted: cargo-ndk gradle plugin OR raw Copy task pattern; rationale documented in commit message",
+        "cd android && ./gradlew :app:assembleDebug succeeds on this fresh checkout (post-warp-src clone + cargo config render) and produces APK with libwarp_mobile_android_host.so inside",
+        "Acceptance test: extract APK, unzip, verify lib/arm64-v8a/libwarp_mobile_android_host.so exists with non-zero size matching cargo-ndk build output",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S03",
+      "title": "warpui::platform::android scaffold from headless",
+      "passes": true,
+      "verifiedBy": "codex round-1 06-57-03Z CODEX_PASS at warp-src commit 5933841 (warp-mobile/m0-facade pushed to ImL1s/warp). 8-file scaffold matches ralplan §6 M2 table (mod/window/dispatch/vulkan/ime/input/font/text_layout). cfg(target_os = \"android\") dispatch in platform/mod.rs verified. CO-3 fold-in (android-activity/winit reorganization) sound and bounded — cargo tree --target aarch64-linux-android -p warpui shows ONLY android-activity (no font-kit/winit/wgpu/cosmic-text/global-hotkey/fontconfig). desktop_native cfg consistently defined in both warpui/build.rs and warpui_core/build.rs. cargo check -p warpui_core PASS on host; cargo ndk -t arm64-v8a check -p warpui PASS 0 errors / 30 warnings (expected scaffold dead-code, no unsafe/lifetime/Send/Sync). 2 non-blocking nits: private_interfaces warning at android/mod.rs:91 (M2-S04+ will resolve when types become public), pre-existing unused_must_use at platform/app.rs:28 (NOT introduced by S03).",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/ created by copying headless/ as starting base (preserve git history of which files were headless-derived in commit message)",
+        "warp-src/crates/warpui/src/platform/mod.rs adds cfg(target_os = \"android\") branch dispatching to android module, mirroring how linux/mac/windows are dispatched",
+        "Module file structure aligned with ralplan §6 M2 implementation table (lines 489-502): mod.rs (cfg dispatch entry), window.rs (Window/WindowContext/WindowManager), dispatch.rs (DispatchDelegate), vulkan.rs (ash + ANativeWindow + render_scene + request_frame_capture), ime.rs, input.rs, font.rs, text_layout.rs",
+        "warp-src/crates/warpui/src/platform/android/mod.rs has TODO markers for 4 major-rewrite areas (render_scene, request_frame_capture, FontDB, TextLayoutSystem) referencing M0-platform-trait-delta.md §6.2 A4 path scoring (22 total reuse + 10 minor patch + 4 major rewrite)",
+        "ANDROID_NDK_ROOT=$NDK cargo ndk -t arm64-v8a check -p warpui in warp-src/ succeeds (other crates' android-incompat errors are out-of-scope per D1.5-hybrid)",
+        "Web search docs: warp upstream warpui platform module organization, headless backend trait stubs",
+        "Commit on warp-src branch warp-mobile/m0-facade and pushed to ImL1s/warp",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S04",
+      "title": "render_scene minimal Vulkan submission via ash + ANativeWindow",
+      "passes": true,
+      "verifiedBy": "Death-pit #1 — 4-round Codex review with 8 cumulative blockers caught/fixed. Final CODEX_PASS at round-4 (commit 369ff50). Round 1 (worker 21111c8 warp-src + dfd6469 main): VK_SUBOPTIMAL_KHR ignored (ash 0.38 returns Ok(bool) not Err); queue_present cleanup ordering UB; driver POST_NOTIFICATIONS focus theft (codex repro got 83 frames vs claimed 7,418); validation layer .so untracked (fresh clone broken). Round 2 (worker abd71b9 warp-src + 492af6a/39283ca main): SHA-256 pin missing on validation layer fetch; permission grant assertion missing; exit codes only checked layer-absent. Round 3 (lead 815b8e2): SHA pin added at 4 verify points + computeSha256 helper; pm grant + dumpsys assertion + focus check; exit code matrix; tamper detection verified. Round 4 (lead 369ff50): exit code matrix collision (validation_clean=False bumped layer-absent from rc=3 to rc=4) decoupled; set +e/set -e wrap around Python parser to preserve cleanup. Device evidence: RFCY71LAFYE (Galaxy S25, Adreno 750, API 36) 60s capture 7,379 frames p50/p95/p99=8/9/9ms peak 122fps in 1s window; validation_layer.clean=true layer_loaded=true. Codex independently reproduced at 7,371 frames (within 0.1% variance).",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/vulkan.rs (per ralplan §6 M2 row #3) implements WindowContext::render_scene by initializing VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + minimal renderpass + present queue submission",
+        "Renders single solid-color quad (clear-color test) on first frame; not yet textured grid (that is M2-S08)",
+        "Vulkan validation layers ON in debug build; zero validation warnings during 60-second steady run on flagship",
+        "Web search docs: ash crate Vulkan surface creation, ANativeWindow_fromSurface NDK API, VK_KHR_android_surface extension, M0 spikes/vulkan-surface-recreate prior art",
+        "Builds: cargo ndk -t arm64-v8a build -p warpui in warp-src/",
+        "Device verification on flagship (S24 Ultra or equivalent Adreno 730+): tools/scripts/test-render-scene.sh <serial> launches APK with android-host wired to warpui android backend, captures logcat showing Vulkan present queue submitted ≥60 times in 1 second",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S05",
+      "title": "request_frame_capture (ash readback to bitmap)",
+      "passes": true,
+      "verifiedBy": "3-round Codex review with 6 cumulative blockers caught/fixed. Final CODEX_PASS at round-3 (warp-src bc7c5e7 + main 88a24d7+06f0435). Round 1 (worker ea3e4a0/f01425e): VK_SUBOPTIMAL_KHR ignored (already fixed in S04 spillover); HOST_READ memory barrier missing before vkMapMemory; queue_present after capture missing (WSI image leak — codex 6-cap repro got Vk(TIMEOUT) at #4); WindowContext::request_frame_capture trait callback was stub. Round 2 (worker 3ea752b/6c7da1a): per-image present-wait semaphore (one render_finished signaled for all swapchain images is not spec-safe — Vulkan guide on swapchain semaphore reuse); capture_to_callback held swapchain mutex during callback (re-entrant deadlock risk); driver focus assertion missed Bouncer/mInputRestricted (Knox-induced lockscreen; codex repro 10/0 captures). Round 3 (worker bc7c5e7/88a24d7): all 3 round-2 blockers structurally fixed — Vec<Semaphore> indexed by image_index in both vulkan.rs files with allocate/destroy in init/recreate/destroy paths; CapturedFrame built in inner scope with MutexGuard dropped before callback fire; 3 driver scripts get 4-tier reject (Bouncer/Keyguard/StatusBar/Shade exit 11; non-dev.warp.mobile exit 12; mInputRestricted=true exit 13; surfaceDestroyed-before-loop exit 14). Lead also added MainActivity FLAG_KEEP_SCREEN_ON (404535f), keep-awake heartbeat helper (93e47b6), and EXIT trap || true cleanup (post-codex-r3 nit). Device evidence on Galaxy S24 Ultra R5CX10VFFBA / Adreno 750 / API 36: 50-capture stress 50/50 PASS / 0 timeouts / 0 validation; codex independently reproduced 100-capture stress 100/100 PASS + rotation-during-capture-loop 50/50 PASS + RFCY71LAFYE M2-S04 60s smoke 7,602 frames 121fps p95=9ms validation clean. PNG output 1080x2340 RGBA mean (255,0,255).",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/vulkan.rs (extension; lives alongside render_scene impl per ralplan §6 M2 row #3) implements WindowContext::request_frame_capture using vkCmdCopyImageToBuffer + memory mapping",
+        "Outputs raw RGBA bitmap and PNG-encoded variant (use image crate already in warpui deps if available, else add)",
+        "Web search docs: Vulkan readback patterns, vkCmdCopyImageToBuffer host-coherent memory, ash examples",
+        "Device run on flagship: capture single frame from M2-S04 render → adb pull → assert bitmap size matches expected dims and not all-black",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S06",
+      "title": "TextLayoutSystem 2-method skeleton",
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src commit a302bd5. No blocking findings. cosmic-text shaping pipeline (BidiParagraphs → ShapeLine::new → shape_line.layout) wired correctly per winit reference; empty-DB guard returns Line::empty()/TextFrame::empty() (correct for current state — no fonts loaded yet, that's M2-S07's job). 6 TODO blocks honestly disclosed and scoped to S07/S08/S10: glyph-run construction needs FontId↔fontdb::ID BiMap from S07; caret positions & chars_with_missing_glyphs same blocker; StyleAndFont→cosmic_text::Attrs translation needs TextStylesMap (winit/fonts.rs:719); TextAlignment Right/Center accepted but discarded (S08); max_height truncation accepted but unused (S08); locale hardcoded en-US (S10 IME wires Resources.getConfiguration().getLocales()). cosmic-text = warpdotdev fork rev 15198beb (v0.12.0, parity with desktop); fontdb 0.23.0 — both gated to [target.'cfg(target_os = \"android\")'.dependencies]. AndroidTextLayoutCore with RwLock<FontSystem> mirrors winit/fonts.rs:202 pattern. cargo ndk -t arm64-v8a check -p warpui: 0 errors, 33 warnings (same baseline). 3 host-side unit tests pass. Codex independently verified: empty-DB safety per pop-os/cosmic-text issue #243, dep gating correct (no desktop regression), no resource leak from let _ = layout drop, core/shim layering coherent.",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Identify the 2 TextLayoutSystem methods needing real impl on android (cross-reference .omc/m0-artifacts/M0-platform-trait-delta.md)",
+        "warp-src/crates/warpui/src/platform/android/text_layout.rs implements those 2 methods using cosmic-text",
+        "Web search docs: cosmic-text Android usage, warp upstream linux/mac TextLayoutSystem implementations for parity",
+        "cargo ndk -t arm64-v8a check -p warpui succeeds; no warpui internal compile errors related to TextLayoutSystem",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S07",
+      "title": "FontDB 15-method cosmic-text + Android system fonts (M2a-font sub-gate)",
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src 70e472c + main 0bbace1. M2a-font sub-gate (per Plan Amendment 2) CLEARED. 15 FontDB methods implemented (only fallback_fonts returns Vec::new — cosmic-text Shaping::Advanced auto-resolves at shape time). Discovery via ASystemFontIterator NDK API 29+ (primary) + /system/fonts/ scan (fallback). On Galaxy S24 Ultra R5CX10VFFBA (Adreno 750, API 36): 358 fonts loaded across 197 families; CJK fallback found Samsung One UI's renamed 'SEC CJK SC' (= Noto Sans CJK SC, 16 SEC CJK / Noto Serif CJK families discovered). 'Hello, 世界' rendered with 9 glyphs / 0 missing / 11,138 composed pixels; visually inspected no tofu (codex pulled PNG and confirmed). Validation layer clean (W=0/E=0). 4 honest pivots: (1) Samsung CJK rename (fallback regex with Hanunoo/Myanmar guards); (2) adb shell am broadcast drops codepoints > U+007F via shell, used text_b64 base64 extra; (3) cosmic-text other.rs has empty fallback tables on Android — emulated unix.rs::script_fallback via per-script Family::Name spans (file upstream PR for M3); (4) cross-workspace duplication font_render.rs in main mirrors AndroidFontDB (M3 unification). Codex verified: cargo ndk check warpui 0 errors / 32 warnings (1 less than S06 baseline); cargo ndk check + cargo check warp-mobile-android-host PASS; PNG visually inspected. 6 non-blocking nits for S08: fallback_fonts empty acceptable; font_id_for_internal:467 read-then-write race tighten before S08; SubpixelMask/Color smoke test; CJK span hack file upstream; cross-workspace dup M3 unification.",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/font.rs implements all 15 FontDB methods identified in M0-platform-trait-delta.md",
+        "Font discovery uses Android NDK font matcher (AFontMatcher_NDK API since API 29) OR scans /system/fonts/ + bundled assets",
+        "cosmic-text used for shaping/layout consistent with linux/mac backends",
+        "Web search docs: cosmic-text Android usage, AFontMatcher API, NDK font discovery, Noto fonts bundled with Android, warp upstream FontDB implementations",
+        "Device verification on flagship: render \"Hello, 世界\" — Latin glyphs and CJK glyphs both visible, no missing-glyph tofu boxes",
+        "Sub-gate evaluation: if cosmic-text + Android fonts cannot render CJK in 5 person-days post-S07 dispatch, fallback decision documented",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S08",
+      "title": "Static MxN grid 60fps on flagship (M2a Acceptance #1)",
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src 20eaf1a + main f581575. M2a Acceptance #1 gate CLEARED. 50×20 grid = 11,000 glyph instances/frame on Galaxy S24 Ultra R5CX10VFFBA (Adreno 750, API 36): 4,195 frames in 30s, peak 122fps (vsync 120Hz), p95=9ms (gate <16.6ms — 44% margin), p99=10ms, validation clean (W=0/E=0). Visually inspected screenshot: real white 'Hello, World' glyphs on magenta, no tofu. Architecture: shelf-pack 1024×1024 R8_UNORM atlas (9 unique glyphs), per-instance vertex buffer (11k×32B=352KB), single vkCmdDraw(4, 11000), SPIR-V pre-compiled at build time via NDK glslc + Vec<u32> alignment fix for Rust 1.83+, alpha-blend pipeline. Init 81ms one-shot. Codex extra stress: 100×40 grid (44k instances) also p95=9ms over 10s; rotation recreated surface + reinitialized grid cleanly. 7 honest pivots: perf overpowered on S24U (M2-S13 low-end will be real test); title bar visible (M2b/M3 fullscreen); SPIR-V alignment Vec<u32> copy; am start --es space-split → grid_text_b64; android_logger ignores target:; cross-workspace dup (M3 unification); cells overlap (text 120px > 100px cell). Regression: S04 7614 frames p95=9ms; S05 single capture clean; S07 Hello, 世界 9 glyphs/0 missing all OK. 1 non-blocking nit: START_STATIC_GRID broadcast receiver comment but no impl (launch-intent driven, cosmetic).",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Render fixed 50x20 grid of \"Hello, World\" glyphs (per ralplan §6 M2 Acceptance #1) using S04 render_scene + S07 FontDB + S06 TextLayoutSystem",
+        "Steady-state 60fps on Galaxy S24 Ultra (Adreno 730+) — frame timing instrumented via Choreographer.postFrameCallback OR perfetto trace",
+        "p95 frame time < 16.6ms over 30-second sustained render",
+        "Zero Vulkan validation warnings in debug build",
+        "Driver: tools/scripts/test-static-grid.sh <serial> launches APK, drives 30-second steady render, exports per-frame timing JSON",
+        "Result artifact: .omc/m2-artifacts/M2-S08-result.json with per-device p50/p95/p99 frame times + validation warning count",
+        "Web search docs: Choreographer.postFrameCallback timing measurement, perfetto Android tracing, Android Vulkan profiling patterns",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S09",
+      "title": "Activity recreate swapchain p95 less than 200ms (M2a Acceptance #2)",
+      "passes": true,
+      "verifiedBy": "Codex round-2 CODEX_PASS at main e0e3afc + b0a5865 (regex fix). M2a Acceptance #2 gate CLEARED. 100-cycle Activity recreate stress on Galaxy S24 Ultra R5CX10VFFBA: codex's own rerun produced 93/200 valid pairs (Samsung Launcher reclaimed focus around cycle 47, non-deterministic), p95=155ms (gate <200ms; 22% margin), max=171ms (gate <300ms; 43% margin), validation clean (W=0/E=0). MainActivity production fix during bring-up: skip spurious follow-up surfaceChanged re-attach when dims unchanged (was costing ~80ms per rotation, directly causing p95 to exceed gate). Round-1 codex blocker: PID-boundary filter regex r'\\((\\d+)\\)' missed padded logcat PID like '( 8089)' — fixed in b0a5865 to r'\\(\\s*(\\d+)\\)'. Codex round-2 verified parser correctly handles padded/unpadded + drops cross-PID pairs. M2a story sequence (S01..S09): all 9 stories CODEX_PASS at: M2-S01 round-3, M2-S02 round-2, M2-S03 round-1, M2-S04 round-4 (death-pit #1, 8 cumulative blockers), M2-S05 round-3 (6 cumulative blockers), M2-S06 round-1, M2-S07 round-1 (M2a-font sub-gate), M2-S08 round-1 (M2a Acceptance #1, 11k glyph instances/frame at p95=9ms), M2-S09 round-2 (M2a Acceptance #2). Total cumulative codex blockers caught + fixed across M2a: 21+. Honest disclosure: 93/200 sample size due to Launcher focus loss; M0 spike's 18ms baseline is NOT comparable (50-line clear-only with configChanges defeating Activity recreate); 150ms is realistic flagship Activity recreate baseline.",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Activity.recreate() loop driven via adb shell wm rotation 100 cycles, swapchain re-acquires within 200ms p95",
+        "Reuse / extend M0 spikes/vulkan-surface-recreate pattern; no black frame > 300ms",
+        "Driver: tools/scripts/test-rotation-stress.sh <serial> 100 rotations, t0=surfaceDestroyed callback, t1=first frame where pixels != stale_pixels",
+        "Result artifact: .omc/m2-artifacts/M2-S09-result.json with p50/p95/p99 swapchain recovery + max black-frame duration",
+        "Web search docs: Android Activity recreate lifecycle, SurfaceHolder.Callback events, M0 spike report",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S10",
+      "title": "IME glue (commitText/setComposingText/finishComposingText)",
+      "passes": true,
+      "verifiedBy": "Death-pit #2 — 2-round Codex review with 2 cumulative blockers caught/fixed. Final CODEX_PASS at round-2 (warp-src 6acd5e2 + main d4dc1b6). Round 1 (worker df870ed/caf3dae): IME state machine + WarpInputView + custom BaseInputConnection + ImeSimulationReceiver. Round-1 codex blockers: (1) Gboard quirk test direction WRONG — worker tested `compose→commit→finish` (empty finish AFTER commit, OK case) but real risky order is `compose→finish→commit` (Gboard inserts finish BETWEEN compose and commit) — codex repro got latin_commit '你好' instead of composing_commit; (2) driver could false-pass via direct-JNI fallback when WarpInputConnection null. Round 2 (worker 6acd5e2/d4dc1b6): pending_finish:Option<String> defer pattern — finish_composing_text saves into pending_finish (no event); next commit_text classifies as ComposingCommit; next set_composing_text discards pending_finish silently; drain_events flushes pending_finish as ComposingFinish if no follow-up. Driver adds fallback grep (exit 15) + IC.* call count assertion (exit 16) + Sub-test 6 NEW (Gboard correct order). Device evidence on Galaxy S24 Ultra R5CX10VFFBA: 14 IME events / 4 sub-tests PASS / IC counts 7/6/2 match expected / zero fallback warnings; Sub-test 6 `set('nihao')→finish()→commit('你好')` produces composing_update + composing_commit (NOT latin_commit). Codex independently verified break sequence `set('a')→finish()→set('b')→commit('c')` = Update+Update+Commit. 10 host tests pass (7 IME + 3 PTY). M2-S04..S09 regression all PASS post-S10. Honest disclosure: test device only has Samsung HoneyBoard not Gboard/Pinyin, driver uses ImeSimulationReceiver broadcast that routes through real WarpInputConnection.commitText/setComposingText/finishComposingText (verified IC.* logcat counts match) — no JNI bypass. Pending_finish defer is harmless for non-Gboard IMEs (M3 cursor consumers drain per IME burst).",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/ime.rs implements composing-text state machine consuming Java-side InputConnection events",
+        "android/app/src/main/java/dev/warp/mobile/WarpInputView.kt extends View and overrides onCreateInputConnection to expose BaseInputConnection delegating to native via JNI",
+        "Web search docs: Android InputConnection contract, BaseInputConnection, setComposingText vs commitText semantics, Pinyin IME composition flow, Gboard composition flow",
+        "Device verification: type \"hello\" in Gboard → Rust receives 5 char input events; type Pinyin \"ni hao\" → composing region updates in-place without flicker, then commits as 你好",
+        "Driver: tools/scripts/test-ime.sh <serial> automates adb shell input keyboard text + verifies via logcat",
+        "Result artifact: .omc/m2-artifacts/M2-S10-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S11",
+      "title": "Touch input + gesture mapping",
+      "passes": true,
+      "verifiedBy": "codex gpt-5.5 xhigh 2026-05-01 round-5 CODEX_PASS. Round-1 found 4 issues; round-3 audit kept #2 driver false-pass, #3 VelocityTracker feed ordering, #4 ACTION_CANCEL no emit, #5 sign convention docs OPEN; round-4 closed #2/#3/#4 but left #5 OPEN at 3 stale comments; round-5 verified #5 CLOSED at tools/scripts/test-touch.sh:18, crates/android-host/src/input.rs:422, warp-src/crates/warpui/src/platform/android/input.rs:152-155. Convention consistent: positive vx = finger right, positive vy = finger down in Android screen coords. cargo test -p warp-mobile-android-host PASS 18/18. M2-S04..S10 regression previously PASS; S05/S08/S10 rerun artifacts updated in c644af7. M2-S11 fully resolved across all 5 issues.",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/input.rs maps onTouchEvent → MouseDown/Up with screen coords",
+        "GestureDetector wired on Java side for tap, long-press, scroll velocity",
+        "Web search docs: Android MotionEvent, GestureDetector, scroll velocity computation, warp upstream input handling for parity",
+        "Device verification: adb shell input tap <x> <y> → Rust receives MouseDown/Up with x,y matching within 2px; adb shell input swipe → scroll event with non-zero velocity",
+        "Driver: tools/scripts/test-touch.sh <serial>",
+        "Result artifact: .omc/m2-artifacts/M2-S11-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S12",
+      "title": "WindowInsets + IME insets reservation (M2b Acceptance #4)",
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at main 5277983. M2b Acceptance #4 cleared (last M2b story). WindowCompat.setDecorFitsSystemWindows(false) edge-to-edge + ViewCompat.setOnApplyWindowInsetsListener forwards max(ime.bottom, sysBars.bottom) to NativeBridge.setRenderInsets JNI (4 AtomicI32 globals in lib.rs:768). Fullscreen toggle via WindowInsetsControllerCompat.hide(systemBars()) + BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE. Codex verified: listener returns insets non-consuming, max() semantics correct (overlap extents same edge not additive), Rust storage thread-safe. Device evidence on Galaxy S24 Ultra R5CX10VFFBA: rotation portrait{top=242 b=42}→landscape{top=219 l=84 b=42}; fullscreen sysBars.bottom 42→0; sub-test 1 ime.bottom=0 (Knox blocks programmatic showSoftInput on debug builds, listener wiring proven via sub-tests 2+3). 18/18 tests, gradle BUILD SUCCESSFUL, S04..S11 regression all PASS. Worker followed SOP cleanly (no self-PASS, prd.json left false until lead-dispatched codex audit returned — contrast with M2-S11 SOP violation lesson). 2 non-blocking nits deferred to S14 close-out: stale doc URL, WindowInsetsControllerCompat.show(Type.ime()) preferred for ime_mode test hook.",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "WindowInsetsCompat consumed; bottom region reserved when IME panel visible",
+        "Full-screen mode hides nav bar via WindowInsetsControllerCompat",
+        "Rotation re-lays out grid within one frame budget (verified via M2-S09 driver extended)",
+        "Web search docs: WindowInsetsCompat API, edge-to-edge Android 15 changes, IME insets vs system bars insets, fitSystemWindows alternatives",
+        "Device verification: open Gboard, observe terminal grid shrinks above keyboard with no overlap; rotate, verify re-layout; toggle full-screen, verify nav bar hides",
+        "Driver: tools/scripts/test-window-insets.sh <serial>",
+        "Result artifact: .omc/m2-artifacts/M2-S12-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S13",
+      "title": "Acquire Pixel 4a or A52s + re-run M1 stories on low-end",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "user-action then lead",
+      "acceptanceCriteria": [
+        "User acquires Pixel 4a or Galaxy A52s (Adreno 619-642L, API 31+) per Plan Amendment 3 §3 requirement",
+        "Re-run tools/scripts/test-pty-{reattach,resize}.sh <low-end-serial>, test-fgs-clean-kill.sh <low-end-serial>, test-30min-idle-stress.sh <low-end-serial>",
+        "Result artifacts: .omc/m2-artifacts/M2-S13-low-end-{S06,S07,S08,S09}-result.json with delta_ms + observed values matching flagship pattern",
+        "If any of S06-S09 fail on low-end with worse-than-flagship metrics, document deviation and decide GO/CONDITIONAL/DEFER",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S14",
+      "title": "M2 close-out integration document",
+      "passes": true,
+      "verifiedBy": "Codex round-3 CODEX_PASS at main 5e306b1 (worker delivered 7d9dd60 → lead picked up codex's S04/S08/S09 reruns at 90c6d76 → round-2 fixes at c71421e → round-3 polish at 5e306b1). M2-go-no-go.md 508 lines / 6,904 words. Round-1 found 4 blockers (wrong Vulkan trait file refs / §7 citation ranges incomplete / JNI table missing 2 exports / stale HEAD commit) + 3 nits (S11 SOP timestamps / M1 verdict label / L3 GO inconsistency). Round-2 found 4 polish issues (header still stale / §2.1 still bad refs / 2 stale 'PARTIAL — flagship' hits / §6 path-to-GO count off-by-one). Round-3 verified all closed. M2 milestone officially CLOSED CONDITIONAL GO modulo S13 hardware acquisition. Cumulative across M2 14 stories: 21+ codex review rounds, 30+ blockers caught + fixed. Death-pit #1 (S04 Vulkan) 4 rounds 8 blockers; death-pit #2 (S10 IME) 2 rounds 2 blockers; M2-S11 process anomaly 5 rounds (worker self-PASS SOP violation, lead audit exposed 4/5 OPEN — captured as §8.1 lesson for M3). M2a (S03-S09) 9 stories all PASS including M2a-font sub-gate and Acceptance #1 (60fps p95=9ms 11k glyphs/frame) + Acceptance #2 (swapchain p95=155ms over 100 rotations). M2b (S10-S12) 3 stories all PASS including IME composing-text + touch + WindowInsets. Path to full M2 GO: acquire Pixel 4a/A52s API 31 + re-run M1-S06/S07/S08/S09 + M2-S04/S08/S09 drivers (M2-S13 user action).",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m2-artifacts/M2-go-no-go.md exists per M1-go-no-go.md template",
+        "§1 Story Ledger: all 14 M2 stories with PASS/PARTIAL/FAIL + commit hash + evidence file:line",
+        "§2 Architecture state at M2 close (warpui::platform::android module structure + 4 hand-written area file:line refs)",
+        "§3 Per-layer GO/CONDITIONAL/NO-GO decision (L1 WarpUI Android backend the primary M2 deliverable)",
+        "§4 Performance baselines: per-device frame time + swapchain recovery from S08 + S09",
+        "§5 Carry-overs to M3 (terminal session integration, block-based UI, AI hooks scaffolding)",
+        "§6 Final verdict GO / CONDITIONAL GO / NO-GO with rationale",
+        "§7 Per-criterion citation table covering all ~80 prd.json ACs",
+        "Codex 5-round iterative review SOP per M1-S10 — final round PASS"
+      ]
+    }
+  ],
+  "verifierConfig": {
+    "critic": "codex",
+    "rationale": "User SOP from M0/M1: every worker deliverable goes through Codex review. User reinforced for M2: 「每一步都要搭配 codex 和網路搜索相關文檔和資訊」. Web docs lookup precedes implementation; Codex review precedes story passes:true."
+  }
+}
