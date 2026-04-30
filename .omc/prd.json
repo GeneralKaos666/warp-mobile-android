@@ -1,171 +1,252 @@
 {
-  "task": "M1 milestone — Android PTY/service prototype, no UI (per .omc/plans/ralplan-warp-on-mobile.md §6 M1)",
+  "task": "M2 milestone — warpui::platform::android backend per .omc/plans/ralplan-warp-on-mobile.md §6 M2 (D1.5-hybrid, Amendment 1+2 split into M2a/M2b). 4 hand-written areas + headless-derived base. 8-12 weeks.",
   "scope": {
     "in": [
-      "Plan Amendment 3 raising minSdk to 31",
-      "android-activity Cargo feature flag fix in warp-src submodule",
-      "Top-level Rust crate crates/android-host/ for L0 Android Host Service + JNI bridge",
-      "PTY backend in pure Rust (openpty + setsid + TIOCSCTTY) without Termux dependency",
-      "Android Service skeleton (FGS) + AndroidManifest with foregroundServiceType, runtime permission flow",
-      "JNI bridge expanded: PTY spawn, write, read, resize, kill methods callable from Java",
-      "Activity destroy/recreate -> PTY reattach within 1s",
-      "PTY resize via TIOCSWINSZ reflected in shell stty size",
-      "FGS notification persistent + adb shell am kill cleans up cleanly",
-      "30-min idle stress test on S24 Ultra flagship",
-      "All evidence committed under .omc/m1-artifacts/ with matching commit hashes"
+      "warp-src submodule clone + cargo config rendered for this machine (P0 setup)",
+      "Gradle copy task replacing absolute jniLibs symlink (M1 carry-over #2)",
+      "warpui::platform::android scaffold derived from headless backend, gated by cfg(target_os = \"android\")",
+      "render_scene hand-written with ash + ANativeWindow (Vulkan production swapchain, scaled from M0 50-line spike)",
+      "request_frame_capture hand-written (ash readback for visual regression testing)",
+      "TextLayoutSystem 2 hand-written methods (per M0 platform-trait-delta)",
+      "FontDB 15 hand-written methods (cosmic-text wrap + Android system font discovery via NDK)",
+      "Static M×N grid render at 60fps p95 < 16.6ms on flagship (M2a Acceptance #1)",
+      "Activity recreate swapchain p95 < 200ms over 100 rotations (M2a Acceptance #2)",
+      "IME glue (commitText/setComposingText/finishComposingText) → Rust input events (M2b Acceptance #3)",
+      "Touch + gesture mapping (onTouchEvent → MouseDown/Up/scroll)",
+      "WindowInsets + IME insets reservation (M2b Acceptance #4)",
+      "Pixel 4a or Galaxy A52s API 31 acquisition + re-run M1-S06/S07/S08/S09 on low-end (M1 carry-over #1, Plan Amendment 3 §3 requirement)",
+      "M2 close-out doc per M1-go-no-go.md template with file:line evidence"
     ],
     "out": [
-      "WarpUI Android Vulkan backend (M2)",
+      "Block-based UI integration with terminal stream (M3)",
       "Termux package bootstrap (M4)",
-      "Block-based UI (M3)",
-      "AI integration (M6)",
-      "low-end device matrix beyond S24 Ultra (deferred until Pixel 4a / Galaxy A52 acquired; documented as TODO not blocker)"
+      "Mobile UX polish — selection, accessory row, gestures-on-blocks (M5)",
+      "AI integration Haiku ghost-text + Sonnet agent (M6)",
+      "Notification customization session count + command preview (M3 carry-over)",
+      "Clippy 7 lint cleanup (M3 carry-over, low priority)"
     ]
   },
   "stories": [
     {
-      "id": "M1-S01",
-      "title": "Plan Amendment 3 — raise minSdk 26 -> 31",
-      "passes": true,
-      "verifiedBy": "codex review 17-12-55-500Z, CODEX_PASS, all 5 acceptance criteria PASS, commit 2ccc0f7",
-      "ownerHint": "worker-env",
+      "id": "M2-S01",
+      "title": "M2 kickoff doc + Plan section update",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
-        "ralplan-warp-on-mobile.md has new Amendment 3 block above existing Amendment 2 (or as latest top-level amendment)",
-        "Amendment 3 cites M0 Task #8 evidence (S8/Mali-G71/A9 100-cycle p95=326ms FAIL, Adreno 6xx+ all <30ms PASS)",
-        "Plan §6 M2 acceptance criterion line 354 (Galaxy S8 30fps fallback) is removed or rewritten to drop S8 dependency",
-        "Plan §7 Risk register entries that named S8 as primary baseline are updated to API 31+ matrix",
-        "git log shows commit on main with message starting 'plan: Amendment 3'"
+        ".omc/m2-artifacts/M2-kickoff-confirmed.md exists documenting M2a/M2b split, 4 hand-written areas, entry criteria satisfied (M0 Vulkan + M1 PTY+FGS), exit criteria from Plan §6 M2",
+        "References ralplan §6 M2 lines 470-500 with Amendment 1+2 D1.5-hybrid context",
+        "Lists this prd.json 14 stories with M2a/M2b assignment per story",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S02",
-      "title": "android-activity Cargo feature fix in warp-src/crates/warpui",
-      "passes": true,
-      "verifiedBy": "codex review 17-14-12-718Z, CODEX_PASS, all 3 acceptance criteria PASS, commit afc74ec on ImL1s/warp:warp-mobile/m0-facade. Note: Codex flagged warpui/Cargo.toml explicit android-activity dep as redundant — actual E0282 fix is workspace winit feature. Carry-over: M2 may remove redundant warpui dep when reorganizing for D1.5-hybrid.",
-      "ownerHint": "worker-env",
+      "id": "M2-S02",
+      "title": "Gradle copy task replacing jniLibs symlink",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
-        "warp-src/crates/warpui/Cargo.toml has [target.'cfg(target_os = \"android\")'.dependencies] block adding android-activity = { version = \"0.6\", features = [\"native-activity\"] }",
-        "cd warp-src && cargo ndk -t arm64-v8a check -p warpui no longer reports E0282 type-inference error from android-activity macro (font-kit/winit errors still expected, those are M2 scope)",
-        "Change committed on warp-src branch warp-mobile/m0-facade and pushed (warp-src is gitignored at top level so the fix lives only in submodule)"
+        "android/app/src/main/jniLibs/arm64-v8a/libwarp_mobile_android_host.so absolute symlink removed and added to .gitignore if not already",
+        "android/app/build.gradle gains a Gradle task that copies $rustTargetDir/aarch64-linux-android/{debug,release}/libwarp_mobile_android_host.so to jniLibs/arm64-v8a/ before assembleDebug/assembleRelease",
+        "Web search docs consulted: cargo-ndk gradle plugin OR raw Copy task pattern; rationale documented in commit message",
+        "cd android && ./gradlew :app:assembleDebug succeeds on this fresh checkout (post-warp-src clone + cargo config render) and produces APK with libwarp_mobile_android_host.so inside",
+        "Acceptance test: extract APK, unzip, verify lib/arm64-v8a/libwarp_mobile_android_host.so exists with non-zero size matching cargo-ndk build output",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S03",
-      "title": "crates/android-host/ Rust skeleton with JNI ping",
-      "passes": true,
-      "verifiedBy": "codex round-1 17-14-47-766Z REVISE (AC#5 FAIL on commit 10989b6 missing .so size/sha256) → fix README addendum 5b1424e → codex round-2 17-17-33-280Z CODEX_PASS",
-      "ownerHint": "worker-spike",
+      "id": "M2-S03",
+      "title": "warpui::platform::android scaffold from headless",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "crates/android-host/Cargo.toml exists with name=\"warp-mobile-android-host\", crate-type=[\"cdylib\"], deps include jni 0.21+, ndk 0.9+, ndk-sys 0.6+, log 0.4+, android_logger 0.13+",
-        "crates/android-host/src/lib.rs exports Java_dev_warp_mobile_NativeBridge_ping returning a JString",
-        "init_logger() function gated by #[cfg(target_os = \"android\")] so non-Android cargo check doesn't error",
-        "cargo ndk -t arm64-v8a build -p warp-mobile-android-host produces a libwarp_mobile_android_host.so under target/aarch64-linux-android/debug/",
-        ".so size and sha256 recorded in commit message",
-        "Workspace Cargo.toml lists crates/android-host as a member"
+        "warp-src/crates/warpui/src/platform/android/ created by copying headless/ as starting base (preserve git history of which files were headless-derived in commit message)",
+        "warp-src/crates/warpui/src/platform/mod.rs adds cfg(target_os = \"android\") branch dispatching to android module, mirroring how linux/mac/windows are dispatched",
+        "warp-src/crates/warpui/src/platform/android/mod.rs has TODO markers for 4 hand-written areas (render_scene, request_frame_capture, FontDB, TextLayoutSystem) referencing M0 platform-trait-delta evidence",
+        "ANDROID_NDK_ROOT=$NDK cargo ndk -t arm64-v8a check -p warpui in warp-src/ succeeds (other crates' android-incompat errors are out-of-scope per D1.5-hybrid)",
+        "Web search docs: warp upstream warpui platform module organization, headless backend trait stubs",
+        "Commit on warp-src branch warp-mobile/m0-facade and pushed to ImL1s/warp",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S04",
-      "title": "PTY backend in pure Rust (openpty + setsid + TIOCSCTTY)",
-      "passes": true,
-      "verifiedBy": "codex round-1 17-19-21-298Z REJECT (6 safety bugs) → fix fb97d15 → round-2 17-29-02-836Z REVISE (putenv/execvp + E0597) → fix d9bf0d4 → round-3 17-37-08-437Z CODEX_PASS. cargo test 2/2 PASS. AS-safe execve, FD_CLOEXEC, kill timeout+SIGKILL, Drop impl, JNI null guards, signature locked.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S04",
+      "title": "render_scene minimal Vulkan submission via ash + ANativeWindow",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "crates/android-host/src/pty.rs exists with public functions: spawn_pty(cmd: &str, env: &[(&str,&str)]) -> Result<PtySession>, write(buf: &[u8]) -> Result<usize>, read(buf: &mut [u8]) -> Result<usize>, resize(rows: u16, cols: u16) -> Result<()>, kill() -> Result<()>",
-        "spawn_pty internally calls libc::openpty, fork, setsid in child, TIOCSCTTY on slave fd, dup2 to stdin/stdout/stderr, execvp",
-        "Rust unit test on host (linux/mac aarch64 if possible) spawn_pty(\"echo hello\") returns the bytes \"hello\\n\" via read(); test gated under #[cfg(unix)]",
-        "No dependency on Termux executables or files; pure libc + nix",
-        "PTY module exports JNI binding so Java can call Java_dev_warp_mobile_NativeBridge_ptySpawn / ptyRead / ptyWrite / ptyResize / ptyKill"
+        "warp-src/crates/warpui/src/platform/android/render.rs implements render_scene by initializing VkInstance + VkSurfaceKHR (VK_KHR_android_surface) + VkSwapchainKHR + minimal renderpass + present queue submission",
+        "Renders single solid-color quad (clear-color test) on first frame; not yet textured grid (that is M2-S08)",
+        "Vulkan validation layers ON in debug build; zero validation warnings during 60-second steady run on flagship",
+        "Web search docs: ash crate Vulkan surface creation, ANativeWindow_fromSurface NDK API, VK_KHR_android_surface extension, M0 spikes/vulkan-surface-recreate prior art",
+        "Builds: cargo ndk -t arm64-v8a build -p warpui in warp-src/",
+        "Device verification on flagship (S24 Ultra or equivalent Adreno 730+): tools/scripts/test-render-scene.sh <serial> launches APK with android-host wired to warpui android backend, captures logcat showing Vulkan present queue submitted ≥60 times in 1 second",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S05",
-      "title": "Android Service + AndroidManifest + FGS skeleton",
-      "passes": true,
-      "verifiedBy": "codex round-1 17-25-42-845Z REVISE → fix f424be2 → PTY plumbing chain Task#28→#33→#35 CODEX_PASS at 03-32-36-215Z → device run on S24 Ultra (R5CX10VFFBA) 7/8 ACs PASS, 1/8 PARTIAL (Samsung One UI drawer suppression; isForeground=true confirms framework state). Evidence: .omc/m1-artifacts/M1-S05-evidence-v2.md @ commit 1b737f3.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S05",
+      "title": "request_frame_capture (ash readback to bitmap)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "android/app/ project (or similar) created with build.gradle, AndroidManifest.xml, single Activity + WarpTerminalService extending Service",
-        "AndroidManifest declares uses-permission android.permission.FOREGROUND_SERVICE plus android.permission.FOREGROUND_SERVICE_SPECIAL_USE (API 34+)",
-        "Service has android:foregroundServiceType=\"specialUse\" with the corresponding meta-data property declared",
-        "Service.onStartCommand calls startForeground with a NotificationChannel + persistent Notification",
-        "minSdkVersion 31, targetSdk 36, compileSdk 36 in build.gradle",
-        "Service loads libwarp_mobile_android_host.so via System.loadLibrary",
-        "adb install + launch on S24 Ultra shows the persistent notification visible",
-        "adb shell dumpsys activity services dev.warp.mobile lists the Service in foreground state"
+        "warp-src/crates/warpui/src/platform/android/capture.rs implements request_frame_capture using vkCmdCopyImageToBuffer + memory mapping",
+        "Outputs raw RGBA bitmap and PNG-encoded variant (use image crate already in warpui deps if available, else add)",
+        "Web search docs: Vulkan readback patterns, vkCmdCopyImageToBuffer host-coherent memory, ash examples",
+        "Device run on flagship: capture single frame from M2-S04 render → adb pull → assert bitmap size matches expected dims and not all-black",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S06",
-      "title": "Activity recreate -> PTY reattach within 1s",
-      "passes": true,
-      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — delta_ms=36 (under 1000ms threshold), PTY survived 5 device rotations. Evidence: .omc/m1-artifacts/M1-S06-result.json @ commit 1b737f3. Driver fixes during run: && quoting + anchor t_expected on PTY_WRITE log + end-anchor token regex.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S06",
+      "title": "TextLayoutSystem 2-method skeleton",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "Service holds the PTY session (Service-process-bound) so it survives Activity destroy/recreate",
-        "Activity binds to Service via ServiceConnection on each onCreate, gets a reference to the existing PtySession",
-        "Acceptance test on S24 Ultra: spawn `sleep 60 && echo done`, rotate device 5 times, then wait. Activity prints `done` within 1s of the actual fire (verify via adb shell logcat WarpTerminal:I time-tagging)",
-        "Test driver script under tools/scripts/test-pty-reattach.sh + artifact under .omc/m1-artifacts/ documenting run"
+        "Identify the 2 TextLayoutSystem methods needing real impl on android (cross-reference .omc/m0-artifacts/M0-platform-trait-delta.md)",
+        "warp-src/crates/warpui/src/platform/android/text_layout.rs implements those 2 methods using cosmic-text",
+        "Web search docs: cosmic-text Android usage, warp upstream linux/mac TextLayoutSystem implementations for parity",
+        "cargo ndk -t arm64-v8a check -p warpui succeeds; no warpui internal compile errors related to TextLayoutSystem",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S07",
-      "title": "PTY resize via TIOCSWINSZ -> stty size in shell",
-      "passes": true,
-      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — observed='24 80' exact match. Evidence: .omc/m1-artifacts/M1-S07-result.json @ commit 1b737f3. Driver fix during run: switched broadcast→FGS direct path + end-anchor stty regex.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S07",
+      "title": "FontDB 15-method cosmic-text + Android system fonts (M2a-font sub-gate)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "Java side reads view dims and calls NativeBridge.ptyResize(cols, rows) on layout change",
-        "Rust resize() calls libc::ioctl(fd, TIOCSWINSZ, &winsize{rows, cols, 0, 0})",
-        "Acceptance test on S24 Ultra: spawn `stty size > /tmp/sz; cat /tmp/sz` after resize(80, 24); the file content equals \"24 80\\n\"",
-        "Artifact under .omc/m1-artifacts/ with adb logcat evidence"
+        "warp-src/crates/warpui/src/platform/android/font.rs implements all 15 FontDB methods identified in M0-platform-trait-delta.md",
+        "Font discovery uses Android NDK font matcher (AFontMatcher_NDK API since API 29) OR scans /system/fonts/ + bundled assets",
+        "cosmic-text used for shaping/layout consistent with linux/mac backends",
+        "Web search docs: cosmic-text Android usage, AFontMatcher API, NDK font discovery, Noto fonts bundled with Android, warp upstream FontDB implementations",
+        "Device verification on flagship: render \"Hello, 世界\" — Latin glyphs and CJK glyphs both visible, no missing-glyph tofu boxes",
+        "Sub-gate evaluation: if cosmic-text + Android fonts cannot render CJK in 5 person-days post-S07 dispatch, fallback decision documented",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S08",
-      "title": "FGS persistence + clean kill",
-      "passes": true,
-      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — pid_before=1, pid_after=0, orphans=0. Evidence: .omc/m1-artifacts/M1-S08-result.json @ commit 1b737f3.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S08",
+      "title": "Static MxN grid 60fps on flagship (M2a Acceptance #1)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "Notification visible continuously during PTY session",
-        "adb shell am kill dev.warp.mobile triggers Service.onDestroy which calls pty.kill() and removes notification",
-        "After kill: ps -A | grep dev.warp shows no orphan processes (especially no zombie PTY children)",
-        "Artifact under .omc/m1-artifacts/ logs the before/after process listings"
+        "Render fixed 50x20 grid of \"Hello, World\" glyphs (per ralplan §6 M2 Acceptance #1) using S04 render_scene + S07 FontDB + S06 TextLayoutSystem",
+        "Steady-state 60fps on Galaxy S24 Ultra (Adreno 730+) — frame timing instrumented via Choreographer.postFrameCallback OR perfetto trace",
+        "p95 frame time < 16.6ms over 30-second sustained render",
+        "Zero Vulkan validation warnings in debug build",
+        "Driver: tools/scripts/test-static-grid.sh <serial> launches APK, drives 30-second steady render, exports per-frame timing JSON",
+        "Result artifact: .omc/m2-artifacts/M2-S08-result.json with per-device p50/p95/p99 frame times + validation warning count",
+        "Web search docs: Choreographer.postFrameCallback timing measurement, perfetto Android tracing, Android Vulkan profiling patterns",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S09",
-      "title": "30-min idle stress test on S24 Ultra flagship",
-      "passes": true,
-      "verifiedBy": "Device run on S24 Ultra (R5CX10VFFBA) PASS — 30-min idle: PID 24008 constant throughout, alive=1 + isForeground=true at all 4 checkpoints (t=0/10/20/30), 0 warp-app anomalies (script's broad regex over-counted unrelated system Zygote kills for OTHER apps; manual app-filter returns 0), pwd response latency 4ms via device-side logcat epoch delta. Two script bugs discovered + documented as M2 carry-overs (macOS BSD date %3N incompatibility, anomaly regex too broad). Evidence: .omc/m1-artifacts/M1-S09-result.json + M1-stress-test.md @ commit pending.",
-      "ownerHint": "worker-spike",
+      "id": "M2-S09",
+      "title": "Activity recreate swapchain p95 less than 200ms (M2a Acceptance #2)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "Spawn `bash` PTY session, leave idle 30 minutes on S24 Ultra",
-        "No crashes (no app death, no Service termination)",
-        "No PhantomProcessKiller events in logcat",
-        "Notification still present at t=30min",
-        "PTY still responsive: write `pwd\\n` returns the cwd in <500ms",
-        "Artifact .omc/m1-artifacts/M1-stress-test.md documenting run with raw logcat snippets at t=0/10/20/30 min"
+        "Activity.recreate() loop driven via adb shell wm rotation 100 cycles, swapchain re-acquires within 200ms p95",
+        "Reuse / extend M0 spikes/vulkan-surface-recreate pattern; no black frame > 300ms",
+        "Driver: tools/scripts/test-rotation-stress.sh <serial> 100 rotations, t0=surfaceDestroyed callback, t1=first frame where pixels != stale_pixels",
+        "Result artifact: .omc/m2-artifacts/M2-S09-result.json with p50/p95/p99 swapchain recovery + max black-frame duration",
+        "Web search docs: Android Activity recreate lifecycle, SurfaceHolder.Callback events, M0 spike report",
+        "Codex review dispatched and PASS verdict received"
       ]
     },
     {
-      "id": "M1-S10",
-      "title": "M1 close-out integration document",
-      "passes": true,
-      "verifiedBy": "Codex 5-round iterative review CODEX_PASS at 04-41-13-401Z. Final commit 4f37601. M1-go-no-go.md §6 verdict CONDITIONAL GO with documented am force-stop vs am kill deviation + low-end device deferral to M2. §7 per-criterion citation table covers all ~50 prd.json ACs with file:line refs. 6 M2 carry-overs in §5 (low-end device, gradle copy task, D1.5-hybrid impl, android-activity dep cleanup, notification customization, clippy lint). Round history: round-1/2/3/4 REVISE addressed in commits 7513445/ad3d0cc/fc0a892/4f37601 → round-5 PASS.",
-      "ownerHint": "worker-env",
+      "id": "M2-S10",
+      "title": "IME glue (commitText/setComposingText/finishComposingText)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        ".omc/m1-artifacts/M1-go-no-go.md exists summarising all M1 stories with PASS evidence + commit hashes",
-        "Each acceptance criterion in this prd.json has a one-line citation in the ledger",
-        "M1 verdict: GO / CONDITIONAL GO / NO-GO with rationale",
-        "Carry-overs for M2 listed (e.g. low-end device matrix when Pixel 4a/A52 acquired)",
-        "Codex review dispatched and PASS verdict received before story is marked passes:true"
+        "warp-src/crates/warpui/src/platform/android/ime.rs implements composing-text state machine consuming Java-side InputConnection events",
+        "android/app/src/main/java/dev/warp/mobile/WarpInputView.kt extends View and overrides onCreateInputConnection to expose BaseInputConnection delegating to native via JNI",
+        "Web search docs: Android InputConnection contract, BaseInputConnection, setComposingText vs commitText semantics, Pinyin IME composition flow, Gboard composition flow",
+        "Device verification: type \"hello\" in Gboard → Rust receives 5 char input events; type Pinyin \"ni hao\" → composing region updates in-place without flicker, then commits as 你好",
+        "Driver: tools/scripts/test-ime.sh <serial> automates adb shell input keyboard text + verifies via logcat",
+        "Result artifact: .omc/m2-artifacts/M2-S10-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S11",
+      "title": "Touch input + gesture mapping",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "warp-src/crates/warpui/src/platform/android/input.rs maps onTouchEvent → MouseDown/Up with screen coords",
+        "GestureDetector wired on Java side for tap, long-press, scroll velocity",
+        "Web search docs: Android MotionEvent, GestureDetector, scroll velocity computation, warp upstream input handling for parity",
+        "Device verification: adb shell input tap <x> <y> → Rust receives MouseDown/Up with x,y matching within 2px; adb shell input swipe → scroll event with non-zero velocity",
+        "Driver: tools/scripts/test-touch.sh <serial>",
+        "Result artifact: .omc/m2-artifacts/M2-S11-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S12",
+      "title": "WindowInsets + IME insets reservation (M2b Acceptance #4)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "WindowInsetsCompat consumed; bottom region reserved when IME panel visible",
+        "Full-screen mode hides nav bar via WindowInsetsControllerCompat",
+        "Rotation re-lays out grid within one frame budget (verified via M2-S09 driver extended)",
+        "Web search docs: WindowInsetsCompat API, edge-to-edge Android 15 changes, IME insets vs system bars insets, fitSystemWindows alternatives",
+        "Device verification: open Gboard, observe terminal grid shrinks above keyboard with no overlap; rotate, verify re-layout; toggle full-screen, verify nav bar hides",
+        "Driver: tools/scripts/test-window-insets.sh <serial>",
+        "Result artifact: .omc/m2-artifacts/M2-S12-result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S13",
+      "title": "Acquire Pixel 4a or A52s + re-run M1 stories on low-end",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "user-action then lead",
+      "acceptanceCriteria": [
+        "User acquires Pixel 4a or Galaxy A52s (Adreno 619-642L, API 31+) per Plan Amendment 3 §3 requirement",
+        "Re-run tools/scripts/test-pty-{reattach,resize}.sh <low-end-serial>, test-fgs-clean-kill.sh <low-end-serial>, test-30min-idle-stress.sh <low-end-serial>",
+        "Result artifacts: .omc/m2-artifacts/M2-S13-low-end-{S06,S07,S08,S09}-result.json with delta_ms + observed values matching flagship pattern",
+        "If any of S06-S09 fail on low-end with worse-than-flagship metrics, document deviation and decide GO/CONDITIONAL/DEFER",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M2-S14",
+      "title": "M2 close-out integration document",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m2-artifacts/M2-go-no-go.md exists per M1-go-no-go.md template",
+        "§1 Story Ledger: all 14 M2 stories with PASS/PARTIAL/FAIL + commit hash + evidence file:line",
+        "§2 Architecture state at M2 close (warpui::platform::android module structure + 4 hand-written area file:line refs)",
+        "§3 Per-layer GO/CONDITIONAL/NO-GO decision (L1 WarpUI Android backend the primary M2 deliverable)",
+        "§4 Performance baselines: per-device frame time + swapchain recovery from S08 + S09",
+        "§5 Carry-overs to M3 (terminal session integration, block-based UI, AI hooks scaffolding)",
+        "§6 Final verdict GO / CONDITIONAL GO / NO-GO with rationale",
+        "§7 Per-criterion citation table covering all ~80 prd.json ACs",
+        "Codex 5-round iterative review SOP per M1-S10 — final round PASS"
       ]
     }
   ],
   "verifierConfig": {
     "critic": "codex",
-    "rationale": "User SOP from M0: every worker deliverable goes through Codex review. Same applies to M1."
+    "rationale": "User SOP from M0/M1: every worker deliverable goes through Codex review. User reinforced for M2: 「每一步都要搭配 codex 和網路搜索相關文檔和資訊」. Web docs lookup precedes implementation; Codex review precedes story passes:true."
   }
 }
