@@ -105,8 +105,8 @@
     {
       "id": "M2-S06",
       "title": "TextLayoutSystem 2-method skeleton",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at warp-src commit a302bd5. No blocking findings. cosmic-text shaping pipeline (BidiParagraphs → ShapeLine::new → shape_line.layout) wired correctly per winit reference; empty-DB guard returns Line::empty()/TextFrame::empty() (correct for current state — no fonts loaded yet, that's M2-S07's job). 6 TODO blocks honestly disclosed and scoped to S07/S08/S10: glyph-run construction needs FontId↔fontdb::ID BiMap from S07; caret positions & chars_with_missing_glyphs same blocker; StyleAndFont→cosmic_text::Attrs translation needs TextStylesMap (winit/fonts.rs:719); TextAlignment Right/Center accepted but discarded (S08); max_height truncation accepted but unused (S08); locale hardcoded en-US (S10 IME wires Resources.getConfiguration().getLocales()). cosmic-text = warpdotdev fork rev 15198beb (v0.12.0, parity with desktop); fontdb 0.23.0 — both gated to [target.'cfg(target_os = \"android\")'.dependencies]. AndroidTextLayoutCore with RwLock<FontSystem> mirrors winit/fonts.rs:202 pattern. cargo ndk -t arm64-v8a check -p warpui: 0 errors, 33 warnings (same baseline). 3 host-side unit tests pass. Codex independently verified: empty-DB safety per pop-os/cosmic-text issue #243, dep gating correct (no desktop regression), no resource leak from let _ = layout drop, core/shim layering coherent.",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Identify the 2 TextLayoutSystem methods needing real impl on android (cross-reference .omc/m0-artifacts/M0-platform-trait-delta.md)",
