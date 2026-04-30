@@ -1,7 +1,7 @@
 {
   "story": "M2-S11",
   "device_serial": "R5CX10VFFBA",
-  "attach_ts_ms": 136252620,
+  "attach_ts_ms": 140092124,
   "detach_ts_ms": null,
   "sub_test_1_real_tap": {
     "method": "adb_shell_input_tap",

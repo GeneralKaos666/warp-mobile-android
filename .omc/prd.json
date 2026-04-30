@@ -199,8 +199,8 @@
     {
       "id": "M2-S12",
       "title": "WindowInsets + IME insets reservation (M2b Acceptance #4)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "Codex round-1 CODEX_PASS at main 5277983. M2b Acceptance #4 cleared (last M2b story). WindowCompat.setDecorFitsSystemWindows(false) edge-to-edge + ViewCompat.setOnApplyWindowInsetsListener forwards max(ime.bottom, sysBars.bottom) to NativeBridge.setRenderInsets JNI (4 AtomicI32 globals in lib.rs:768). Fullscreen toggle via WindowInsetsControllerCompat.hide(systemBars()) + BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE. Codex verified: listener returns insets non-consuming, max() semantics correct (overlap extents same edge not additive), Rust storage thread-safe. Device evidence on Galaxy S24 Ultra R5CX10VFFBA: rotation portrait{top=242 b=42}→landscape{top=219 l=84 b=42}; fullscreen sysBars.bottom 42→0; sub-test 1 ime.bottom=0 (Knox blocks programmatic showSoftInput on debug builds, listener wiring proven via sub-tests 2+3). 18/18 tests, gradle BUILD SUCCESSFUL, S04..S11 regression all PASS. Worker followed SOP cleanly (no self-PASS, prd.json left false until lead-dispatched codex audit returned — contrast with M2-S11 SOP violation lesson). 2 non-blocking nits deferred to S14 close-out: stale doc URL, WindowInsetsControllerCompat.show(Type.ime()) preferred for ime_mode test hook.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "WindowInsetsCompat consumed; bottom region reserved when IME panel visible",
