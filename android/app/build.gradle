@@ -140,6 +140,55 @@ task copyRustLibsRelease(type: Copy) {
 }
 
 // ---------------------------------------------------------------------------
+// M3-S06: zsh_body.sh APK asset packaging
+//
+// warp-src/app/assets/bundled/bootstrap/zsh_body.sh is the canonical source
+// of the Warp zsh hook script (lines 80, 254, 301 emit DCS hooks consumed by
+// the M3-S05 DCS parser). The file is not committed to the main repo — it
+// lives only in the warp-src fork (gitignored). This Gradle Copy task stages
+// it into android/app/src/main/assets/warp/ before every build so AGP picks
+// it up via the default assets source set.
+//
+// Path resolution: repoRoot = android/../ = warp-mobile-android root.
+// warp-src is checked out at <repoRoot>/warp-src per README fresh-clone SOP.
+//
+// Hook execution DEFERRED to M5 Termux: S24 Ultra ships only mksh; zsh is
+// unavailable without Termux. M3-S06 ships + extracts the asset only.
+// Asset source: warp-src/app/assets/bundled/bootstrap/zsh_body.sh
+//
+// Refs:
+//   https://developer.android.com/build/building-cmdline (AGP assets srcDirs)
+//   https://developer.android.com/reference/android/content/res/AssetManager
+// ---------------------------------------------------------------------------
+
+def warpAssetsSrcDir = new File(repoRoot, "warp-src/app/assets/bundled/bootstrap")
+def warpAssetsDestDir = file("src/main/assets/warp")
+
+task verifyZshBodySh {
+    description = "Fail-fast if warp-src/app/assets/bundled/bootstrap/zsh_body.sh is missing."
+    doLast {
+        def src = new File(warpAssetsSrcDir, "zsh_body.sh")
+        if (!src.exists()) {
+            throw new GradleException(
+                "Missing zsh_body.sh source: ${src.absolutePath}\n" +
+                "Clone the warp-src fork first:\n" +
+                "  git clone https://github.com/ImL1s/warp warp-src --branch warp-mobile/m0-facade\n" +
+                "See CLAUDE.md §Fresh-clone setup for full instructions."
+            )
+        }
+    }
+}
+
+task copyWarpAssets(type: Copy) {
+    description = "Copy zsh_body.sh from warp-src bootstrap into APK assets/warp/ (M3-S06)."
+    dependsOn verifyZshBodySh
+    from(warpAssetsSrcDir) {
+        include "zsh_body.sh"
+    }
+    into warpAssetsDestDir
+}
+
+// ---------------------------------------------------------------------------
 // Vulkan validation layer fetch (Round-2, Codex blocker 4a)
 //
 // Background: the M2-S04 acceptance gate requires VK_LAYER_KHRONOS_validation
@@ -337,6 +386,17 @@ android {
 // Ref: https://docs.gradle.org/8.6/userguide/validation_problems.html#implicit_dependency
 //      https://developer.android.com/build/jniLibs (AGP source set semantics)
 afterEvaluate {
+    // M3-S06: wire zsh_body.sh copy to all assemble variants. AGP merges
+    // assets before package*, so we hook into mergeAssets* (canonical consumer)
+    // AND package* + assemble* as belt-and-suspenders (same pattern as jniLibs).
+    tasks.matching { it.name == "mergeDebugAssets" }.configureEach   { dependsOn copyWarpAssets }
+    tasks.matching { it.name == "mergeReleaseAssets" }.configureEach { dependsOn copyWarpAssets }
+    // Belt-and-suspenders: also wire to package + assemble.
+    tasks.matching { it.name == "packageDebug" }.configureEach    { dependsOn copyWarpAssets }
+    tasks.matching { it.name == "packageRelease" }.configureEach  { dependsOn copyWarpAssets }
+    tasks.matching { it.name == "assembleDebug" }.configureEach   { dependsOn copyWarpAssets }
+    tasks.matching { it.name == "assembleRelease" }.configureEach { dependsOn copyWarpAssets }
+
     // Merge tasks are the canonical jniLibs consumer when AGP generates them.
     tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
     tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 class WarpTerminalService : Service() {
 
@@ -52,6 +53,17 @@ class WarpTerminalService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // M3-S06: extract APK-bundled warp assets to the app's internal files
+        // directory on first launch. zsh_body.sh is bundled as
+        // assets/warp/zsh_body.sh and extracted to
+        // /data/data/dev.warp.mobile/files/warp/zsh_body.sh so PTY context
+        // (and eventually M5 Termux zsh) can source it directly from the
+        // filesystem.
+        //
+        // Refs:
+        //   https://developer.android.com/reference/android/content/res/AssetManager
+        //   (AssetManager.open / copyTo pattern)
+        extractWarpAssets()
         val filter = IntentFilter().apply {
             addAction(ACTION_SPAWN)
             addAction(ACTION_WRITE)
@@ -91,6 +103,48 @@ class WarpTerminalService : Service() {
             .setOngoing(true)
             .build()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    }
+
+    // ── M3-S06: asset extraction ─────────────────────────────────────────────
+
+    /**
+     * Extract APK-bundled warp assets to the app's internal files dir.
+     *
+     * Currently extracts:
+     *   assets/warp/zsh_body.sh → filesDir/warp/zsh_body.sh
+     *
+     * The file is skipped if it already exists (idempotent). Extraction happens
+     * at service creation so the path is available before any PTY session
+     * spawns. A PTY shell can `cat` the file at:
+     *   /data/data/dev.warp.mobile/files/warp/zsh_body.sh
+     *
+     * Hook execution is DEFERRED to M5 Termux: the S24 Ultra ships only mksh;
+     * zsh_body.sh's precmd/preexec hooks require zsh which ships in M5.
+     *
+     * Refs:
+     *   https://developer.android.com/reference/android/content/res/AssetManager
+     *   https://wiki.termux.com/wiki/Zsh (zsh availability in Termux; M5 target)
+     *   AGPL-3.0 §5: source-form script shipped verbatim in APK satisfies §5
+     *     (corresponding source = the script itself; no additional obligation).
+     */
+    private fun extractWarpAssets() {
+        val warpDir = File(filesDir, "warp")
+        val target = File(warpDir, "zsh_body.sh")
+        if (target.exists()) {
+            Log.i(LOG_TAG, "zsh_body.sh already extracted at ${target.absolutePath} (${target.length()} bytes); skipping")
+            return
+        }
+        try {
+            warpDir.mkdirs()
+            assets.open("warp/zsh_body.sh").use { input ->
+                target.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.i(LOG_TAG, "extracted zsh_body.sh to ${target.absolutePath} (${target.length()} bytes)")
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "failed to extract zsh_body.sh: ${e.message}", e)
+        }
     }
 
     override fun onDestroy() {
