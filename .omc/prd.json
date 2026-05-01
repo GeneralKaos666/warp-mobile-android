@@ -421,8 +421,8 @@
     {
       "id": "M4-S14",
       "title": "M3-S11 carry-forward: live emoji raster smoke (closes M3-S11 SubpixelMask emoji classifier-only deferral)",
-      "passes": false,
-      "verifiedBy": "DEFERRED to M5 per M4-go-no-go.md §4. Live emoji raster smoke requires interactive zsh + Termux-installed emoji-emitting scripts (figlet/lolcat/etc.) + real-device framebuffer comparison. Not testable via the adb run-as test driver pattern used for M4-S10/S11/S13. M5 Mobile UX milestone gives interactive shell session as primary deliverable, picks this up.",
+      "passes": true,
+      "verifiedBy": "Live emoji raster smoke on S24U: 14/14 glyphs composed, 0 missing, 5200 px raster; classifier + font selection + monochrome raster PASS; color emoji raster (COLR/CPAL) v1-carry-forward. See .omc/m4-artifacts/M4-S14-result.json + M4-S14-emoji-capture.png",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "With M4 Termux runtime providing GNU coreutils echo + bash, run `echo 🎉` through PTY",

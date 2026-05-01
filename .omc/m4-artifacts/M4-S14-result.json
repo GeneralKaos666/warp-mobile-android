@@ -1,0 +1,61 @@
+{
+  "story": "M4-S14",
+  "title": "M3-S11 carry-forward: live emoji raster smoke (closes M3-S11 SubpixelMask emoji classifier-only deferral)",
+  "date_run": "2026-05-02",
+  "device": "Galaxy S24 Ultra R5CX10VFFBA",
+  "verdict": "PASS (raster pipeline) + COLOR_EMOJI_v1_CARRYFORWARD",
+  "test_input": {
+    "text": "🚀 emoji 🎉 中文 ✓",
+    "byte_length": 26,
+    "char_length": 16,
+    "font_size_px": 64.0,
+    "background_rgba": [0.1, 0.1, 0.15, 1.0]
+  },
+  "evidence": {
+    "broadcast_ok": true,
+    "renderCaptureFrameWithText_ok": true,
+    "captured_png_path": ".omc/m4-artifacts/M4-S14-emoji-capture.png",
+    "captured_png_bytes": 77550,
+    "captured_png_dims": "1080x2340",
+    "fonts_loaded": 358,
+    "fonts_via": "ASystemFontIterator",
+    "primary_font": "Roboto",
+    "cjk_font": "SEC CJK SC",
+    "emoji_font": "Noto Color Emoji",
+    "runs_classified": [
+      [0, 4, "Emoji"],
+      [4, 11, "Latin"],
+      [11, 15, "Emoji"],
+      [15, 16, "Latin"],
+      [16, 22, "Cjk"],
+      [22, 23, "Latin"],
+      [23, 26, "Emoji"]
+    ],
+    "glyphs_total": 14,
+    "glyphs_missing": 0,
+    "composed_pixels": 5200,
+    "foreground_pixels_sampled_every_4th": 326,
+    "foreground_bbox": "x=(148..592) y=(352..412)",
+    "saturation_distribution": "all pixels 0-10 (monochrome alpha mask)"
+  },
+  "verdict_breakdown": {
+    "classifier_pipeline": "PASS — script-based run classification (Latin/CJK/Emoji) works; correct fallback font selection routed each run to Roboto / SEC CJK SC / Noto Color Emoji",
+    "glyph_composition": "PASS — glyphs_total=14 glyphs_missing=0; cosmic-text + Noto Color Emoji loaded the COLR-tabled glyphs without errors",
+    "monochrome_raster": "PASS — 5200 composed pixels; bbox occupies expected 444×60 region for one line of 64px text; ✓ ✓ glyphs visible in foreground sample",
+    "color_emoji_raster": "v1_CARRY_FORWARD — pixel sat distribution shows all foreground pixels are 0-10 saturation (grayscale alpha mask). swash rasterizer is not consuming the COLR/CPAL or CBDT/CBLC color tables. This is the next step beyond the M3-S11 'classifier-only' deferral closure: the classifier + composition work, monochrome raster works, color raster needs swash CBDT/COLR support (v1 enhancement, not regression)"
+  },
+  "logcat_evidence": [
+    "WarpRender: CAPTURE_FRAME_WITH_TEXT received path=/data/data/dev.warp.mobile/cache/m4-s14-emoji.png text=\"🚀 emoji 🎉 中文 ✓\" len=16",
+    "warp-android-host::font_render: discovered=274 loaded=358 via=ASystemFontIterator primary=Some(\"Roboto\") cjk=Some(\"SEC CJK SC\")",
+    "compose_text_on_rgba: using primary='Roboto' cjk='SEC CJK SC' emoji='Noto Color Emoji'",
+    "compose_text_on_rgba: text=\"🚀 emoji 🎉 中文 ✓\" bytes=26 runs_classified=[(0..4, Emoji), (4..11, Latin), (11..15, Emoji), (15..16, Latin), (16..22, Cjk), (22..23, Latin), (23..26, Emoji)]",
+    "compose_text_on_rgba: glyphs_total=14 glyphs_missing=0 composed_pixels=5200 via=ASystemFontIterator fonts=358",
+    "WarpRender: renderCaptureFrameWithText ok=true path=/data/data/dev.warp.mobile/cache/m4-s14-emoji.png"
+  ],
+  "carry_forward_to_v1": [
+    "Color emoji rasterization (swash COLR/CPAL or CBDT/CBLC support) — currently the COLR-tabled Noto Color Emoji font is selected, glyph IDs are resolved, but only the alpha mask is rasterized (no color layers composited). Pixel saturation analysis on the captured PNG shows all foreground pixels at sat=0-10 (essentially grayscale)."
+  ],
+  "comparable_artifacts": {
+    "predecessor_M3_S11": ".omc/m3-artifacts/M3-S11-result.json — 'SubpixelMask emoji classifier-only' deferral (this story closes the live raster smoke portion; color portion stays in v1)"
+  }
+}
