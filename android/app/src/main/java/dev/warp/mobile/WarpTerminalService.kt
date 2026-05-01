@@ -217,6 +217,12 @@ class WarpTerminalService : Service() {
             Log.i(LOG_TAG, "writeWarpZshenv: $prefix/bin/zsh not present (M4-S05 not run yet); skipping")
             return
         }
+        // Codex round-1 finding 3: $PREFIX/tmp creation must be GATED on usr/
+        // already existing — buildPrefixEnv used to mkdirs $PREFIX/tmp on every
+        // spawn including the mksh fallback path, which could race the M4-S05
+        // atomic rename `usr.tmp/ → usr/`. Now we create it here, AFTER the
+        // usr/bin/zsh exists check, so it can only happen post-extraction.
+        File("$prefix/tmp").mkdirs()
         val zshenvPath = File("$prefix/etc/.zshenv")
         // Canonical content (per M4-S06 AC #6/#7 from prd.json round-7).
         // The HEREDOC-style multiline string is a single Kotlin string with
@@ -244,10 +250,30 @@ class WarpTerminalService : Service() {
             |    ${"$"}{fpath:#/data/data/com.termux/*}
             |)
             |
-            |# 3. Sanity-check sentinel for M4-S06 acceptance verification:
+            |# 3. TMPPREFIX redirects zsh heredoc/here-string temp files
+            |#    away from /tmp (unwritable on Android) into our app-private
+            |#    ${"$"}PREFIX/tmp. Without this, warp_escape_json (used by the
+            |#    DCS hook script) emits "can't create temp file for here
+            |#    document: permission denied" warnings every command.
+            |TMPPREFIX="${"$"}{TMPDIR:-/data/data/dev.warp.mobile/files/usr/tmp}/zsh"
+            |
+            |# 4. Sanity-check sentinel for M4-S06 acceptance verification:
             |#    `print -rl -- ${"$"}WARP_ZSHENV_LOADED` returns "1" iff this
             |#    file was sourced. M4-S10 acceptance test asserts this.
             |export WARP_ZSHENV_LOADED=1
+            |
+            |# 5. Source the warp DCS-hook script extracted by M3-S06.
+            |#    (Codex M4-S06 round-1 finding 1: AC #3 says hooks must fire,
+            |#    but until this round zsh never sourced the script.)
+            |#    The script registers preexec/precmd functions that emit DCS
+            |#    sequences (ESC P ${"$"} d <hex> 0x9c) consumed by the M3-S05
+            |#    DCS parser to populate the Block model.
+            |if [[ -r /data/data/dev.warp.mobile/files/warp/zsh_body.sh ]]; then
+            |    # zsh_body.sh expects WARP_SESSION_ID; default to PID if unset.
+            |    : ${"$"}{WARP_SESSION_ID:=${"$"}${"$"}}
+            |    export WARP_SESSION_ID
+            |    source /data/data/dev.warp.mobile/files/warp/zsh_body.sh
+            |fi
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.
@@ -290,17 +316,26 @@ class WarpTerminalService : Service() {
     private fun buildPrefixEnv(extra: Map<String, String> = emptyMap()): Map<String, String> {
         val prefix = "${applicationInfo.dataDir}/files/usr"
         val home = "${applicationInfo.dataDir}/files/home"
-        // Make sure the home dir exists; first launch zsh will write history
-        // and configs into it.
+        // home/ is in the app's writable area regardless of M4-S05 state, so
+        // mkdirs here is safe (no race with bootstrap atomic rename).
+        // Codex round-1 finding 3: $PREFIX/tmp mkdirs MOVED OUT of this
+        // function and into writeWarpZshenv (gated on zsh existence) to
+        // avoid racing the M4-S05 `usr.tmp/ → usr/` atomic rename.
         File(home).mkdirs()
-        File("$prefix/tmp").mkdirs()
+
+        // Codex round-1 finding 4: AC #2 says PATH=$PREFIX/bin:$PATH but
+        // the round-1 implementation hardcoded $PREFIX/bin:/system/bin,
+        // dropping all other entries from the parent's PATH (e.g.
+        // /apex/com.android.runtime/bin which has linker shims). Honor
+        // the inherited PATH per AC text.
+        val parentPath = System.getenv("PATH") ?: "/system/bin"
 
         return buildMap {
             // PATH: $PREFIX/bin first so binaries from the bootstrap zip
-            // shadow any system tools. /system/bin retained as fallback for
-            // Android-only utilities (am, pm, settings, getprop) that may
-            // be useful from the shell.
-            put("PATH", "$prefix/bin:/system/bin")
+            // shadow any system tools. The inherited Android PATH is
+            // appended so /system/bin (am, pm, settings, getprop) plus
+            // any apex shims remain reachable.
+            put("PATH", "$prefix/bin:$parentPath")
             put("HOME", home)
             put("PREFIX", prefix)
             put("TERMUX_PREFIX", prefix) // termux-tools scripts read this
@@ -354,6 +389,13 @@ class WarpTerminalService : Service() {
         // extraction). Falls back to /system/bin/sh if zsh isn't extracted yet
         // (M4-S05 not run, e.g., race during first-launch coroutine startup);
         // the M3 PTY pipeline still works on mksh for that fallback.
+        //
+        // Codex round-1 finding 2: writeWarpZshenv() called here AS WELL as
+        // in onCreate so a race where service starts before bootstrap finishes
+        // gets retried at every spawn. Idempotent + cheap (~ms after first
+        // write). Without this, .zshenv could remain unwritten forever if
+        // service onCreate happened to win the race against M4-S05.
+        writeWarpZshenv()
         val prefixZsh = "${applicationInfo.dataDir}/files/usr/bin/zsh"
         val defaultProgram = if (File(prefixZsh).exists()) prefixZsh else "/system/bin/sh"
         val program = intent.getStringExtra("program") ?: defaultProgram
