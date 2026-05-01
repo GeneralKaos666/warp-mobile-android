@@ -197,15 +197,15 @@ pub struct Block {
     command: String,
     exit_code: Option<i32>,
     end_time_unix_ms: Option<u64>,
-    /// Half-open [start, end) over the cell stream. M3-S07 leaves this
-    /// `0..0`; M3-S08 (per-cell renderer) populates it.
-    output_range_start: usize,
-    output_range_end: usize,
     /// V1-prep: captured output bytes between Preexec and CommandFinished.
     /// Capped at [`Block::OUTPUT_CAP_BYTES`] to bound memory on `find /`-
     /// style commands. Stored as bytes (not String) so partial multi-byte
     /// UTF-8 sequences at the cap boundary don't panic; JSON serialization
     /// does a lossy decode at dump time.
+    ///
+    /// Replaces the M3-S07-era `output_range_start`/`output_range_end`
+    /// fields (cell-stream indices, never populated) — `output: Vec<u8>`
+    /// is the model that materialized.
     output: Vec<u8>,
 }
 
@@ -224,8 +224,6 @@ impl Block {
             command: String::new(),
             exit_code: None,
             end_time_unix_ms: None,
-            output_range_start: 0,
-            output_range_end: 0,
             output: Vec::new(),
         }
     }
