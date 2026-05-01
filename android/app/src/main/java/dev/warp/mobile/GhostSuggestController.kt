@@ -155,6 +155,37 @@ object GhostSuggestController {
     }
 
     /**
+     * IME backspace / delete: shrink the buffer by N chars. Called
+     * from WarpInputConnection.deleteSurroundingText (IME-side delete)
+     * and from sendKeyEvent on KEYCODE_DEL (hardware backspace).
+     *
+     * Without this hook, a user typing "lsx" then backspacing to "ls"
+     * would have the controller's buffer stuck at "lsx" — Haiku gets
+     * the wrong context, suggestion is wrong, Tab-accept emits the
+     * wrong suffix. v1 UX bug.
+     *
+     * Round-1 simplification: shrinks from the END of the buffer
+     * regardless of where the actual cursor is. Mid-word backspaces
+     * (cursor in middle of typed text) will diverge from actual PTY
+     * state, but the immediate visual feedback is correct (suggestion
+     * stays GONE because phase clears) and a follow-up commitText
+     * resets the trajectory.
+     */
+    fun onTextDeleted(charsBeforeCursor: Int) {
+        if (!enabled || charsBeforeCursor <= 0) return
+        mutateState { state ->
+            val newLen = (state.buffer.length - charsBeforeCursor).coerceAtLeast(0)
+            val newBuffer = state.buffer.substring(0, newLen)
+            // Drop the suggestion + revert phase on edit — same as
+            // appendToBuffer's "thinking" except we don't reschedule
+            // a fetch (let the user keep editing first; they'll
+            // commitText again when done).
+            state.copy(buffer = newBuffer, suggestion = "", phase = "")
+        }
+        cancelActiveStream()
+    }
+
+    /**
      * Accept the active suggestion. Returns the bytes to send to PTY,
      * or null if no active suggestion. Caller (AccessoryRow Tab
      * button) handles the byte transmission via PtyBroadcastReceiver.

@@ -488,21 +488,49 @@ class WarpInputView @JvmOverloads constructor(
             // Detect KEYCODE_ENTER on ACTION_DOWN and forward an explicit
             // "\n" commit to the controller (idempotent — multiple resets
             // just clear an already-empty buffer).
-            if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN &&
-                (event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
-                    event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
-                try {
-                    GhostSuggestController.onTextCommitted("\n")
-                } catch (t: Throwable) {
-                    Log.w(TAG, "GhostSuggest enter-reset failed: ${t.message}")
+            if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                when (event.keyCode) {
+                    android.view.KeyEvent.KEYCODE_ENTER,
+                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        try {
+                            GhostSuggestController.onTextCommitted("\n")
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "GhostSuggest enter-reset failed: ${t.message}")
+                        }
+                    }
+                    android.view.KeyEvent.KEYCODE_DEL,
+                    android.view.KeyEvent.KEYCODE_FORWARD_DEL -> {
+                        // M6-CO1 v1-prep: hardware backspace shrinks the
+                        // ghost buffer by 1 char. Without this, "lsx"
+                        // backspaced to "ls" would leave the controller's
+                        // buffer stuck at "lsx", giving Haiku wrong context.
+                        try {
+                            GhostSuggestController.onTextDeleted(1)
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "GhostSuggest backspace shrink failed: ${t.message}")
+                        }
+                    }
                 }
             }
             return super.sendKeyEvent(event)
         }
 
-        // Note: deleteSurroundingText is NOT routed to Rust in M2-S10 —
-        // BaseInputConnection super-class default handles it on the local
-        // Editable buffer for now so the IME doesn't get confused.
+        override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+            // M6-CO1 v1-prep: IME-driven delete (Gboard, SwiftKey backspace)
+            // routes through deleteSurroundingText, not sendKeyEvent. Forward
+            // the before-cursor delete count so the ghost buffer shrinks
+            // accordingly. afterLength is rare for shell input (would mean
+            // the cursor isn't at end-of-line) — accepted but ignored for
+            // round-1; round-2 could track cursor position to handle it.
+            if (beforeLength > 0) {
+                try {
+                    GhostSuggestController.onTextDeleted(beforeLength)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "GhostSuggest deleteSurroundingText shrink failed: ${t.message}")
+                }
+            }
+            return super.deleteSurroundingText(beforeLength, afterLength)
+        }
 
         private fun quote(s: String): String {
             // Compact one-line representation suitable for logcat. Truncates
