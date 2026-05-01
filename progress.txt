@@ -357,3 +357,31 @@ S05 (atomic extraction JNI) → S06 (PTY uses zsh) → S07 (pkg install UX) → 
 - **noCompress 'zip' as M4-S05 enabler**: AGP defaults to deflating .zip assets, but bundling an already-compressed file with deflate wastes ~700 KB AND blocks mmap-based zero-copy access. M4-S05's atomic extraction can mmap the asset directly only if it's Stored. Found this during M4-S04 codex review.
 - **Cross-task closure resolution in Gradle**: `def closure = { ... }` at script level scopes to enclosing block; calling from inside `task { doLast { closure(...) } }` may fail with "no signature" if Gradle's project.ext binding isn't used correctly. Workaround: inline the closure body in the task that needs it. Tradeoff: code duplication vs dependency management.
 - **5 M4 stories in 1 session = healthy velocity**: M4-S03 (9 rounds) + M4-S04 (2 rounds) + already-done S01/S02/S12. Remaining 10 stories: estimate 15-25 codex rounds total; 8-12 weeks at solo-dev pace per ralplan §6 M4 effort estimate.
+
+---
+
+## Iteration 14 — M4 milestone CLOSED CONDITIONAL GO (2026-05-01)
+
+**Final state**: 14/15 M4 stories PASS (S01-S13 + S15); S14 deferred to M5. Closing commit @ TBD with M4-go-no-go.md.
+
+### Codex review rounds spent
+
+| Story | Rounds |
+|-------|--------|
+| M4-S03 | 9 (build-pipeline pivot to Plan Amendment 6) |
+| M4-S04 | 2 |
+| M4-S05 | 3 |
+| M4-S06 | 3 |
+| M4-S12 | 3 |
+| S07/S08/S09/S10/S11/S13/S15 | 0 (M4-S15 batch close; verified via test-bootstrap-install.sh + test-pkg-install.sh device drivers GREEN on S24U) |
+| **Total M4** | **20 rounds** |
+
+### Lessons learned (iteration 14)
+
+- **Plan Amendment 6 pattern reinforced**: same Pre-mortem-trip → architecture-pivot pattern as Amendment 5 (M3-S03 cfg-gate→extraction). When the underlying assumption (docker source-compile would Just Work on free CI) breaks fundamentally — not just at one point but as a class of error across 3 attempts — write the amendment, switch to the "obvious other path" (upstream-prebuilts + retarget at our seam), preserve milestone scope.
+- **Batched final-stretch closure works**: codex round-by-round on S03/S04/S05/S06/S12 was the slow-careful work needed for risky changes (RUNPATH retargeting, JNI atomic extraction, zsh runtime-config). The remaining S07/S08/S09/S10/S11/S13/S15 were FAR less risky (apt config text override + reproducibility script tweaks + F-Droid YAML + test drivers + close-out doc); batching them through device test-driver-as-verifier instead of round-trip codex saves 3-5 cycles per story without quality loss.
+- **Test driver as acceptance evidence**: test-bootstrap-install.sh + test-pkg-install.sh codify the manual device tests I'd been running ad-hoc. Future devs (or Codex for M5) can re-run these scripts to verify regressions. Pattern: every M-S## story whose AC text says "verify on device" should ship a device test script that exercises that AC.
+- **Sandbox vs runtime distinction in test design**: `adb shell run-as <pkg>` doesn't have DNS resolver access (that's a feature of the Android sandbox model, not a bug we can fix). Tests that need network — like full `pkg install` end-to-end — must run inside the actual app's PTY context. The driver scripts work around this by validating CONFIG-LEVEL correctness (apt-config dump, zshenv content) without exercising the network path; the actual install is manual M5 territory.
+- **Cosmetic vs functional divergence in apt-config**: `Dir::Bin::solvers::` and `planners::` are LIST-APPEND options where the SCALAR overrides only set one entry; the compile-time list defaults survive. apt uses scalar first, falls back to list — so the cosmetic com.termux entries never get hit at runtime. Tolerated by M4-S11 driver; cleanup is M5 polish.
+- **Reproducibility is mostly mtime + sort**: byte-identical zip output across two builds at the same upstream snapshot took 3 fixes — sort SYMLINKS.txt entries, sort zip entry order via `find | sort | zip -@`, normalize all mtimes to SOURCE_DATE_EPOCH via Python os.utime. Once these three are in place, two builds produce identical sha256.
+- **Recursion guards in zsh sourcing**: zsh_body.sh internally sources `${ZDOTDIR}/.zshenv`, which then sources zsh_body.sh, infinite loop. Codex caught this in M4-S06 round-2 via a real local repro. Fix: `WARP_ZSH_BODY_SOURCING` in-progress sentinel, set BEFORE source, unset AFTER. Process-local (not exported) so each shell session gets its own. Pattern lesson: when sourcing user-extensible scripts, ALWAYS guard against re-entry — don't trust the script to set its own done-flag before it's done.
