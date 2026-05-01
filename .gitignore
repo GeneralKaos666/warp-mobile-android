@@ -104,6 +104,11 @@ dist/
 # release builds publish to GitHub Releases.
 _bootstrap-out/
 
+# M4-S04 staged bootstrap inside APK assets — copied at gradle assemble time
+# from _bootstrap-out/ via copyBootstrapZip + generateBootstrapVersion tasks.
+# Never commit (43 MB binary). Reproduce locally via build-bootstrap.sh.
+android/app/src/main/assets/warp/bootstrap/
+
 # Tools cache
 tools/.cache/
 
