@@ -79,10 +79,15 @@ jobs:
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.13113456"
 
       - name: Clone warp-src + termux-packages forks
+        # Clone INTO the repo root (NOT ../). The cargo path deps in
+        # crates/android-host/Cargo.toml are `../../warp-src/...` which
+        # from crates/android-host/ resolves to <repo_root>/warp-src/.
+        # F-Droid recipe uses `../` because it runs from subdir: android;
+        # GHA checkout sits at repo root by default.
         run: |
-          git clone https://github.com/ImL1s/warp ../warp-src \
+          git clone https://github.com/ImL1s/warp warp-src \
             --branch warp-mobile/m0-facade --depth 1
-          git clone https://github.com/ImL1s/termux-packages ../termux-packages \
+          git clone https://github.com/ImL1s/termux-packages termux-packages \
             --branch warp-mobile/main --depth 1
           bash tools/scripts/setup-cargo-config.sh
 

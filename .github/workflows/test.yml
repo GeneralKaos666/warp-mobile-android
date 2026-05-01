@@ -48,8 +48,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Clone warp-src fork
+        # Clone INTO the repo root at warp-src/ (not ../warp-src). The
+        # cargo path dep in crates/android-host/Cargo.toml is
+        # `../../warp-src/...` which resolves to <repo_root>/warp-src/.
+        # The F-Droid recipe clones to `../warp-src` because its build
+        # runs from `subdir: android`, so its `../` IS the repo root —
+        # but GHA checkout sits at the repo root by default, so we drop
+        # the `../`.
         run: |
-          git clone https://github.com/ImL1s/warp ../warp-src \
+          git clone https://github.com/ImL1s/warp warp-src \
             --branch warp-mobile/m0-facade --depth 1
 
       - name: Render Cargo config
@@ -84,6 +91,9 @@ jobs:
         run: cargo test -p warp_ai_mobile --no-fail-fast
 
       - name: Test warp_terminal_mobile_facade (~73 tests)
+        # warp-src is its own workspace; --manifest-path points cargo
+        # at the cloned fork's Cargo.toml. The path is `warp-src/Cargo.toml`
+        # since we cloned INTO the repo root above.
         run: |
           cargo test -p warp_terminal_mobile_facade \
             --manifest-path warp-src/Cargo.toml \
@@ -98,8 +108,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Clone warp-src fork
+        # Clone INTO the repo root at warp-src/ (not ../warp-src). The
+        # cargo path dep in crates/android-host/Cargo.toml is
+        # `../../warp-src/...` which resolves to <repo_root>/warp-src/.
+        # The F-Droid recipe clones to `../warp-src` because its build
+        # runs from `subdir: android`, so its `../` IS the repo root —
+        # but GHA checkout sits at the repo root by default, so we drop
+        # the `../`.
         run: |
-          git clone https://github.com/ImL1s/warp ../warp-src \
+          git clone https://github.com/ImL1s/warp warp-src \
             --branch warp-mobile/m0-facade --depth 1
 
       - name: Render Cargo config
