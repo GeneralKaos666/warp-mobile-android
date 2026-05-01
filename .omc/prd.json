@@ -281,11 +281,11 @@
     {
       "id": "M4-S05",
       "title": "First-launch atomic extraction (JNI shim with usr.tmp → usr rename + kill-mid-extract recovery)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main ab8d206. Round-1 found 3 findings (BLOCKING symlink path-confinement; MEDIUM first-launch UI; HIGH concurrency single-flight). Round-2 fixed all 3 but introduced status-0 contract bug (AtomicBool fire-and-forget on contention returned Ok before bootstrap actually ready). Round-3 replaced AtomicBool with Mutex<()> — concurrent callers block until in-flight install completes, then re-enter and sha-pin short-circuits. Status 0 = bootstrap genuinely ready. Device verified on S24U R5CX10VFFBA: clean first launch 5358 ms; sha-pin fast path 1 ms; kill-mid-extract recovery 6304 ms; LD_LIBRARY_PATH-unset zsh+git+bash launch (M4-S03 patchelf RUNPATH end-to-end). Implementation in crates/android-host/src/bootstrap.rs (NOT bootstrap_install.c — language deviation per codex round-1 non-blocking note; AC#1 amended). 15 host tests pass.",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "android/app/src/main/cpp/bootstrap_install.c (NEW) implements: extract bootstrap-aarch64.zip from APK assets to /data/data/dev.warp.mobile/files/usr.tmp/; verify SHA256; atomic rename usr.tmp/ → usr/; write version-pin",
+        "crates/android-host/src/bootstrap.rs (NEW) implements: extract bootstrap-aarch64.zip from APK assets to /data/data/dev.warp.mobile/files/usr.tmp/; verify SHA256; atomic rename usr.tmp/ → usr/; write version-pin (deviation from C scaffold per codex round-1 non-blocking: Rust + JNI in existing android-host cdylib, consistent with M1+ pattern; JNI export name is the contract)",
         "Kill-mid-extract recovery: on next launch, detect usr.tmp/ remnant and restart extraction (not skip with corrupt usr/)",
         "JNI export Java_dev_warp_mobile_NativeBridge_bootstrapInstall returns extraction status (0=success, !=0=error code)",
         "Subsequent launches: verify extraction by checking version.json sha256 match; instant return without re-extraction",
