@@ -495,6 +495,19 @@ pub(crate) fn compose_text_on_rgba(
         let dst_x_origin = (baseline_x + glyph.x + image.placement.left as f32) as i32;
         let dst_y_origin = (baseline_y + glyph.y - image.placement.top as f32) as i32;
 
+        // V1-prep: log the swash content variant so we can diagnose
+        // why M4-S14's emoji raster came back grayscale despite the
+        // Color blit path existing. If all glyphs report Mask, swash
+        // isn't extracting COLR/CBDT layers — likely a feature-flag
+        // or font-table issue (some "Noto Color Emoji" builds ship
+        // alpha-only on certain OEM ROMs). If glyphs report Color
+        // but pixels are still gray, the blit_color_rgba blend is
+        // wrong (premultiplied vs straight alpha).
+        let content_kind = match image.content {
+            SwashContent::Mask => "Mask",
+            SwashContent::SubpixelMask => "SubpixelMask",
+            SwashContent::Color => "Color",
+        };
         match image.content {
             SwashContent::Mask | SwashContent::SubpixelMask => {
                 composed_pixels += blit_mask_white(
@@ -521,6 +534,17 @@ pub(crate) fn compose_text_on_rgba(
                 );
             }
         }
+        // Compact per-glyph trace; only emit at log level Debug to
+        // avoid spamming logcat in production. M4-S14 retest will
+        // grep for "swash_glyph" lines.
+        log::debug!(
+            target: "WarpFont",
+            "swash_glyph content={} placement={}x{} bytes={}",
+            content_kind,
+            image.placement.width,
+            image.placement.height,
+            image.data.len()
+        );
     }
 
     log::info!(

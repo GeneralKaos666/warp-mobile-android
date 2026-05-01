@@ -55,6 +55,24 @@
   "carry_forward_to_v1": [
     "Color emoji rasterization (swash COLR/CPAL or CBDT/CBLC support) — currently the COLR-tabled Noto Color Emoji font is selected, glyph IDs are resolved, but only the alpha mask is rasterized (no color layers composited). Pixel saturation analysis on the captured PNG shows all foreground pixels at sat=0-10 (essentially grayscale)."
   ],
+  "post_close_diagnosis_2026-05-02": {
+    "investigation": "Added per-glyph swash content-variant log (font_render.rs:498). Re-ran capture; ALL 8 emoji+CJK+Latin glyphs return SwashContent::Mask. The Color path is unreachable.",
+    "evidence_logs": [
+      "WarpFont: swash_glyph content=Mask placement=32x36 bytes=1152",
+      "WarpFont: swash_glyph content=Mask placement=50x35 bytes=1750",
+      "WarpFont: swash_glyph content=Mask placement=51x56 bytes=2856",
+      "WarpFont: swash_glyph content=Mask placement=44x48 bytes=2112"
+    ],
+    "font_inspection": "/system/fonts/NotoColorEmoji.ttf has COLR + CPAL tables (verified via OT table dump). So the font IS color-capable.",
+    "root_cause": "swash 0.1.19 (pinned via cosmic-text fork) supports COLR v0 only. Modern NotoColorEmoji.ttf on Android 15 ships COLR v1 (PaintColrLayers etc). swash falls through to the Outline source for unsupported COLR versions, yielding a monochrome alpha mask.",
+    "fix_paths_for_v1": [
+      "Path A: upgrade swash to 0.2.x with COLR v1 decoder. Requires verifying cosmic-text fork compatibility (warpdotdev/cosmic-text rev 15198beba6 may not allow upgrading swash without breakage).",
+      "Path B: fork swash 0.1.19 + backport COLR v1 decoder. Bigger lift; not solo-dev-feasible in v1 timeframe.",
+      "Path C: bypass cosmic-text for emoji-classified glyphs — use Android NDK font APIs (ASystemFontIterator + ANativeFontFamily_render) directly. NDK's renderer handles all COLR variants. Requires per-platform code; mock/stub for tests.",
+      "Path D: ship NotoColorEmojiFlags.ttf or a CBDT-bitmap variant of the font (e.g., the 2020-era Noto Color Emoji which still uses CBDT). swash 0.1.19 supports CBDT/CBLC. Tradeoff: older glyph set, but bitmap-rendered colors work."
+    ],
+    "decision": "Defer to v1+1. Path D (CBDT bitmap font) is tractable and could ship in v1.0 if user-facing emoji color is a release blocker — bundling a 4 MB CBDT NotoColorEmoji as an APK asset adds <1% to the 51 MB total size. Otherwise wait for cosmic-text to absorb swash 0.2 (community work in progress per warpdotdev's fork branch)."
+  },
   "comparable_artifacts": {
     "predecessor_M3_S11": ".omc/m3-artifacts/M3-S11-result.json — 'SubpixelMask emoji classifier-only' deferral (this story closes the live raster smoke portion; color portion stays in v1)"
   }
