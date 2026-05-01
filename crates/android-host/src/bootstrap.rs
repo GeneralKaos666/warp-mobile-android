@@ -42,45 +42,30 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
 /// Process-wide single-flight guard for `install_bootstrap`. Codex M4-S05
-/// round-1 finding 3: Activity recreation (rotation, config change, etc.)
-/// can spawn multiple GlobalScope.launch coroutines targeting the same
-/// usr.tmp/ + usr/ paths. Without this guard, two overlapping calls can
-/// delete or rename each other's staging tree.
+/// round-1+2 findings 3+1: Activity recreation (rotation, config change,
+/// etc.) can spawn multiple `GlobalScope.launch` coroutines targeting the
+/// same `usr.tmp/` + `usr/` paths. Without this guard, two overlapping
+/// calls can delete or rename each other's staging tree.
 ///
-/// Semantics: the first caller to set this flag from false→true gets
-/// permission to run; subsequent callers return Ok(()) early (treat
-/// "already in progress" as success — the in-flight install will
-/// complete and the next sha-pin check will short-circuit). The flag is
-/// reset in a RAII guard regardless of success/failure path.
-static INSTALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
-
-struct InstallGuard;
-impl Drop for InstallGuard {
-    fn drop(&mut self) {
-        INSTALL_IN_FLIGHT.store(false, Ordering::Release);
-    }
-}
-impl InstallGuard {
-    /// Attempts to acquire the single-flight slot. Returns Some if we
-    /// won the CAS, None if another caller is already running install.
-    fn try_acquire() -> Option<Self> {
-        match INSTALL_IN_FLIGHT.compare_exchange(
-            false,
-            true,
-            Ordering::AcqRel,
-            Ordering::Acquire,
-        ) {
-            Ok(_) => Some(InstallGuard),
-            Err(_) => None,
-        }
-    }
-}
+/// Round-2 fix: previous round used AtomicBool + fire-and-forget early
+/// return on contention, which yielded a false-positive `Ok(())` (JNI
+/// status 0) for callers that didn't actually run install. During rotation
+/// on first install, recreated Activity could show "Termux runtime
+/// installed (0 ms)" Toast before `usr/` actually existed. Now we use a
+/// `Mutex<()>` so concurrent callers BLOCK on the lock. By the time they
+/// acquire it, the in-flight install has finished; they re-enter the
+/// install_bootstrap body, the sha-pin check short-circuits, and they
+/// return Ok(()) only AFTER the install is genuinely complete.
+///
+/// Status 0 contract restored: success means bootstrap is ready when
+/// this function returns.
+static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
 #[cfg(target_os = "android")]
 use std::ffi::CString;
@@ -348,20 +333,17 @@ pub fn install_bootstrap(
     asset_mgr: *mut ndk_sys::AAssetManager,
     data_dir: &Path,
 ) -> io::Result<()> {
-    // Round-1 finding 3: single-flight guard. If another caller is already
-    // running install_bootstrap, return early — don't touch the staging
-    // tree. The in-flight install will complete; the next call (e.g. from
-    // the resumed Activity) will see sha-pin and skip.
-    let _guard = match InstallGuard::try_acquire() {
-        Some(g) => g,
-        None => {
-            log::info!(
-                target: "android-host",
-                "bootstrap_install: another install in flight; skipping concurrent call"
-            );
-            return Ok(());
-        }
-    };
+    // Round-1+2 findings 3+1: single-flight guard via Mutex. Concurrent
+    // callers BLOCK on the lock; once unblocked, they re-enter the body
+    // and the sha-pin check below short-circuits. Status 0 contract
+    // preserved: success means bootstrap is ready when this returns.
+    //
+    // PoisonError handling: if a previous caller panicked while holding
+    // the lock, the data is `()` so there's nothing to lose; recover
+    // with `into_inner()`. The next caller proceeds normally; whatever
+    // partial state was left in usr.tmp/ gets wiped by step "kill-mid-
+    // extract recovery" below.
+    let _guard = INSTALL_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let files_dir = data_dir.join("files");
     let usr_dir = files_dir.join("usr");
