@@ -34,14 +34,21 @@ jobs:
       - name: Verify retargeting
         run: |
           cd termux-packages
-          # Hard constraint: 0 com.termux in shell scripts
+          # Hard constraint: 0 com.termux in shell scripts.
+          # IMPORTANT: use grep -F (fixed-string, no regex) so the literal `.`
+          # in `com.termux` does NOT match `com/termux` in URLs like
+          # `github.com/termux/...` (2316 such URLs preserved by M4-S02 design
+          # via regex dot-escaping in setup-warp-prefix.sh; the audit must
+          # mirror that semantics).
           REMAINING=$(git ls-files | grep -E '\.(sh|in|patch|yml|subpackage\.sh)$|/termux\.properties$' \
-                     | xargs grep -l 'com.termux' 2>/dev/null | wc -l)
+                     | xargs grep -lF 'com.termux' 2>/dev/null | wc -l)
           if [ "$REMAINING" -ne 0 ]; then
-            echo "FAIL: $REMAINING build files contain com.termux (M4-S02 retargeting incomplete)"
+            echo "FAIL: $REMAINING build files contain literal com.termux (M4-S02 retargeting incomplete)"
+            git ls-files | grep -E '\.(sh|in|patch|yml|subpackage\.sh)$|/termux\.properties$' \
+              | xargs grep -lF 'com.termux' 2>/dev/null | head -10
             exit 1
           fi
-          echo "PASS: 0 com.termux in build files"
+          echo "PASS: 0 literal com.termux in build files"
 
       - name: Build bootstrap zip
         env:
