@@ -59,11 +59,12 @@ jobs:
           java-version: '17'
 
       - name: Set up Rust + Android NDK target
-        uses: actions-rs/toolchain@v1
+        # actions-rs/toolchain is deprecated; dtolnay/rust-toolchain is
+        # the modern replacement actively maintained at the time of
+        # writing.
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: aarch64-linux-android
-          override: true
+          targets: aarch64-linux-android
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
@@ -77,13 +78,18 @@ jobs:
           # explicitly to match the version pinned in build.gradle
           # (ndkVersion '29.0.13113456').
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.13113456"
+          # Export ANDROID_NDK_ROOT for setup-cargo-config.sh in the
+          # following step (the path is well-known + deterministic).
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/29.0.13113456" >> "$GITHUB_ENV"
 
-      - name: Clone warp-src + termux-packages forks
+      - name: Clone warp-src + termux-packages forks + render Cargo config
         # Clone INTO the repo root (NOT ../). The cargo path deps in
         # crates/android-host/Cargo.toml are `../../warp-src/...` which
         # from crates/android-host/ resolves to <repo_root>/warp-src/.
         # F-Droid recipe uses `../` because it runs from subdir: android;
         # GHA checkout sits at repo root by default.
+        # MUST run AFTER NDK install — setup-cargo-config.sh validates
+        # the NDK toolchain path exists.
         run: |
           git clone https://github.com/ImL1s/warp warp-src \
             --branch warp-mobile/m0-facade --depth 1
