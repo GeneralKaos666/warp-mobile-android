@@ -62,7 +62,10 @@ jobs:
           DEFAULT_PKGS="apt bash coreutils findutils pkg"
           ADD_PKGS=""
           while IFS= read -r pkg; do
+              # Codex M4-S03 round-2 finding: skip empty lines AND comment
+              # lines (m4-bootstrap-packages.txt has #-prefixed header).
               [ -z "$pkg" ] && continue
+              case "$pkg" in \#*) continue ;; esac
               # Strip -gnu suffix (M4 spec used coreutils-gnu but build script
               # canonical name is coreutils).
               pkg="${pkg%-gnu}"
