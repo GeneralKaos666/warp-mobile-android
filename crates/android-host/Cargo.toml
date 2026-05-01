@@ -27,6 +27,16 @@ serde_json = "1"
 libc = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
+# M4-S12: shared rlib hosting the canonical `static_grid` + `dynamic_grid`
+# implementations (Option D shared-rlib API split). This is what eliminates
+# the M2-era + M3-S08 cross-workspace mirrors that were tracked under
+# M3-S11-result.json `next_milestone_action`. The crate sits in the
+# warp-src workspace (`warp-src/crates/warp_mobile_android_link/`) so the
+# canonical impl lives next to the warpui consumer; the path dep here is
+# how the main-repo cdylib pulls it in. Verified Metal-clean via
+# `cargo tree -p warp_mobile_android_link --target aarch64-linux-android |
+# grep -i metal` returning empty.
+warp_mobile_android_link = { path = "../../warp-src/crates/warp_mobile_android_link" }
 ndk = "0.9"
 ndk-sys = "0.6"
 # M2-S04: Vulkan via ash + ANativeWindow. The CANONICAL implementation is in

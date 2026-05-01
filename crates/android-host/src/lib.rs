@@ -14,13 +14,14 @@ pub mod ime;
 // without cross-compilation.
 pub mod input;
 
+// M4-S12: `static_grid` + `dynamic_grid` were lifted into the shared
+// `warp_mobile_android_link` rlib (Option D shared-rlib API split). The
+// `crate::static_grid::*` / `crate::dynamic_grid::*` paths formerly used
+// throughout this cdylib (lib.rs, vulkan.rs) now resolve via this `use`
+// re-export so JNI exports + vulkan.rs don't need per-call-site rewrites.
+// See `warp_mobile_android_link/Cargo.toml` for the full rationale.
 #[cfg(target_os = "android")]
-mod static_grid;
-
-// M3-S08: per-cell dynamic grid renderer (runtime mirror of
-// `warp-src/crates/warpui/src/platform/android/dynamic_grid.rs`).
-#[cfg(target_os = "android")]
-mod dynamic_grid;
+use warp_mobile_android_link::{dynamic_grid, static_grid};
 
 // M3-S04: terminal model. Pure Rust + atomics (mirrors the canonical facade
 // `warp_terminal_mobile_facade::render::TerminalModel`); built on host targets
