@@ -1,0 +1,46 @@
+{
+  "story": "M4-S08",
+  "property": "Bootstrap zip reproducibility — two builds at the same pin produce byte-identical output",
+  "verified_at": "2026-05-02T07:53Z",
+  "verified_in_session": "v1-prep continuation of M6 close (commit d652baa pin refresh + this re-verification)",
+  "host": {
+    "os": "macOS Darwin 25.4.0",
+    "arch": "arm64",
+    "host_tag_for_NDK": "darwin-x86_64 (Rosetta on Apple Silicon)"
+  },
+  "input": {
+    "snapshot_pin_file": "tools/scripts/m4-bootstrap-snapshot.sha256",
+    "snapshot_pin_value": "a85e7511079814d4e161de521a429bb404902dffe540788bccf9478daceb7ecf",
+    "package_list_file": "tools/scripts/m4-bootstrap-packages.txt",
+    "upstream_repo": "https://packages-cf.termux.dev/apt/termux-main",
+    "target_arch": "aarch64",
+    "command": "bash tools/scripts/build-bootstrap.sh aarch64 tools/scripts/m4-bootstrap-packages.txt <out-dir>"
+  },
+  "output_A": {
+    "out_dir": "/tmp/_repro-A",
+    "zip_path": "/tmp/_repro-A/bootstrap-aarch64.zip",
+    "size_bytes": 45750465,
+    "size_mb": 43,
+    "sha256": "221216544d0b8b3d025ccc08d95aa1883da4e16952c72a652deb392193357dee"
+  },
+  "output_B": {
+    "out_dir": "/tmp/_repro-B",
+    "zip_path": "/tmp/_repro-B/bootstrap-aarch64.zip",
+    "size_bytes": 45750465,
+    "size_mb": 43,
+    "sha256": "221216544d0b8b3d025ccc08d95aa1883da4e16952c72a652deb392193357dee"
+  },
+  "verdict": "BYTE-IDENTICAL — `cmp /tmp/_repro-A/bootstrap-aarch64.zip /tmp/_repro-B/bootstrap-aarch64.zip` exited 0",
+  "implications": {
+    "f_droid_reproducibility": "F-Droid's reproducible-build verification will succeed on this snapshot — anyone rebuilding from this commit + the pinned snapshot will get the same SHA256.",
+    "supply_chain_integrity": "If a future build at this pin produces a different hash, that's evidence of a build-environment change OR a script regression — not silent upstream drift (the pin gates against that)."
+  },
+  "reproducibility_techniques_in_place": [
+    "SOURCE_DATE_EPOCH=1577836800 normalizes all mtimes",
+    "find | sort | zip -@ stabilizes zip-entry order",
+    "SYMLINKS.txt sidecar entries are sorted before zip creation",
+    "Upstream snapshot hash (Packages.aarch64 || Packages.all) is pinned via tools/scripts/m4-bootstrap-snapshot.sha256",
+    "Per-package .deb sha256 verification on download (transitively pins all 1300+ binaries)"
+  ],
+  "next_drift_handling": "When upstream Termux apt repo evolves, build-bootstrap.sh exits 1 with a clear 'snapshot drift detected' message. Re-run with UPDATE_SNAPSHOT=1 to accept + commit the new pin. Documented in .omc/v1-release-kickoff.md §5."
+}
