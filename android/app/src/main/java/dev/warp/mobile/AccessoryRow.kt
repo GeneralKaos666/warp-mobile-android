@@ -3,6 +3,7 @@ package dev.warp.mobile
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -197,11 +198,17 @@ class AccessoryRow @JvmOverloads constructor(
         ctrlPending = false
         altPending = false
 
-        // Dispatch via the existing PtyBroadcastReceiver path. This routes
-        // through PtyManager.write → NativeBridge.ptyWrite → libc::write
-        // on the PTY master fd (M1 pipeline).
+        // Dispatch via the manifest-registered PtyBroadcastReceiver only.
+        // Bug found in M5-S02 round-1 device test: setPackage(...) was too
+        // broad — both the manifest receiver AND the in-service runtime-
+        // registered receiver matched the action, causing handleWrite to
+        // fire TWICE per click (visible as duplicate PTY_WRITE / PtyOutput
+        // log lines + double bytes flowing into cat). Setting an explicit
+        // ComponentName targets a single receiver; PtyBroadcastReceiver
+        // forwards to WarpTerminalService.onStartCommand which dispatches
+        // ACTION_WRITE → handleWrite exactly once.
         val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
-            setPackage(context.packageName)
+            component = ComponentName(context.packageName, "${context.packageName}.PtyBroadcastReceiver")
             putExtra("cmd_id", cmdId)
             putExtra("data", out)
         }
@@ -287,10 +294,11 @@ class AccessoryRow @JvmOverloads constructor(
         val end = (offset + CHUNK_BYTES).coerceAtMost(data.size)
         val chunk = data.copyOfRange(offset, end)
         // Send chunk via the existing PTY_WRITE broadcast — same pipeline
-        // sendBytes() uses for keystrokes. Each broadcast → PtyManager.write
-        // → libc::write on the master fd.
+        // sendBytes() uses for keystrokes. Targets PtyBroadcastReceiver
+        // explicitly (not setPackage) to avoid the double-dispatch bug
+        // (see sendBytes() comment).
         val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
-            setPackage(context.packageName)
+            component = ComponentName(context.packageName, "${context.packageName}.PtyBroadcastReceiver")
             putExtra("cmd_id", cmdId)
             putExtra("data", chunk)
         }
