@@ -38,6 +38,13 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Opt JavaScript actions into Node.js 24 ahead of GitHub's June 2026
+  # forced switch (Node 20 removal on September 16, 2026). Surfaces any
+  # action incompatibility now rather than at the deprecation cliff.
+  # Refs: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   rust:
     name: Rust unit tests

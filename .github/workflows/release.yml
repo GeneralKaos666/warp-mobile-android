@@ -24,6 +24,11 @@ on:
 permissions:
   contents: write   # required for gh release create
 
+env:
+  # Opt JavaScript actions into Node.js 24 ahead of GitHub's June 2026
+  # forced switch. Same rationale as test.yml.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   release:
     runs-on: ubuntu-latest
