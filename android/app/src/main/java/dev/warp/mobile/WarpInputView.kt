@@ -211,11 +211,9 @@ class WarpInputView @JvmOverloads constructor(
             // M3-S09: drag scroll → terminal viewport offset.
             //
             // GestureDetector convention: positive `distanceY` = finger moved
-            // UP (content scrolled DOWN). Terminal convention: scrolling
-            // content DOWN means revealing more recent text → offset DECREASES
-            // toward 0. Conversely, finger moves DOWN (positive y direction
-            // in absolute terms; negative `distanceY`) reveals older history
-            // → offset INCREASES.
+            // UP (oldY - newY > 0 because successive Y decreases as finger
+            // travels toward top). When the user drags UP they are scrolling
+            // INTO older history → scroll offset should INCREASE.
             //
             // Pixel-to-rows conversion uses `cellHeightPx` provided by
             // MainActivity. We accumulate sub-cell motion in
@@ -224,9 +222,9 @@ class WarpInputView @JvmOverloads constructor(
                 // Cancel any in-flight fling — direct touch trumps inertia.
                 cancelFling()
 
-                // distanceY > 0 → finger up → newer content → offset --
-                // distanceY < 0 → finger down → older content → offset ++
-                pixelAccumulator -= distanceY
+                // distanceY > 0 → finger up → older content → offset ++
+                // distanceY < 0 → finger down → newer content → offset --
+                pixelAccumulator += distanceY
                 val rowsDelta = (pixelAccumulator / cellHeightPx).toInt()
                 if (rowsDelta != 0) {
                     pixelAccumulator -= rowsDelta * cellHeightPx
@@ -260,9 +258,11 @@ class WarpInputView @JvmOverloads constructor(
          * ~0.998 per ms ≈ 0.9 per 16ms). When velocity drops below
          * one cell-per-second the timer cancels.
          *
-         * `velocityY` follows the M2-S11 sign convention: positive = finger
-         * moves DOWNWARD. Same mapping as `onScroll` — finger down = older
-         * history = increase offset.
+         * `velocityY` from GestureDetector: positive = finger moves DOWNWARD.
+         * Finger moving DOWNWARD reveals NEWER content → offset DECREASES.
+         * Finger moving UPWARD (negative velocityY) → older content → offset
+         * INCREASES. We negate so that a negative (upward) fling produces a
+         * positive accumulator contribution matching the onScroll convention.
          */
         override fun onFling(
             e1: MotionEvent?,
@@ -276,8 +276,11 @@ class WarpInputView @JvmOverloads constructor(
             }
             cancelFling()
 
-            // Internal mutable velocity capture for the decay closure.
-            val velocityArr = floatArrayOf(velocityY)
+            // Negate velocityY: GestureDetector positive = finger DOWN = newer
+            // content = decrease offset. We want the accumulator to grow for
+            // an upward fling (negative velocityY after negation → positive).
+            // Store negated so the decay loop uses the corrected sign.
+            val velocityArr = floatArrayOf(-velocityY)
             val r = object : Runnable {
                 override fun run() {
                     val v = velocityArr[0]

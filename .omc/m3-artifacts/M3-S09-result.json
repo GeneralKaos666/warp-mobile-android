@@ -1,6 +1,6 @@
 {
   "story": "M3-S09",
-  "round": 2,
+  "round": 3,
   "device_serial": "R5CX10VFFBA",
   "device_class": "flagship",
   "scrollback": {
@@ -12,14 +12,17 @@
     "pass": true
   },
   "gesture_scroll": {
-    "swipes_sent": 12,
+    "swipes_sent": 11,
     "down_swipes": 6,
-    "up_swipes": 6,
-    "rust_set_scroll_offset_calls": 234,
-    "kotlin_gesture_scroll_lines": 65,
-    "kotlin_gesture_fling_lines": 6,
+    "up_swipes": 5,
+    "rust_set_scroll_offset_calls": 195,
+    "max_requested_offset": 610,
+    "max_clamped_offset": 610,
+    "clamped_distinct_values": 195,
+    "kotlin_gesture_scroll_lines": 55,
+    "kotlin_gesture_fling_lines": 5,
     "broadcast_crosstalk_lines": 0,
-    "expected": "rust_set_scroll_offset_calls >=1 (gesture-driven, no broadcasts)",
+    "expected": "max_clamped_offset > 0 AND clamped_distinct_values >= 5 (actual viewport movement, not just JNI reachability)",
     "is_ac_gate": true,
     "pass": true
   },
@@ -32,18 +35,18 @@
   },
   "frame_timing": {
     "scroll_p50_ms": 8,
-    "scroll_p95_ms": 9,
-    "scroll_p99_ms": 10,
+    "scroll_p95_ms": 13,
+    "scroll_p99_ms": 14,
     "peak_fps": 144,
-    "num_frames": 643,
+    "num_frames": 608,
     "p95_threshold_ms": 16.6,
     "expected": "p95 <16.6ms during sustained scroll (sub-test A window)",
     "pass": true
   },
   "dynamic_grid_perf": {
-    "fast_path_lines": 1,
+    "fast_path_lines": 195,
     "full_reinit_lines": 0,
-    "fast_path_total": 6,
+    "fast_path_total": 200,
     "full_reinit_total": 1
   },
   "evidence": {

@@ -273,6 +273,27 @@ sleep 1
 A_RUST_CALLS=$( (grep -cE "terminal_set_scroll_offset requested=" "$LOGCAT_GESTURE" || true) | tr -d ' ')
 A_RUST_CALLS="${A_RUST_CALLS:-0}"
 
+# Parse requested= and clamped= values from all gesture-window JNI lines.
+# These prove actual viewport MOVEMENT, not just JNI reachability. Round-3
+# fix: sign was inverted in WarpInputView.kt; all 234 round-2 calls had
+# requested=0 clamped=0 because pixelAccumulator always went negative.
+A_RUST_LINES=$(grep -E "terminal_set_scroll_offset requested=" "$LOGCAT_GESTURE" || true)
+A_MAX_REQ=$(echo "$A_RUST_LINES" \
+    | grep -oE 'requested=[0-9]+' \
+    | grep -oE '[0-9]+' \
+    | sort -n | tail -1)
+A_MAX_CLAMP=$(echo "$A_RUST_LINES" \
+    | grep -oE 'clamped=[0-9]+' \
+    | grep -oE '[0-9]+' \
+    | sort -n | tail -1)
+A_DISTINCT=$(echo "$A_RUST_LINES" \
+    | grep -oE 'clamped=[0-9]+' \
+    | grep -oE '[0-9]+' \
+    | sort -u | wc -l | tr -d ' ')
+A_MAX_REQ="${A_MAX_REQ:-0}"
+A_MAX_CLAMP="${A_MAX_CLAMP:-0}"
+A_DISTINCT="${A_DISTINCT:-0}"
+
 # Also count gesture_scroll + gesture_fling lines from the input view as a
 # sanity check on touch dispatch. The logcat tag column is space-padded
 # (`WarpIme :` not `WarpIme:`), so we match `gesture_scroll`/`gesture_fling`
@@ -287,7 +308,7 @@ A_GESTURE_FLING_LINES="${A_GESTURE_FLING_LINES:-0}"
 A_BROADCAST_LINES=$( (grep -cE "TERM_SET_SCROLL_OFFSET" "$LOGCAT_GESTURE" || true) | tr -d ' ')
 A_BROADCAST_LINES="${A_BROADCAST_LINES:-0}"
 
-echo "    Sub-test A: rust_calls=$A_RUST_CALLS gesture_scroll=$A_GESTURE_SCROLL_LINES gesture_fling=$A_GESTURE_FLING_LINES broadcast_crosstalk=$A_BROADCAST_LINES" >&2
+echo "    Sub-test A: rust_calls=$A_RUST_CALLS max_req=$A_MAX_REQ max_clamp=$A_MAX_CLAMP distinct_clamp=$A_DISTINCT gesture_scroll=$A_GESTURE_SCROLL_LINES gesture_fling=$A_GESTURE_FLING_LINES broadcast_crosstalk=$A_BROADCAST_LINES" >&2
 
 # Sub-test A frame timing — captured from the gesture-only window.
 grep "present_ok frame=" "$LOGCAT_GESTURE" \
@@ -428,11 +449,13 @@ if [[ "$SCROLLBACK_OBSERVED_MAX" -ge 1000 ]]; then
     SCROLLBACK_GATE_PASS="true"
 fi
 
-# AC#2/#3 (round-2 hard split): Sub-test A — gesture-only — must produce
-# at least one Rust set_scroll_offset call. This is the *real* AC#2/AC#3
-# evidence. Sub-test B is a non-AC sanity check on the broadcast path.
+# AC#2/#3 (round-3 movement gate): Sub-test A — gesture-only — must show
+# actual viewport MOVEMENT, not just JNI reachability. Round-2 had 234 calls
+# all at requested=0 clamped=0 due to inverted sign in WarpInputView.kt.
+# Round-3 fix: require max_clamped > 0 (viewport actually moved) AND
+# distinct clamped values >= 5 (visited at least 5 distinct scroll positions).
 GESTURE_GATE_PASS="false"
-if [[ "$A_RUST_CALLS" -gt 0 ]]; then
+if [[ "$A_MAX_CLAMP" -gt 0 && "$A_DISTINCT" -ge 5 ]]; then
     GESTURE_GATE_PASS="true"
 fi
 
@@ -467,7 +490,7 @@ fi
 cat > "$RESULT_JSON" <<EOF
 {
   "story": "M3-S09",
-  "round": 2,
+  "round": 3,
   "device_serial": "$SERIAL",
   "device_class": "flagship",
   "scrollback": {
@@ -483,10 +506,13 @@ cat > "$RESULT_JSON" <<EOF
     "down_swipes": $A_DOWN_SWIPE_COUNT,
     "up_swipes": $A_UP_SWIPE_COUNT,
     "rust_set_scroll_offset_calls": $A_RUST_CALLS,
+    "max_requested_offset": $A_MAX_REQ,
+    "max_clamped_offset": $A_MAX_CLAMP,
+    "clamped_distinct_values": $A_DISTINCT,
     "kotlin_gesture_scroll_lines": $A_GESTURE_SCROLL_LINES,
     "kotlin_gesture_fling_lines": $A_GESTURE_FLING_LINES,
     "broadcast_crosstalk_lines": $A_BROADCAST_LINES,
-    "expected": "rust_set_scroll_offset_calls >=1 (gesture-driven, no broadcasts)",
+    "expected": "max_clamped_offset > 0 AND clamped_distinct_values >= 5 (actual viewport movement, not just JNI reachability)",
     "is_ac_gate": true,
     "pass": $GESTURE_GATE_PASS
   },
@@ -535,7 +561,7 @@ cat > "$RESULT_JSON" <<EOF
 EOF
 
 echo "=== gate: overall_pass=$OVERALL_PASS ===" >&2
-echo "    scrollback=$SCROLLBACK_GATE_PASS  gesture(AC#2/#3)=$GESTURE_GATE_PASS  fps_p95=$FPS_GATE_PASS (${P95_MS}ms <16.6ms)" >&2
+echo "    scrollback=$SCROLLBACK_GATE_PASS  gesture(AC#2/#3)=$GESTURE_GATE_PASS [max_clamp=$A_MAX_CLAMP distinct=$A_DISTINCT]  fps_p95=$FPS_GATE_PASS (${P95_MS}ms <16.6ms)" >&2
 echo "    broadcast_health=$BROADCAST_GATE_PASS (sanity check, not part of AC gate)" >&2
 
 if [[ "$OVERALL_PASS" == "true" ]]; then

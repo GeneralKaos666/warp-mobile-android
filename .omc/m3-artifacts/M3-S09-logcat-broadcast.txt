@@ -1,656 +1,657 @@
 --------- beginning of main
-05-01 07:49:42.130  1684 16942 I HYPER-HAL: [RequestManager.cpp]releaseLocked(): Released ID : 25629251
-05-01 07:49:42.136 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3000 ts=163974610
-05-01 07:49:42.145 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3001 ts=163974619
-05-01 07:49:42.153 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3002 ts=163974627
-05-01 07:49:42.162 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3003 ts=163974636
-05-01 07:49:42.163  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.171 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3004 ts=163974644
-05-01 07:49:42.179 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3005 ts=163974653
-05-01 07:49:42.187 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3006 ts=163974661
-05-01 07:49:42.195 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3007 ts=163974669
-05-01 07:49:42.204 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3008 ts=163974677
-05-01 07:49:42.213 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3009 ts=163974686
-05-01 07:49:42.220 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3010 ts=163974694
-05-01 07:49:42.222  2070  2070 I CNSS    : /sys/wifi/max_chipset_log_size doesn't exist
-05-01 07:49:42.228 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3011 ts=163974702
-05-01 07:49:42.237 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3012 ts=163974710
-05-01 07:49:42.238  2814  6253 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 42670, isSameBssidAndFreq true
-05-01 07:49:42.240  2814  3842 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
-05-01 07:49:42.240  2814  3842 D InsDataManager: Trying to save initial normal data.
-05-01 07:49:42.241  2814  3842 D SensorCollector: syncMappedBuffers: 0, 0, 0
-05-01 07:49:42.241  2814  3842 D InsDataManager: trimBuffers start.
-05-01 07:49:42.241  2814  3842 D InsDataManager: trimBuffers - nsmBuffer size: 26
-05-01 07:49:42.241  2814  3842 D InsDataManager: Too short for collecting additional normal data
-05-01 07:49:42.241  2814  3842 D SemInsManager: {"bssid": "bd55f12c5200","rssi": -26.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -26.0 / 0 / 69 / 1 / 0 || bd55f12c5200: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 163974713 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
-05-01 07:49:42.245 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3013 ts=163974719
+05-01 08:01:14.053 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2962 ts=164666526
+05-01 08:01:14.062 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2963 ts=164666536
+05-01 08:01:14.070  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+05-01 08:01:14.071 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2964 ts=164666544
+05-01 08:01:14.071  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+05-01 08:01:14.071  1667  5342 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
+05-01 08:01:14.071  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+05-01 08:01:14.077  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:3A:5E, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-52, periodicAdvInt=0x0
+05-01 08:01:14.078 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2965 ts=164666552
+05-01 08:01:14.087 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2966 ts=164666560
+05-01 08:01:14.092  2070  2070 I CNSS    : /sys/wifi/max_chipset_log_size doesn't exist
+05-01 08:01:14.095 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2967 ts=164666569
+05-01 08:01:14.103 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2968 ts=164666577
+05-01 08:01:14.112 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2969 ts=164666585
+05-01 08:01:14.121 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2970 ts=164666595
+05-01 08:01:14.123  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.129 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2971 ts=164666602
+05-01 08:01:14.134  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:ED:E9, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-64, periodicAdvInt=0x0
+05-01 08:01:14.136 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2972 ts=164666610
+05-01 08:01:14.145 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2973 ts=164666619
+05-01 08:01:14.153 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2974 ts=164666627
+05-01 08:01:14.161 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2975 ts=164666635
+05-01 08:01:14.170 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2976 ts=164666644
+05-01 08:01:14.172  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+05-01 08:01:14.172  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+05-01 08:01:14.178 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2977 ts=164666652
+05-01 08:01:14.186 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2978 ts=164666660
+05-01 08:01:14.194 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2979 ts=164666668
+05-01 08:01:14.203 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2980 ts=164666676
+05-01 08:01:14.211 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2981 ts=164666685
+05-01 08:01:14.219 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2982 ts=164666693
+05-01 08:01:14.222  2814  4860 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
 --------- beginning of system
-05-01 07:49:42.249  2814  3860 D SGM:GameManager: identifyGamePackage. dev.warp.mobile, mCurrentUserId: 0, callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
-05-01 07:49:42.249  2814  3860 D SGM:SemGameManager: isGamePackage(), pkgName=dev.warp.mobile, ret=false
-05-01 07:49:42.254 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3014 ts=163974727
-05-01 07:49:42.262 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3015 ts=163974736
-05-01 07:49:42.263  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.270 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3016 ts=163974744
-05-01 07:49:42.278 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3017 ts=163974752
-05-01 07:49:42.286 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3018 ts=163974760
-05-01 07:49:42.294 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3019 ts=163974768
-05-01 07:49:42.303 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3020 ts=163974777
-05-01 07:49:42.312 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3021 ts=163974785
-05-01 07:49:42.320 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3022 ts=163974794
-05-01 07:49:42.321  2814  4406 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
-05-01 07:49:42.322  2814  4406 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
-05-01 07:49:42.328 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3023 ts=163974802
-05-01 07:49:42.329 16310 16310 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
-05-01 07:49:42.329 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=10 clamped=10
-05-01 07:49:42.329 16310 16310 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=10 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=10
-05-01 07:49:42.330  2814  3004 I ActivityManager: Broadcast completed: result=0
-05-01 07:49:42.338 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=2 instances=696 fast_path_updates=7 full_reinits=1
-05-01 07:49:42.339 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3024 ts=163974813
-05-01 07:49:42.339 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
-05-01 07:49:42.346 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3025 ts=163974819
-05-01 07:49:42.355 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3026 ts=163974829
-05-01 07:49:42.362 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3027 ts=163974836
-05-01 07:49:42.362  1186  1186 D io_stats: !@   8,0 r 25046426 369517808 w 13776417 211645624 d 1117186 382665080 f 500181 1537086 iot 5417688 0 th 0 0 0 pt 0 inp 0 0 163974.836
-05-01 07:49:42.363  1186  1186 D io_stats: !@ Read_top(KB): c.android.sdhms(7128) 144 .gms.persistent(30192) 8 vendor.samsung.(1722) 4
-05-01 07:49:42.363  1186  1186 D io_stats: !@ Write_top(KB): nordvpn.android(15130) 1152 c.android.sdhms(7128) 636 f2fs_ckpt-254:6(1341) 80
-05-01 07:49:42.364  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.371 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3028 ts=163974844
-05-01 07:49:42.378 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3029 ts=163974852
-05-01 07:49:42.387 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3030 ts=163974861
-05-01 07:49:42.395 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3031 ts=163974869
-05-01 07:49:42.403 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3032 ts=163974877
-05-01 07:49:42.412 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3033 ts=163974886
-05-01 07:49:42.420 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3034 ts=163974894
-05-01 07:49:42.428 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3035 ts=163974902
-05-01 07:49:42.436 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3036 ts=163974910
-05-01 07:49:42.445 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3037 ts=163974919
-05-01 07:49:42.453 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3038 ts=163974927
-05-01 07:49:42.462 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3039 ts=163974936
-05-01 07:49:42.465  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.471 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3040 ts=163974945
-05-01 07:49:42.478 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3041 ts=163974952
-05-01 07:49:42.487 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3042 ts=163974961
-05-01 07:49:42.495 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3043 ts=163974969
-05-01 07:49:42.504 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3044 ts=163974977
-05-01 07:49:42.512 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3045 ts=163974985
-05-01 07:49:42.520 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3046 ts=163974994
-05-01 07:49:42.529 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3047 ts=163975002
-05-01 07:49:42.537 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3048 ts=163975010
-05-01 07:49:42.545 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3049 ts=163975019
-05-01 07:49:42.553 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3050 ts=163975027
-05-01 07:49:42.562 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3051 ts=163975035
-05-01 07:49:42.570 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3052 ts=163975044
-05-01 07:49:42.572  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.579 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3053 ts=163975053
-05-01 07:49:42.587 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3054 ts=163975061
-05-01 07:49:42.595 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3055 ts=163975069
-05-01 07:49:42.604 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3056 ts=163975077
-05-01 07:49:42.612 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3057 ts=163975085
-05-01 07:49:42.620 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3058 ts=163975094
-05-01 07:49:42.628 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3059 ts=163975102
-05-01 07:49:42.637 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3060 ts=163975110
-05-01 07:49:42.645 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3061 ts=163975119
-05-01 07:49:42.653 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3062 ts=163975127
-05-01 07:49:42.662 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3063 ts=163975135
-05-01 07:49:42.670 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3064 ts=163975144
-05-01 07:49:42.672  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.679 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3065 ts=163975153
-05-01 07:49:42.686 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3066 ts=163975160
-05-01 07:49:42.695 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3067 ts=163975169
-05-01 07:49:42.704 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3068 ts=163975177
-05-01 07:49:42.711 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3069 ts=163975185
-05-01 07:49:42.719 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3070 ts=163975193
-05-01 07:49:42.727 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3071 ts=163975201
-05-01 07:49:42.736 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3072 ts=163975210
-05-01 07:49:42.745 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3073 ts=163975219
-05-01 07:49:42.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777592982
-05-01 07:49:42.749  1792  1822 D HeatmapThread: !@ batteryplugType : 2
-05-01 07:49:42.749  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 322 
-05-01 07:49:42.750  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626549
-05-01 07:49:42.750  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626524
-05-01 07:49:42.750  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
-05-01 07:49:42.750  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
-05-01 07:49:42.750  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
-05-01 07:49:42.752  1792  1822 E HeatmapThread: !@ CAM is Working
-05-01 07:49:42.753 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3074 ts=163975226
-05-01 07:49:42.761 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3075 ts=163975235
-05-01 07:49:42.763  2814  4406 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
-05-01 07:49:42.764  2814  4406 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
-05-01 07:49:42.766 16310 16310 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
-05-01 07:49:42.766 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=30 clamped=30
-05-01 07:49:42.766 16310 16310 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=30 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=30
-05-01 07:49:42.768  2814  3004 I ActivityManager: Broadcast completed: result=0
-05-01 07:49:42.770 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=3 instances=696 fast_path_updates=8 full_reinits=1
-05-01 07:49:42.772 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3076 ts=163975245
-05-01 07:49:42.772 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
-05-01 07:49:42.772  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.778 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3077 ts=163975252
-05-01 07:49:42.786 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3078 ts=163975260
-05-01 07:49:42.795 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3079 ts=163975269
-05-01 07:49:42.803 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3080 ts=163975277
-05-01 07:49:42.811 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3081 ts=163975285
-05-01 07:49:42.820 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3082 ts=163975293
-05-01 07:49:42.828 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3083 ts=163975301
-05-01 07:49:42.837 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3084 ts=163975310
-05-01 07:49:42.845 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3085 ts=163975318
-05-01 07:49:42.853 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3086 ts=163975326
-05-01 07:49:42.861 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3087 ts=163975335
-05-01 07:49:42.870 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3088 ts=163975343
-05-01 07:49:42.872  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.879 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3089 ts=163975352
-05-01 07:49:42.886 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3090 ts=163975360
-05-01 07:49:42.891  2814  3036 D BatteryExternalStatsWorker: update stats : procstate-change (10)
-05-01 07:49:42.892  2814  3036 D BatteryExternalStatsWorker: Fetch WiFi data
-05-01 07:49:42.892  2814  3036 D BatteryExternalStatsWorker: Update Rail Energy data
-05-01 07:49:42.894 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3091 ts=163975368
-05-01 07:49:42.903 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3092 ts=163975377
-05-01 07:49:42.911 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3093 ts=163975385
-05-01 07:49:42.912  1684 17000 I HYPER-HAL: [RequestManager.cpp]releaseLocked(): Released ID : 4042775
-05-01 07:49:42.920 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3094 ts=163975393
-05-01 07:49:42.922  2814  3036 D BatteryExternalStatsWorker: mStats lock released
-05-01 07:49:42.928 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3095 ts=163975402
-05-01 07:49:42.936 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3096 ts=163975410
-05-01 07:49:42.940  2814  3036 D BatteryExternalStatsWorker: Update wifi state
-05-01 07:49:42.940  2814  3036 D BatteryExternalStatsWorker: done updateExternalStatsLocked
-05-01 07:49:42.944 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3097 ts=163975418
-05-01 07:49:42.947  8385  8385 I SCS@AiSearch user 0: (SearchProvider) onTrimMemory(): 40
-05-01 07:49:42.949 30076 30076 I ContactsProvider: [P] onTrimMemory-success
-05-01 07:49:42.953 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3098 ts=163975427
-05-01 07:49:42.961 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3099 ts=163975435
-05-01 07:49:42.969 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3100 ts=163975443
-05-01 07:49:42.973  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:42.978 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3101 ts=163975452
-05-01 07:49:42.986 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3102 ts=163975460
-05-01 07:49:42.994 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3103 ts=163975468
-05-01 07:49:43.003 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3104 ts=163975477
-05-01 07:49:43.009  2814  4406 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
-05-01 07:49:43.011 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3105 ts=163975485
-05-01 07:49:43.019 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3106 ts=163975493
-05-01 07:49:43.028 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3107 ts=163975501
-05-01 07:49:43.036 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3108 ts=163975510
-05-01 07:49:43.044 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3109 ts=163975518
-05-01 07:49:43.053 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3110 ts=163975527
-05-01 07:49:43.062 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3111 ts=163975535
-05-01 07:49:43.069 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3112 ts=163975543
-05-01 07:49:43.076  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
-05-01 07:49:43.076  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
-05-01 07:49:43.077  1667  5342 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
-05-01 07:49:43.077  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
-05-01 07:49:43.078 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3113 ts=163975552
-05-01 07:49:43.080  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.087 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3114 ts=163975561
-05-01 07:49:43.088  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:67:70, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-64, periodicAdvInt=0x0
-05-01 07:49:43.095 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3115 ts=163975569
-05-01 07:49:43.103 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3116 ts=163975577
-05-01 07:49:43.112 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3117 ts=163975585
-05-01 07:49:43.120 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3118 ts=163975593
-05-01 07:49:43.126  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:56:F4, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-52, periodicAdvInt=0x0
-05-01 07:49:43.128 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3119 ts=163975602
-05-01 07:49:43.136 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3120 ts=163975609
-05-01 07:49:43.144 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3121 ts=163975618
-05-01 07:49:43.152 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3122 ts=163975626
-05-01 07:49:43.161  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
-05-01 07:49:43.161  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
-05-01 07:49:43.161 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3123 ts=163975635
-05-01 07:49:43.168 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3124 ts=163975642
-05-01 07:49:43.177 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3125 ts=163975651
-05-01 07:49:43.181  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.186 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3126 ts=163975660
-05-01 07:49:43.194 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3127 ts=163975667
-05-01 07:49:43.202 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3128 ts=163975676
-05-01 07:49:43.206  2814  4406 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
-05-01 07:49:43.207  2814  4406 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
-05-01 07:49:43.208 16310 16310 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
-05-01 07:49:43.208 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=50 clamped=50
-05-01 07:49:43.208 16310 16310 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=50 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=50
-05-01 07:49:43.210 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=696 fast_path_updates=9 full_reinits=1
-05-01 07:49:43.211 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3129 ts=163975685
-05-01 07:49:43.211 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
-05-01 07:49:43.212  2814  3004 I ActivityManager: Broadcast completed: result=0
-05-01 07:49:43.219 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3130 ts=163975693
-05-01 07:49:43.227 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3131 ts=163975701
-05-01 07:49:43.236 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3132 ts=163975709
-05-01 07:49:43.244 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3133 ts=163975718
-05-01 07:49:43.252 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3134 ts=163975726
-05-01 07:49:43.261 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3135 ts=163975734
-05-01 07:49:43.270 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3136 ts=163975744
-05-01 07:49:43.278 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3137 ts=163975752
-05-01 07:49:43.286 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3138 ts=163975759
-05-01 07:49:43.288  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.295 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3139 ts=163975768
-05-01 07:49:43.303 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3140 ts=163975776
-05-01 07:49:43.311 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3141 ts=163975784
-05-01 07:49:43.312  1667  4712 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
-05-01 07:49:43.319 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3142 ts=163975793
-05-01 07:49:43.327 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3143 ts=163975801
-05-01 07:49:43.336 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3144 ts=163975810
-05-01 07:49:43.344 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3145 ts=163975818
-05-01 07:49:43.353 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3146 ts=163975826
-05-01 07:49:43.361 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3147 ts=163975835
-05-01 07:49:43.369 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3148 ts=163975843
-05-01 07:49:43.377 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3149 ts=163975851
-05-01 07:49:43.386 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3150 ts=163975859
-05-01 07:49:43.388  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.395 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3151 ts=163975868
-05-01 07:49:43.402 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3152 ts=163975876
-05-01 07:49:43.410 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3153 ts=163975884
-05-01 07:49:43.419 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3154 ts=163975892
-05-01 07:49:43.427 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3155 ts=163975901
-05-01 07:49:43.436 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3156 ts=163975909
-05-01 07:49:43.444 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3157 ts=163975918
-05-01 07:49:43.452 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3158 ts=163975926
-05-01 07:49:43.455  1672  2586 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 244696616658253 ns; value = [0, 0, 5, 5, 0, 15, 0, 0, 0, 0]
-05-01 07:49:43.461 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3159 ts=163975934
-05-01 07:49:43.469 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3160 ts=163975942
-05-01 07:49:43.477 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3161 ts=163975951
-05-01 07:49:43.486 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3162 ts=163975959
-05-01 07:49:43.489  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.494 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3163 ts=163975968
-05-01 07:49:43.502 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3164 ts=163975976
-05-01 07:49:43.510 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3165 ts=163975984
-05-01 07:49:43.519 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3166 ts=163975992
-05-01 07:49:43.527 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3167 ts=163976001
-05-01 07:49:43.535 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3168 ts=163976009
-05-01 07:49:43.544 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3169 ts=163976017
-05-01 07:49:43.552 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3170 ts=163976026
-05-01 07:49:43.560 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3171 ts=163976034
-05-01 07:49:43.569 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3172 ts=163976043
-05-01 07:49:43.577 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3173 ts=163976051
-05-01 07:49:43.585 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3174 ts=163976059
-05-01 07:49:43.593 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3175 ts=163976067
-05-01 07:49:43.595  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.603 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3176 ts=163976076
-05-01 07:49:43.610 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3177 ts=163976083
-05-01 07:49:43.618 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3178 ts=163976092
-05-01 07:49:43.625  2814  3080 D PowerManagerService: UserActivityStateListenerState: 0
-05-01 07:49:43.625 16310 16310 I VRI[MainActivity]@afeb858: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@afeb858
-05-01 07:49:43.627 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3179 ts=163976100
-05-01 07:49:43.634  1802  1802 I SurfaceFlinger: [dev.warp.mobile/dev.warp.mobile.MainActivity$_16310#43976] setFrameRateCategory: NoPreference
-05-01 07:49:43.635 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3180 ts=163976109
-05-01 07:49:43.644 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3181 ts=163976117
-05-01 07:49:43.652 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3182 ts=163976126
-05-01 07:49:43.655  2814  4406 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
-05-01 07:49:43.656  2814  4406 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
-05-01 07:49:43.657 16310 16310 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
-05-01 07:49:43.657 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=25 clamped=25
-05-01 07:49:43.657 16310 16310 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=25 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=25
-05-01 07:49:43.659  2814  3004 I ActivityManager: Broadcast completed: result=0
-05-01 07:49:43.659 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=696 fast_path_updates=10 full_reinits=1
-05-01 07:49:43.660 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3183 ts=163976134
-05-01 07:49:43.660 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
-05-01 07:49:43.668 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3184 ts=163976141
-05-01 07:49:43.677 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3185 ts=163976150
-05-01 07:49:43.685 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3186 ts=163976159
-05-01 07:49:43.693 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3187 ts=163976167
-05-01 07:49:43.695  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.703 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3188 ts=163976176
-05-01 07:49:43.710 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3189 ts=163976184
-05-01 07:49:43.719 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3190 ts=163976192
-05-01 07:49:43.727 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3191 ts=163976201
-05-01 07:49:43.735 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3192 ts=163976209
-05-01 07:49:43.744 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3193 ts=163976217
-05-01 07:49:43.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777592983
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ batteryplugType : 2
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 322 
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626549
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626524
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
-05-01 07:49:43.751  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
-05-01 07:49:43.752 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3194 ts=163976226
-05-01 07:49:43.752  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
-05-01 07:49:43.752  1792  1822 E HeatmapThread: !@ CAM is Working
-05-01 07:49:43.760 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3195 ts=163976234
-05-01 07:49:43.768 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3196 ts=163976242
-05-01 07:49:43.778 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3197 ts=163976251
-05-01 07:49:43.785 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3198 ts=163976259
-05-01 07:49:43.794 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3199 ts=163976268
-05-01 07:49:43.796  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.803 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3200 ts=163976276
-05-01 07:49:43.810 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3201 ts=163976284
-05-01 07:49:43.819 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3202 ts=163976292
-05-01 07:49:43.827 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3203 ts=163976301
-05-01 07:49:43.835 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3204 ts=163976308
-05-01 07:49:43.843 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3205 ts=163976317
-05-01 07:49:43.852 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3206 ts=163976325
-05-01 07:49:43.860 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3207 ts=163976334
-05-01 07:49:43.868 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3208 ts=163976342
-05-01 07:49:43.877 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3209 ts=163976350
-05-01 07:49:43.885 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3210 ts=163976358
-05-01 07:49:43.893 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3211 ts=163976367
-05-01 07:49:43.896  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:43.902 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3212 ts=163976376
-05-01 07:49:43.910 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3213 ts=163976384
-05-01 07:49:43.918 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3214 ts=163976392
-05-01 07:49:43.926 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3215 ts=163976400
-05-01 07:49:43.935  1672  2564 I sensors-hal: handle_sns_std_sensor_event:409, [SSC_LIGHT] P: 0(0),c:1,b:15,m:13,cl:0,l:0,s:0,l0:0,l1:0,s0:0,s1:0,acl:1,opr:0.02,f(r):77,u(bl):100,if:0,wi:0,si:0,po:0(N:0)
-05-01 07:49:43.935  1672  6806 I sensors-hal: handle_sns_std_sensor_event:131, [SSC_LIGHT] A: 0(0),c:1,b:15,m:13,cl:0,l:0,s:0,l0:0,l1:0,s0:0,s1:0,acl:1,opr:0.02,f(r):77,u(bl):100,if:0,wi:0,si:0,po:0(N:0)
-05-01 07:49:43.935 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3216 ts=163976409
-05-01 07:49:43.943 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3217 ts=163976417
-05-01 07:49:43.952 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3218 ts=163976425
-05-01 07:49:43.960 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3219 ts=163976434
-05-01 07:49:43.968 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3220 ts=163976442
-05-01 07:49:43.977 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3221 ts=163976451
-05-01 07:49:43.985 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3222 ts=163976459
-05-01 07:49:43.993 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3223 ts=163976467
-05-01 07:49:43.996  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.002 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3224 ts=163976476
-05-01 07:49:44.010 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3225 ts=163976483
-05-01 07:49:44.013  2814  4406 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
-05-01 07:49:44.018 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3226 ts=163976492
-05-01 07:49:44.026 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3227 ts=163976500
-05-01 07:49:44.035 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3228 ts=163976508
-05-01 07:49:44.043 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3229 ts=163976517
-05-01 07:49:44.051 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3230 ts=163976525
-05-01 07:49:44.059 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3231 ts=163976533
-05-01 07:49:44.068 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3232 ts=163976541
-05-01 07:49:44.075 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3233 ts=163976549
-05-01 07:49:44.084 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3234 ts=163976558
-05-01 07:49:44.092 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3235 ts=163976566
-05-01 07:49:44.094  2814  4406 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
-05-01 07:49:44.095  2814  4406 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
-05-01 07:49:44.096 16310 16310 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
-05-01 07:49:44.096 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=0 clamped=0
-05-01 07:49:44.096 16310 16310 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=0 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=0
-05-01 07:49:44.097  2814  3004 I ActivityManager: Broadcast completed: result=0
-05-01 07:49:44.100 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=667 fast_path_updates=11 full_reinits=1
-05-01 07:49:44.101 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3236 ts=163976575
-05-01 07:49:44.101 16310 16310 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
-05-01 07:49:44.102  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.109 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3237 ts=163976582
-05-01 07:49:44.118 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3238 ts=163976591
-05-01 07:49:44.127 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3239 ts=163976600
-05-01 07:49:44.135 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3240 ts=163976609
-05-01 07:49:44.143 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3241 ts=163976617
-05-01 07:49:44.151 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3242 ts=163976625
-05-01 07:49:44.160 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3243 ts=163976633
-05-01 07:49:44.168 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3244 ts=163976642
-05-01 07:49:44.176 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3245 ts=163976650
-05-01 07:49:44.185 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3246 ts=163976658
-05-01 07:49:44.193 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3247 ts=163976667
-05-01 07:49:44.201 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3248 ts=163976675
-05-01 07:49:44.203  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.210 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3249 ts=163976683
-05-01 07:49:44.218 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3250 ts=163976691
-05-01 07:49:44.226 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3251 ts=163976700
-05-01 07:49:44.228  2814  4406 E BatteryStatsService: Invalid uid for waking network packet: -1
-05-01 07:49:44.234 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3252 ts=163976708
-05-01 07:49:44.243 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3253 ts=163976716
-05-01 07:49:44.251 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3254 ts=163976725
-05-01 07:49:44.259 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3255 ts=163976733
-05-01 07:49:44.268 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3256 ts=163976742
-05-01 07:49:44.276 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3257 ts=163976750
-05-01 07:49:44.284 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3258 ts=163976758
-05-01 07:49:44.293 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3259 ts=163976766
-05-01 07:49:44.302 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3260 ts=163976775
-05-01 07:49:44.303  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.310 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3261 ts=163976783
-05-01 07:49:44.317 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3262 ts=163976791
-05-01 07:49:44.326 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3263 ts=163976800
-05-01 07:49:44.335 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3264 ts=163976808
-05-01 07:49:44.343 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3265 ts=163976816
-05-01 07:49:44.351 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3266 ts=163976825
-05-01 07:49:44.359 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3267 ts=163976833
-05-01 07:49:44.364  1186  1186 D io_stats: !@   8,0 r 25046426 369517808 w 13776476 211647348 d 1117194 382666368 f 500188 1537089 iot 5417724 0 th 0 0 0 pt 0 inp 0 0 163976.838
-05-01 07:49:44.368 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3268 ts=163976841
-05-01 07:49:44.376 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3269 ts=163976850
-05-01 07:49:44.384 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3270 ts=163976858
-05-01 07:49:44.392 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3271 ts=163976866
-05-01 07:49:44.401 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3272 ts=163976875
-05-01 07:49:44.403  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.410 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3273 ts=163976883
-05-01 07:49:44.417 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3274 ts=163976891
-05-01 07:49:44.426 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3275 ts=163976900
-05-01 07:49:44.434 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3276 ts=163976908
-05-01 07:49:44.442 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3277 ts=163976916
-05-01 07:49:44.451 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3278 ts=163976925
-05-01 07:49:44.459 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3279 ts=163976933
-05-01 07:49:44.468 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3280 ts=163976941
-05-01 07:49:44.476 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3281 ts=163976950
-05-01 07:49:44.484 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3282 ts=163976958
-05-01 07:49:44.492 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3283 ts=163976966
-05-01 07:49:44.501 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3284 ts=163976974
-05-01 07:49:44.504  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.510 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3285 ts=163976983
-05-01 07:49:44.518 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3286 ts=163976991
-05-01 07:49:44.526 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3287 ts=163977000
-05-01 07:49:44.534 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3288 ts=163977008
-05-01 07:49:44.542 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3289 ts=163977016
-05-01 07:49:44.551 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3290 ts=163977024
-05-01 07:49:44.559 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3291 ts=163977033
-05-01 07:49:44.568 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3292 ts=163977041
-05-01 07:49:44.576 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3293 ts=163977050
-05-01 07:49:44.584 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3294 ts=163977058
-05-01 07:49:44.593 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3295 ts=163977067
-05-01 07:49:44.601 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3296 ts=163977075
-05-01 07:49:44.609 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3297 ts=163977083
-05-01 07:49:44.611  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.618 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3298 ts=163977091
-05-01 07:49:44.626 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3299 ts=163977099
-05-01 07:49:44.634 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3300 ts=163977107
-05-01 07:49:44.642 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3301 ts=163977116
-05-01 07:49:44.651 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3302 ts=163977124
-05-01 07:49:44.659 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3303 ts=163977132
-05-01 07:49:44.667 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3304 ts=163977141
-05-01 07:49:44.676 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3305 ts=163977150
-05-01 07:49:44.684 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3306 ts=163977157
-05-01 07:49:44.692 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3307 ts=163977166
-05-01 07:49:44.700 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3308 ts=163977174
-05-01 07:49:44.708 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3309 ts=163977182
-05-01 07:49:44.711  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.717 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3310 ts=163977191
-05-01 07:49:44.726 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3311 ts=163977199
-05-01 07:49:44.734 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3312 ts=163977207
-05-01 07:49:44.742 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3313 ts=163977216
-05-01 07:49:44.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777592984
-05-01 07:49:44.751 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3314 ts=163977224
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ batteryplugType : 2
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 322 
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626549
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626524
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
-05-01 07:49:44.753  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
-05-01 07:49:44.753  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
-05-01 07:49:44.753  1792  1822 E HeatmapThread: !@ CAM is Working
-05-01 07:49:44.759 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3315 ts=163977233
-05-01 07:49:44.767 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3316 ts=163977241
-05-01 07:49:44.775 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3317 ts=163977249
-05-01 07:49:44.784 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3318 ts=163977257
-05-01 07:49:44.792 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3319 ts=163977266
-05-01 07:49:44.800 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3320 ts=163977274
-05-01 07:49:44.809 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3321 ts=163977283
-05-01 07:49:44.812  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.817 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3322 ts=163977291
-05-01 07:49:44.826 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3323 ts=163977299
-05-01 07:49:44.834 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3324 ts=163977307
-05-01 07:49:44.842 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3325 ts=163977316
-05-01 07:49:44.851 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3326 ts=163977324
-05-01 07:49:44.859 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3327 ts=163977333
-05-01 07:49:44.867 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3328 ts=163977341
-05-01 07:49:44.875 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3329 ts=163977349
-05-01 07:49:44.884 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3330 ts=163977357
-05-01 07:49:44.892 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3331 ts=163977366
-05-01 07:49:44.900 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3332 ts=163977374
-05-01 07:49:44.908 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3333 ts=163977382
-05-01 07:49:44.917 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3334 ts=163977391
-05-01 07:49:44.919  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:44.926 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3335 ts=163977399
-05-01 07:49:44.933 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3336 ts=163977407
-05-01 07:49:44.942 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3337 ts=163977415
-05-01 07:49:44.950 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3338 ts=163977424
-05-01 07:49:44.959 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3339 ts=163977432
-05-01 07:49:44.967 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3340 ts=163977441
-05-01 07:49:44.975 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3341 ts=163977449
-05-01 07:49:44.983 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3342 ts=163977457
-05-01 07:49:44.992 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3343 ts=163977466
-05-01 07:49:44.998  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
-05-01 07:49:44.998  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
-05-01 07:49:44.998  1667  5342 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
-05-01 07:49:44.998  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
-05-01 07:49:45.000 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3344 ts=163977474
-05-01 07:49:45.008 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3345 ts=163977482
-05-01 07:49:45.011  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:67:70, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-64, periodicAdvInt=0x0
-05-01 07:49:45.016  2814  4406 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
-05-01 07:49:45.016 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3346 ts=163977490
-05-01 07:49:45.019  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:45.025 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3347 ts=163977499
-05-01 07:49:45.033 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3348 ts=163977507
-05-01 07:49:45.038  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:56:F4, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-46, periodicAdvInt=0x0
-05-01 07:49:45.041 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3349 ts=163977515
-05-01 07:49:45.050 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3350 ts=163977524
-05-01 07:49:45.058 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3351 ts=163977532
-05-01 07:49:45.067 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3352 ts=163977540
-05-01 07:49:45.075 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3353 ts=163977549
-05-01 07:49:45.075  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
-05-01 07:49:45.076  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
-05-01 07:49:45.083 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3354 ts=163977557
-05-01 07:49:45.092 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3355 ts=163977566
-05-01 07:49:45.100 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3356 ts=163977574
-05-01 07:49:45.108 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3357 ts=163977582
-05-01 07:49:45.116 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3358 ts=163977590
-05-01 07:49:45.119  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:45.125 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3359 ts=163977599
-05-01 07:49:45.132 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3360 ts=163977606
-05-01 07:49:45.141 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3361 ts=163977615
-05-01 07:49:45.149 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3362 ts=163977623
-05-01 07:49:45.158 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3363 ts=163977631
-05-01 07:49:45.166 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3364 ts=163977640
-05-01 07:49:45.169  2814  4406 D InputDispatcher: Inject key (17142/2000): action=0, f=0x0, d=-1, time=163977642000000
-05-01 07:49:45.169  2814  4406 D InputManager-JNI: !@interceptKeyBeforeQueueing(0), action=0, interactive=true
-05-01 07:49:45.169  2814  4406 D SingleKeyGesture: interceptKeyDown, info : KeyCode=KEYCODE_UNKNOWN, size=0
-05-01 07:49:45.169  2814  4406 D PhoneWindowManager: interceptKeyTq interceptKeyResult=1
-05-01 07:49:45.169  2814  4406 D WindowWakeUpPolicy: HINT_DEVICE_WAKEUP acquire()
-05-01 07:49:45.169  2814  4406 I SemDvfsHyPerManager: acquire hyper - DEVICE_WAKEUP/2814@17, type = -999
-05-01 07:49:45.169  2814  4406 D PowerManagerService: [api] wakeUp (uid: 1000 pid: 2814) eventTime = 163977642
-05-01 07:49:45.169  2814  4406 D InputManager-JNI: !@handleInterceptActions(0), action=0, wmActions=0
-05-01 07:49:45.169  1684  1724 I HYPER-HAL: [RequestManager.cpp]acquire(): Acquired ID : 4008713  [2814 / 17]    HINT : DEVICE_WAKEUP    list : 
-05-01 07:49:45.170  2814  4406 D InputDispatcher: Inject key (17142/2000): action=1, f=0x0, d=-1, time=163977644000000
-05-01 07:49:45.170  2814  4406 D InputManager-JNI: !@interceptKeyBeforeQueueing(0), action=1, interactive=true
-05-01 07:49:45.171  2814  4406 D PhoneWindowManager: interceptKeyTq interceptKeyResult=1
-05-01 07:49:45.171  2814  4406 D InputManager-JNI: !@handleInterceptActions(0), action=1, wmActions=0
-05-01 07:49:45.174 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3365 ts=163977648
-05-01 07:49:45.182 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3366 ts=163977656
-05-01 07:49:45.191 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3367 ts=163977665
-05-01 07:49:45.200 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3368 ts=163977673
-05-01 07:49:45.208 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3369 ts=163977682
-05-01 07:49:45.216 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3370 ts=163977690
-05-01 07:49:45.224 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3371 ts=163977698
-05-01 07:49:45.226  1667  4712 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
-05-01 07:49:45.226  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:45.233 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3372 ts=163977706
-05-01 07:49:45.240 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3373 ts=163977714
-05-01 07:49:45.249 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3374 ts=163977723
-05-01 07:49:45.253  2814  6253 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 42671, isSameBssidAndFreq true
-05-01 07:49:45.254  2814  3842 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
-05-01 07:49:45.254  2814  3842 D InsDataManager: Trying to save initial normal data.
-05-01 07:49:45.254  2814  3842 D SensorCollector: syncMappedBuffers: 0, 0, 0
-05-01 07:49:45.254  2814  3842 D InsDataManager: trimBuffers start.
-05-01 07:49:45.254  2814  3842 D InsDataManager: trimBuffers - nsmBuffer size: 26
-05-01 07:49:45.254  2814  3842 D InsDataManager: Too short for collecting additional normal data
-05-01 07:49:45.254  2814  3842 D SemInsManager: {"bssid": "bd55f12c5200","rssi": -26.0,"latency": 0.0,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Unreliable statistics: -26.0 / 0 / 146 / 2 / 0 || bd55f12c5200: 0.000 / 0.000 / @ || N N / 0 0 / Y 2.0 / Y X 0 / 163977727 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
-05-01 07:49:45.257  2814  3860 D SGM:GameManager: identifyGamePackage. dev.warp.mobile, mCurrentUserId: 0, callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
-05-01 07:49:45.257  2814  3860 D SGM:SemGameManager: isGamePackage(), pkgName=dev.warp.mobile, ret=false
-05-01 07:49:45.257 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3375 ts=163977731
-05-01 07:49:45.266 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3376 ts=163977740
-05-01 07:49:45.274 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3377 ts=163977748
-05-01 07:49:45.282 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3378 ts=163977756
-05-01 07:49:45.291 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3379 ts=163977765
-05-01 07:49:45.299 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3380 ts=163977773
-05-01 07:49:45.307 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3381 ts=163977781
-05-01 07:49:45.316 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3382 ts=163977790
-05-01 07:49:45.324 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3383 ts=163977798
-05-01 07:49:45.326  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:45.333 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3384 ts=163977806
-05-01 07:49:45.340 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3385 ts=163977814
-05-01 07:49:45.348 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3386 ts=163977822
-05-01 07:49:45.357 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3387 ts=163977831
-05-01 07:49:45.365 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3388 ts=163977839
-05-01 07:49:45.373 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3389 ts=163977847
-05-01 07:49:45.382 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3390 ts=163977856
-05-01 07:49:45.390 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3391 ts=163977864
-05-01 07:49:45.398 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3392 ts=163977872
-05-01 07:49:45.407 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3393 ts=163977881
-05-01 07:49:45.414 17156 17156 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
-05-01 07:49:45.415 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3394 ts=163977889
-05-01 07:49:45.418 17156 17156 I AndroidRuntime: Using default boot image
-05-01 07:49:45.418 17156 17156 I AndroidRuntime: Leaving lock profiling enabled
-05-01 07:49:45.419 17156 17156 I app_process: Using CollectorTypeCMC GC.
-05-01 07:49:45.423 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3395 ts=163977897
-05-01 07:49:45.426  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
-05-01 07:49:45.432 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3396 ts=163977906
-05-01 07:49:45.440 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3397 ts=163977914
-05-01 07:49:45.449 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3398 ts=163977923
-05-01 07:49:45.457 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3399 ts=163977931
-05-01 07:49:45.465 17156 17156 D nativeloader: InitDefaultPublicLibraries for_preload=1: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libicu.so:libicui18n.so:libicuuc.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativehelper.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
-05-01 07:49:45.466 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3400 ts=163977939
-05-01 07:49:45.473 17156 17156 D nativeloader: Load libicu_jni.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
-05-01 07:49:45.473 17156 17156 D app_process: u_setTimeZoneFilesDirectory("/apex/com.android.tzdata/etc/tz/versioned/9/icu") succeeded. 
-05-01 07:49:45.473 17156 17156 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt76l.dat
-05-01 07:49:45.473 17156 17156 D nativeloader: Load libjavacore.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
-05-01 07:49:45.474 17156 17156 D nativeloader: Load libopenjdk.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
-05-01 07:49:45.474 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3401 ts=163977948
-05-01 07:49:45.474 17156 17156 I app_process: Priority-to-niceness mapping: 19, 16, 13, 10, 0, -2, -4, -5, -6, -8
-05-01 07:49:45.482 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3402 ts=163977956
-05-01 07:49:45.483 17156 17156 E SemDvfsManager_JNI: SemDvfsManager: registerfunction enter
-05-01 07:49:45.483 17156 17156 E SemAffinityControl: SemAffinityControl: registerfunction enter
-05-01 07:49:45.488 17156 17156 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
-05-01 07:49:45.488 17156 17156 D AndroidRuntime: Calling main entry com.android.commands.svc.Svc
-05-01 07:49:45.489 17156 17156 W PlatformAconfigPackage: android.os.flagging.AconfigStorageReadException: ERROR_CANNOT_READ_STORAGE_FILE: Fail to mmap storage
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.graphics.pdf.flags is mapped to com.android.mediaprovider
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.providers.media.flags is mapped to com.android.mediaprovider
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.graphics.pdf.flags.readonly is mapped to com.android.mediaprovider
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.adservices.flags is mapped to com.android.adservices
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.sdksandbox.flags is mapped to com.android.adservices
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.uwb.flags is mapped to com.android.uwb
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.ranging.flags is mapped to com.android.uwb
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.os.profiling is mapped to com.android.profiling
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.wifi.flags is mapped to com.android.wifi
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.art.flags is mapped to com.android.art
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.art.rw.flags is mapped to com.android.art
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.libcore is mapped to com.android.art
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.tethering.mainline.beta is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.net.http is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.tethering.readonly.flags is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: android.net.vcn is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.net.flags is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.tethering.flags is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.tethering.beta.test is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.nearby.flags is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.net.thread.flags is mapped to com.android.tethering
-05-01 07:49:45.489 17156 17156 I AconfigPackage: com.android.net.ct.flags is mapped to com.android.tethering
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.cellbroadcastreceiver.flags is mapped to com.android.cellbroadcast
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.org.conscrypt.flags is mapped to com.android.conscrypt
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.org.conscrypt.net.flags is mapped to com.android.conscrypt
-05-01 07:49:45.490 17156 17156 I AconfigPackage: android.media.swcodec.flags is mapped to com.android.media.swcodec
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.bluetooth.flags is mapped to com.android.bt
-05-01 07:49:45.490 16310 16310 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3403 ts=163977963
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.ipsec.flags is mapped to com.android.ipsec
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.os.statsd.flags is mapped to com.android.os.statsd
-05-01 07:49:45.490 17156 17156 I AconfigPackage: android.provider.flags is mapped to com.android.configinfrastructure
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.server.deviceconfig is mapped to com.android.configinfrastructure
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.permission.flags is mapped to com.android.permission
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.permissioncontroller.flags is mapped to com.android.permission
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.media.extractor.flags is mapped to com.android.media
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.media.mainline.flags is mapped to com.android.media
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.adservices.ondevicepersonalization.flags is mapped to com.android.ondevicepersonalization
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.system.virtualmachine.flags is mapped to com.android.virt
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.rkpd.flags is mapped to com.android.rkpd
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.devicelock.flags is mapped to com.android.devicelock
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.healthfitness.flags is mapped to com.android.healthfitness
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.icu is mapped to com.android.i18n
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.appsearch.flags is mapped to com.android.appsearch
-05-01 07:49:45.490 17156 17156 I AconfigPackage: com.android.adbd.flags is mapped to com.android.adbd
-05-01 07:49:45.490 17156 17156 E FeatureFlagsImplExport: android.os.flagging.AconfigStorageReadException: ERROR_PACKAGE_NOT_FOUND: package android.xr cannot be found on the device
-05-01 07:49:45.491  2814  4406 D PowerManagerService: [api] wakeUp (uid: 2000 pid: 17156) eventTime = 163977965
-05-01 07:49:45.491  2814  4406 D PowerManagerService: [api] setStayOnSetting: 15 (uid: 2000 pid: 17156)
-05-01 07:49:45.491  2814  4406 D KNOX_MDM_SettingsProvider: isChangeAllowed() : name = stay_on_while_plugged_in
-05-01 07:49:45.491  2814  4406 D KNOX_MDM_SettingsProvider: edmUri: content://com.sec.knox.provider/RestrictionPolicy1
-05-01 07:49:45.491  2814  4406 D KNOX_MDM_SettingsProvider: projectionArgs: isDeveloperModeAllowed
-05-01 07:49:45.491  2814  4406 D SecContentProvider: query(), uri = 15 selection = isDeveloperModeAllowed
-05-01 07:49:45.491  2814  4406 D SecContentProvider: called from android.uid.system:1000
-05-01 07:49:45.491  2814  4406 D RestrictionPolicy: isDeveloperModeAllowed : true
-05-01 07:49:45.491  2814  4406 D KNOX_MDM_SettingsProvider: ret = 1
-05-01 07:49:45.492 17156 17156 D AndroidRuntime: Shutting down VM
-05-01 07:49:45.492 17156 17176 W IPCThreadState: call to talkWithDriver in joinThreadPool returned error: -9 (Bad file descriptor), FD: -1
-05-01 07:49:45.494 17156 17177 W app_process: Thread attaching while runtime is shutting down: binder:17156_2
-05-01 07:49:45.494 17156 17177 I AndroidRuntime: NOTE: attach of thread 'binder:17156_2' failed
+05-01 08:01:14.223  2814  4860 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 08:01:14.226 19994 19994 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
+05-01 08:01:14.226 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=10 clamped=10
+05-01 08:01:14.226 19994 19994 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=10 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=10
+05-01 08:01:14.228  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.228 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=696 fast_path_updates=201 full_reinits=1
+05-01 08:01:14.229  2814  3004 I ActivityManager: Broadcast completed: result=0
+05-01 08:01:14.229 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2983 ts=164666703
+05-01 08:01:14.229 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
+05-01 08:01:14.236 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2984 ts=164666710
+05-01 08:01:14.245 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2985 ts=164666718
+05-01 08:01:14.253 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2986 ts=164666727
+05-01 08:01:14.262 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2987 ts=164666735
+05-01 08:01:14.270 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2988 ts=164666743
+05-01 08:01:14.278 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2989 ts=164666752
+05-01 08:01:14.286 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2990 ts=164666760
+05-01 08:01:14.295 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2991 ts=164666769
+05-01 08:01:14.303 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2992 ts=164666777
+05-01 08:01:14.311 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2993 ts=164666785
+05-01 08:01:14.320 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2994 ts=164666793
+05-01 08:01:14.323  1667  4712 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
+05-01 08:01:14.328 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2995 ts=164666802
+05-01 08:01:14.328  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.337 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2996 ts=164666811
+05-01 08:01:14.344 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2997 ts=164666818
+05-01 08:01:14.353 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2998 ts=164666827
+05-01 08:01:14.361 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=2999 ts=164666835
+05-01 08:01:14.370 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3000 ts=164666843
+05-01 08:01:14.378 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3001 ts=164666852
+05-01 08:01:14.386 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3002 ts=164666860
+05-01 08:01:14.395 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3003 ts=164666869
+05-01 08:01:14.403 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3004 ts=164666877
+05-01 08:01:14.411 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3005 ts=164666885
+05-01 08:01:14.421 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3006 ts=164666895
+05-01 08:01:14.428 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3007 ts=164666902
+05-01 08:01:14.429  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.437 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3008 ts=164666910
+05-01 08:01:14.444 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3009 ts=164666918
+05-01 08:01:14.453 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3010 ts=164666927
+05-01 08:01:14.461 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3011 ts=164666935
+05-01 08:01:14.469 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3012 ts=164666943
+05-01 08:01:14.478 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3013 ts=164666951
+05-01 08:01:14.486 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3014 ts=164666960
+05-01 08:01:14.494 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3015 ts=164666968
+05-01 08:01:14.503 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3016 ts=164666977
+05-01 08:01:14.511 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3017 ts=164666985
+05-01 08:01:14.519 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3018 ts=164666993
+05-01 08:01:14.528 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3019 ts=164667002
+05-01 08:01:14.529  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.537 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3020 ts=164667010
+05-01 08:01:14.537 30076 30076 I ContactsProvider: [P] onTrimMemory-success
+05-01 08:01:14.544 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3021 ts=164667018
+05-01 08:01:14.552 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3022 ts=164667026
+05-01 08:01:14.561 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3023 ts=164667035
+05-01 08:01:14.569 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3024 ts=164667043
+05-01 08:01:14.578 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3025 ts=164667052
+05-01 08:01:14.586 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3026 ts=164667059
+05-01 08:01:14.594 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3027 ts=164667068
+05-01 08:01:14.602 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3028 ts=164667076
+05-01 08:01:14.610 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3029 ts=164667084
+05-01 08:01:14.619 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3030 ts=164667092
+05-01 08:01:14.628 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3031 ts=164667101
+05-01 08:01:14.630  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.636 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3032 ts=164667109
+05-01 08:01:14.637  2814  4860 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 08:01:14.638  2814  4860 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 08:01:14.640 19994 19994 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
+05-01 08:01:14.640 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=30 clamped=30
+05-01 08:01:14.640 19994 19994 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=30 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=30
+05-01 08:01:14.641  2814  3004 I ActivityManager: Broadcast completed: result=0
+05-01 08:01:14.644 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=2 instances=696 fast_path_updates=202 full_reinits=1
+05-01 08:01:14.645 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3033 ts=164667119
+05-01 08:01:14.645 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
+05-01 08:01:14.652 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3034 ts=164667126
+05-01 08:01:14.654  1672  2586 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 245387816662637 ns; value = [0, 0, 5, 5, 0, 15, 0, 0, 0, 0]
+05-01 08:01:14.661 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3035 ts=164667134
+05-01 08:01:14.669 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3036 ts=164667143
+05-01 08:01:14.677 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3037 ts=164667151
+05-01 08:01:14.686 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3038 ts=164667159
+05-01 08:01:14.694 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3039 ts=164667168
+05-01 08:01:14.702 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3040 ts=164667176
+05-01 08:01:14.710 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3041 ts=164667184
+05-01 08:01:14.719 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3042 ts=164667193
+05-01 08:01:14.727 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3043 ts=164667201
+05-01 08:01:14.730  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.736 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3044 ts=164667210
+05-01 08:01:14.744 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3045 ts=164667218
+05-01 08:01:14.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777593674
+05-01 08:01:14.750  1792  1822 D HeatmapThread: !@ batteryplugType : 2
+05-01 08:01:14.750  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 321 
+05-01 08:01:14.750  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626561
+05-01 08:01:14.751  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626554
+05-01 08:01:14.751  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
+05-01 08:01:14.751  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
+05-01 08:01:14.751  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
+05-01 08:01:14.751  1792  1822 E HeatmapThread: !@ CAM is Working
+05-01 08:01:14.753 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3046 ts=164667227
+05-01 08:01:14.761 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3047 ts=164667235
+05-01 08:01:14.769 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3048 ts=164667243
+05-01 08:01:14.777 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3049 ts=164667251
+05-01 08:01:14.785 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3050 ts=164667259
+05-01 08:01:14.782  2814  4860 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
+05-01 08:01:14.794 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3051 ts=164667267
+05-01 08:01:14.802 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3052 ts=164667276
+05-01 08:01:14.811 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3053 ts=164667285
+05-01 08:01:14.819 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3054 ts=164667293
+05-01 08:01:14.819  1684 20585 I HYPER-HAL: [RequestManager.cpp]releaseLocked(): Released ID : 4042775
+05-01 08:01:14.827 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3055 ts=164667301
+05-01 08:01:14.830  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.836 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3056 ts=164667309
+05-01 08:01:14.844 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3057 ts=164667318
+05-01 08:01:14.852 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3058 ts=164667326
+05-01 08:01:14.854  1186  1186 D io_stats: !@   8,0 r 25108752 370015176 w 13821690 212412876 d 1119504 383492036 f 501598 1540808 iot 5432828 0 th 0 0 0 pt 0 inp 0 0 164667.327
+05-01 08:01:14.854  1186  1186 D io_stats: !@ Read_top(KB): egram.messenger(15960) 8
+05-01 08:01:14.854  1186  1186 D io_stats: !@ Write_top(KB): nordvpn.android(15130) 1160 egram.messenger(15960) 156 f2fs_ckpt-254:6(1341) 24
+05-01 08:01:14.860 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3059 ts=164667334
+05-01 08:01:14.869 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3060 ts=164667343
+05-01 08:01:14.877 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3061 ts=164667351
+05-01 08:01:14.886 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3062 ts=164667360
+05-01 08:01:14.894 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3063 ts=164667368
+05-01 08:01:14.902 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3064 ts=164667376
+05-01 08:01:14.911 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3065 ts=164667385
+05-01 08:01:14.919 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3066 ts=164667393
+05-01 08:01:14.927 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3067 ts=164667401
+05-01 08:01:14.936 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3068 ts=164667409
+05-01 08:01:14.939  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:14.945 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3069 ts=164667419
+05-01 08:01:14.953 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3070 ts=164667426
+05-01 08:01:14.962 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3071 ts=164667435
+05-01 08:01:14.969 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3072 ts=164667443
+05-01 08:01:14.978 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3073 ts=164667451
+05-01 08:01:14.986 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3074 ts=164667459
+05-01 08:01:14.994 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3075 ts=164667468
+05-01 08:01:15.003 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3076 ts=164667476
+05-01 08:01:15.011 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3077 ts=164667485
+05-01 08:01:15.019 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3078 ts=164667493
+05-01 08:01:15.027 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3079 ts=164667501
+05-01 08:01:15.035 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3080 ts=164667509
+05-01 08:01:15.044 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3081 ts=164667517
+05-01 08:01:15.044  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.052 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3082 ts=164667526
+05-01 08:01:15.061 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3083 ts=164667534
+05-01 08:01:15.070 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3084 ts=164667543
+05-01 08:01:15.076  2814  4860 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 08:01:15.077 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3085 ts=164667550
+05-01 08:01:15.077  2814  4860 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 08:01:15.081 19994 19994 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
+05-01 08:01:15.081 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=50 clamped=50
+05-01 08:01:15.081 19994 19994 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=50 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=50
+05-01 08:01:15.082  2814  3004 I ActivityManager: Broadcast completed: result=0
+05-01 08:01:15.085 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=0 instances=696 fast_path_updates=203 full_reinits=1
+05-01 08:01:15.086 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3086 ts=164667559
+05-01 08:01:15.086 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
+05-01 08:01:15.093 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3087 ts=164667567
+05-01 08:01:15.102 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3088 ts=164667576
+05-01 08:01:15.110 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3089 ts=164667584
+05-01 08:01:15.112  2814  4860 D InputDispatcher: Inject key (20717/2000): action=0, f=0x0, d=-1, time=164667585000000
+05-01 08:01:15.112  2814  4860 D InputManager-JNI: !@interceptKeyBeforeQueueing(0), action=0, interactive=true
+05-01 08:01:15.112  2814  4860 D SingleKeyGesture: interceptKeyDown, info : KeyCode=KEYCODE_UNKNOWN, size=0
+05-01 08:01:15.112  2814  4860 D PhoneWindowManager: interceptKeyTq interceptKeyResult=1
+05-01 08:01:15.112  2814  4860 D WindowWakeUpPolicy: HINT_DEVICE_WAKEUP acquire()
+05-01 08:01:15.112  2814  4860 I SemDvfsHyPerManager: acquire hyper - DEVICE_WAKEUP/2814@17, type = -999
+05-01 08:01:15.113  2814  4860 D PowerManagerService: [api] wakeUp (uid: 1000 pid: 2814) eventTime = 164667585
+05-01 08:01:15.113  2814  4860 D InputManager-JNI: !@handleInterceptActions(0), action=0, wmActions=0
+05-01 08:01:15.113  1684  1724 I HYPER-HAL: [RequestManager.cpp]acquire(): Acquired ID : 4008713  [2814 / 17]    HINT : DEVICE_WAKEUP    list : 
+05-01 08:01:15.114  2814  4860 D InputDispatcher: Inject key (20717/2000): action=1, f=0x0, d=-1, time=164667587000000
+05-01 08:01:15.114  2814  4860 D InputManager-JNI: !@interceptKeyBeforeQueueing(0), action=1, interactive=true
+05-01 08:01:15.114  2814  4860 D PhoneWindowManager: interceptKeyTq interceptKeyResult=1
+05-01 08:01:15.115  2814  4860 D InputManager-JNI: !@handleInterceptActions(0), action=1, wmActions=0
+05-01 08:01:15.118 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3090 ts=164667592
+05-01 08:01:15.126 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3091 ts=164667600
+05-01 08:01:15.135 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3092 ts=164667609
+05-01 08:01:15.143 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3093 ts=164667617
+05-01 08:01:15.146  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.152 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3094 ts=164667626
+05-01 08:01:15.160 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3095 ts=164667634
+05-01 08:01:15.166  2814  6253 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 42899, isSameBssidAndFreq true
+05-01 08:01:15.168  2814  3841 I SemWifiLinkQualityMonitor: Link stat: 288 / 8 / 1.00 (5) / 600 / -26.0 || 100.0 : 600.00 / 0.5 : 1.00 / 0.55 : 0.03 / G (G) || bd55f12c5200: 0.087 / 91.543 / N || N N / 0 0 / Y 2.0 / Y X 0 / 164667640 0 || Invalid
+05-01 08:01:15.168  2814  3842 D InsDataManager: onOutageCountUpdate() - Outage Data: 0, LQ : Y. Outage Triggered: false
+05-01 08:01:15.169  2814  3842 D InsDataManager: Trying to save initial normal data.
+05-01 08:01:15.169  2814  3842 D SensorCollector: syncMappedBuffers: 0, 0, 0
+05-01 08:01:15.169  2814  3842 D InsDataManager: trimBuffers start.
+05-01 08:01:15.169  2814  3842 D InsDataManager: trimBuffers - nsmBuffer size: 26
+05-01 08:01:15.169  2814  3842 D InsDataManager: Too short for collecting additional normal data
+05-01 08:01:15.169  2814  3842 D SemInsManager: {"bssid": "bd55f12c5200","rssi": -26.0,"latency": 0.08739047619047619,"outage_count": 0,"lq_callback_triggered": true,"outage_log": "Link stat: 288 / 8 / 1.00 (5) / 600 / -26.0 || 100.0 : 600.00 / 0.5 : 1.00 / 0.55 : 0.03 / G (G) || bd55f12c5200: 0.087 / 91.543 / N || N N / 0 0 / Y 2.0 / Y X 0 / 164667640 0 || Invalid""Magnetic Sensor Events size": "0""Pressure Sensor Events size": "0"}
+05-01 08:01:15.170  4483  4705 I HoneySpace.StatusIconTracker: invokeEvent() called with: event = Wifi(visible=true, resId=2131236023, activityId=2131236043)
+05-01 08:01:15.171 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3096 ts=164667645
+05-01 08:01:15.172  2814  3860 D SGM:GameManager: identifyGamePackage. dev.warp.mobile, mCurrentUserId: 0, callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
+05-01 08:01:15.173  2814  3860 D SGM:SemGameManager: isGamePackage(), pkgName=dev.warp.mobile, ret=false
+05-01 08:01:15.176 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3097 ts=164667650
+05-01 08:01:15.185 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3098 ts=164667658
+05-01 08:01:15.192 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3099 ts=164667666
+05-01 08:01:15.201 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3100 ts=164667674
+05-01 08:01:15.211 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3101 ts=164667684
+05-01 08:01:15.219 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3102 ts=164667692
+05-01 08:01:15.226 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3103 ts=164667700
+05-01 08:01:15.235 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3104 ts=164667709
+05-01 08:01:15.243 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3105 ts=164667717
+05-01 08:01:15.246  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.252 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3106 ts=164667726
+05-01 08:01:15.259 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3107 ts=164667733
+05-01 08:01:15.268 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3108 ts=164667741
+05-01 08:01:15.276 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3109 ts=164667750
+05-01 08:01:15.284 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3110 ts=164667758
+05-01 08:01:15.293 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3111 ts=164667767
+05-01 08:01:15.301 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3112 ts=164667775
+05-01 08:01:15.309 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3113 ts=164667783
+05-01 08:01:15.318 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3114 ts=164667791
+05-01 08:01:15.326 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3115 ts=164667800
+05-01 08:01:15.330 20726 20726 D AndroidRuntime: >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+05-01 08:01:15.333 20726 20726 I AndroidRuntime: Using default boot image
+05-01 08:01:15.333 20726 20726 I AndroidRuntime: Leaving lock profiling enabled
+05-01 08:01:15.334 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3116 ts=164667808
+05-01 08:01:15.334 20726 20726 I app_process: Using CollectorTypeCMC GC.
+05-01 08:01:15.344 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3117 ts=164667817
+05-01 08:01:15.346  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.351 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3118 ts=164667825
+05-01 08:01:15.359 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3119 ts=164667833
+05-01 08:01:15.368 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3120 ts=164667842
+05-01 08:01:15.376 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3121 ts=164667850
+05-01 08:01:15.378 20726 20726 D nativeloader: InitDefaultPublicLibraries for_preload=1: libandroid.so:libaaudio.so:libamidi.so:libbinder_ndk.so:libc.so:libcamera2ndk.so:libdl.so:libEGL.so:libGLESv1_CM.so:libGLESv2.so:libGLESv3.so:libicu.so:libicui18n.so:libicuuc.so:libjnigraphics.so:liblog.so:libmediandk.so:libm.so:libnativehelper.so:libnativewindow.so:libOpenMAXAL.so:libOpenSLES.so:libRS.so:libstdc++.so:libsync.so:libvulkan.so:libwebviewchromium_plat_support.so:libz.so
+05-01 08:01:15.385 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3122 ts=164667858
+05-01 08:01:15.385 20726 20726 D nativeloader: Load libicu_jni.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+05-01 08:01:15.385 20726 20726 D app_process: u_setTimeZoneFilesDirectory("/apex/com.android.tzdata/etc/tz/versioned/9/icu") succeeded. 
+05-01 08:01:15.385 20726 20726 D app_process: I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt76l.dat
+05-01 08:01:15.385 20726 20726 D nativeloader: Load libjavacore.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+05-01 08:01:15.386 20726 20726 D nativeloader: Load libopenjdk.so using APEX ns com_android_art for caller /apex/com.android.art/javalib/core-oj.jar: ok
+05-01 08:01:15.386 20726 20726 I app_process: Priority-to-niceness mapping: 19, 16, 13, 10, 0, -2, -4, -5, -6, -8
+05-01 08:01:15.393 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3123 ts=164667866
+05-01 08:01:15.395 20726 20726 E SemDvfsManager_JNI: SemDvfsManager: registerfunction enter
+05-01 08:01:15.395 20726 20726 E SemAffinityControl: SemAffinityControl: registerfunction enter
+05-01 08:01:15.399 20726 20726 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+05-01 08:01:15.399 20726 20726 D AndroidRuntime: Calling main entry com.android.commands.svc.Svc
+05-01 08:01:15.401 20726 20726 W PlatformAconfigPackage: android.os.flagging.AconfigStorageReadException: ERROR_CANNOT_READ_STORAGE_FILE: Fail to mmap storage
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.graphics.pdf.flags is mapped to com.android.mediaprovider
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.providers.media.flags is mapped to com.android.mediaprovider
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.graphics.pdf.flags.readonly is mapped to com.android.mediaprovider
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.adservices.flags is mapped to com.android.adservices
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.sdksandbox.flags is mapped to com.android.adservices
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.uwb.flags is mapped to com.android.uwb
+05-01 08:01:15.401 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3124 ts=164667875
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.ranging.flags is mapped to com.android.uwb
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.os.profiling is mapped to com.android.profiling
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.wifi.flags is mapped to com.android.wifi
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.art.flags is mapped to com.android.art
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.art.rw.flags is mapped to com.android.art
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.libcore is mapped to com.android.art
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.tethering.mainline.beta is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.net.http is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.tethering.readonly.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.net.vcn is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.net.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.tethering.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.tethering.beta.test is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.nearby.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.net.thread.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.net.ct.flags is mapped to com.android.tethering
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.cellbroadcastreceiver.flags is mapped to com.android.cellbroadcast
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.org.conscrypt.flags is mapped to com.android.conscrypt
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.org.conscrypt.net.flags is mapped to com.android.conscrypt
+05-01 08:01:15.401 20726 20726 I AconfigPackage: android.media.swcodec.flags is mapped to com.android.media.swcodec
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.bluetooth.flags is mapped to com.android.bt
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.ipsec.flags is mapped to com.android.ipsec
+05-01 08:01:15.401 20726 20726 I AconfigPackage: com.android.os.statsd.flags is mapped to com.android.os.statsd
+05-01 08:01:15.402 20726 20726 I AconfigPackage: android.provider.flags is mapped to com.android.configinfrastructure
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.server.deviceconfig is mapped to com.android.configinfrastructure
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.permission.flags is mapped to com.android.permission
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.permissioncontroller.flags is mapped to com.android.permission
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.media.extractor.flags is mapped to com.android.media
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.media.mainline.flags is mapped to com.android.media
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.adservices.ondevicepersonalization.flags is mapped to com.android.ondevicepersonalization
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.system.virtualmachine.flags is mapped to com.android.virt
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.rkpd.flags is mapped to com.android.rkpd
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.devicelock.flags is mapped to com.android.devicelock
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.healthfitness.flags is mapped to com.android.healthfitness
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.icu is mapped to com.android.i18n
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.appsearch.flags is mapped to com.android.appsearch
+05-01 08:01:15.402 20726 20726 I AconfigPackage: com.android.adbd.flags is mapped to com.android.adbd
+05-01 08:01:15.402 20726 20726 E FeatureFlagsImplExport: android.os.flagging.AconfigStorageReadException: ERROR_PACKAGE_NOT_FOUND: package android.xr cannot be found on the device
+05-01 08:01:15.403  2814  4860 D PowerManagerService: [api] wakeUp (uid: 2000 pid: 20726) eventTime = 164667876
+05-01 08:01:15.403  2814  4860 D PowerManagerService: [api] setStayOnSetting: 15 (uid: 2000 pid: 20726)
+05-01 08:01:15.403  2814  4860 D KNOX_MDM_SettingsProvider: isChangeAllowed() : name = stay_on_while_plugged_in
+05-01 08:01:15.403  2814  4860 D KNOX_MDM_SettingsProvider: edmUri: content://com.sec.knox.provider/RestrictionPolicy1
+05-01 08:01:15.403  2814  4860 D KNOX_MDM_SettingsProvider: projectionArgs: isDeveloperModeAllowed
+05-01 08:01:15.403  2814  4860 D SecContentProvider: query(), uri = 15 selection = isDeveloperModeAllowed
+05-01 08:01:15.403  2814  4860 D SecContentProvider: called from android.uid.system:1000
+05-01 08:01:15.403  2814  4860 D RestrictionPolicy: isDeveloperModeAllowed : true
+05-01 08:01:15.403  2814  4860 D KNOX_MDM_SettingsProvider: ret = 1
+05-01 08:01:15.403 20726 20726 D AndroidRuntime: Shutting down VM
+05-01 08:01:15.403 20726 20737 W IPCThreadState: call to talkWithDriver in joinThreadPool returned error: -9 (Bad file descriptor), FD: -1
+05-01 08:01:15.404 20726 20735 W IPCThreadState: call to talkWithDriver in joinThreadPool returned error: -9 (Bad file descriptor), FD: -1
+05-01 08:01:15.409 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3125 ts=164667883
+05-01 08:01:15.418 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3126 ts=164667892
+05-01 08:01:15.426 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3127 ts=164667900
+05-01 08:01:15.435 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3128 ts=164667909
+05-01 08:01:15.443 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3129 ts=164667917
+05-01 08:01:15.447  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.452 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3130 ts=164667925
+05-01 08:01:15.459 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3131 ts=164667933
+05-01 08:01:15.468 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3132 ts=164667941
+05-01 08:01:15.476 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3133 ts=164667950
+05-01 08:01:15.484 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3134 ts=164667958
+05-01 08:01:15.493 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3135 ts=164667967
+05-01 08:01:15.501 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3136 ts=164667975
+05-01 08:01:15.506  2814  4860 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 08:01:15.507  2814  4860 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 08:01:15.509 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3137 ts=164667983
+05-01 08:01:15.510 19994 19994 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
+05-01 08:01:15.510 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=25 clamped=25
+05-01 08:01:15.510 19994 19994 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=25 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=25
+05-01 08:01:15.511  2814  3004 I ActivityManager: Broadcast completed: result=0
+05-01 08:01:15.518 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=696 fast_path_updates=204 full_reinits=1
+05-01 08:01:15.519 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3138 ts=164667993
+05-01 08:01:15.519 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
+05-01 08:01:15.526  2814  3080 D PowerManagerService: UserActivityStateListenerState: 0
+05-01 08:01:15.526 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3139 ts=164668000
+05-01 08:01:15.535 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3140 ts=164668009
+05-01 08:01:15.537  8385  8385 I SCS@AiSearch user 0: (SearchProvider) onTrimMemory(): 40
+05-01 08:01:15.537 19994 19994 I VRI[MainActivity]@afeb858: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@afeb858
+05-01 08:01:15.541  1802  1802 I SurfaceFlinger: [dev.warp.mobile/dev.warp.mobile.MainActivity$_19994#44006] setFrameRateCategory: NoPreference
+05-01 08:01:15.543 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3141 ts=164668017
+05-01 08:01:15.551  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.551 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3142 ts=164668025
+05-01 08:01:15.560 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3143 ts=164668033
+05-01 08:01:15.568 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3144 ts=164668041
+05-01 08:01:15.576 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3145 ts=164668050
+05-01 08:01:15.584 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3146 ts=164668058
+05-01 08:01:15.593 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3147 ts=164668066
+05-01 08:01:15.601 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3148 ts=164668075
+05-01 08:01:15.609 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3149 ts=164668083
+05-01 08:01:15.618 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3150 ts=164668092
+05-01 08:01:15.626 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3151 ts=164668100
+05-01 08:01:15.634 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3152 ts=164668108
+05-01 08:01:15.643 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3153 ts=164668116
+05-01 08:01:15.651 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3154 ts=164668125
+05-01 08:01:15.653  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.660 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3155 ts=164668133
+05-01 08:01:15.668 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3156 ts=164668142
+05-01 08:01:15.676 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3157 ts=164668150
+05-01 08:01:15.684 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3158 ts=164668158
+05-01 08:01:15.693 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3159 ts=164668166
+05-01 08:01:15.701 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3160 ts=164668175
+05-01 08:01:15.709 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3161 ts=164668183
+05-01 08:01:15.717 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3162 ts=164668191
+05-01 08:01:15.726 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3163 ts=164668200
+05-01 08:01:15.732  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+05-01 08:01:15.732  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+05-01 08:01:15.733  1667  5342 D vendor.qti.bluetooth@1.1-wake_lock: Acquire wakelock is acquired 
+05-01 08:01:15.733  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+05-01 08:01:15.734 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3164 ts=164668208
+05-01 08:01:15.742  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:3A:5E, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-47, periodicAdvInt=0x0
+05-01 08:01:15.743 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3165 ts=164668216
+05-01 08:01:15.743  4283  5396 I ScanController: onScanResult to scannerId: 6- eventType=0x1b, addressType=1, address=XX:XX:XX:XX:2C:4C, primaryPhy=1, secondaryPhy=0, advertisingSid=0xff, txPower=127, rssi=-63, periodicAdvInt=0x0
+05-01 08:01:15.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777593675
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ batteryplugType : 2
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 321 
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626561
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626554
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
+05-01 08:01:15.750  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
+05-01 08:01:15.751 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3166 ts=164668225
+05-01 08:01:15.751  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
+05-01 08:01:15.751  1792  1822 E HeatmapThread: !@ CAM is Working
+05-01 08:01:15.754  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.759 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3167 ts=164668233
+05-01 08:01:15.768 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3168 ts=164668241
+05-01 08:01:15.777 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3169 ts=164668250
+05-01 08:01:15.780  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+05-01 08:01:15.780  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+05-01 08:01:15.784 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3170 ts=164668258
+05-01 08:01:15.789  2814  4860 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
+05-01 08:01:15.789  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_WAKE_IND: 0xFD
+05-01 08:01:15.789  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK ON
+05-01 08:01:15.789  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Writing IBS_WAKE_ACK
+05-01 08:01:15.792 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3171 ts=164668266
+05-01 08:01:15.801 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3172 ts=164668275
+05-01 08:01:15.809 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3173 ts=164668283
+05-01 08:01:15.818 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3174 ts=164668291
+05-01 08:01:15.826 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3175 ts=164668300
+05-01 08:01:15.830  1667  5342 I vendor.qti.bluetooth@1.1-ibs_handler: ProcessIbsCmd: Received IBS_SLEEP_IND: 0xFE
+05-01 08:01:15.830  1667  5342 D vendor.qti.bluetooth@1.1-ibs_handler: SerialClockVote: vote for UART CLK OFF
+05-01 08:01:15.834 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3176 ts=164668308
+05-01 08:01:15.842 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3177 ts=164668316
+05-01 08:01:15.851 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3178 ts=164668325
+05-01 08:01:15.854  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.859 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3179 ts=164668333
+05-01 08:01:15.867 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3180 ts=164668341
+05-01 08:01:15.876 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3181 ts=164668349
+05-01 08:01:15.884 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3182 ts=164668357
+05-01 08:01:15.892 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3183 ts=164668366
+05-01 08:01:15.901 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3184 ts=164668374
+05-01 08:01:15.909 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3185 ts=164668382
+05-01 08:01:15.917 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3186 ts=164668391
+05-01 08:01:15.923  2814  4860 I ActivityManager: Broadcasting: Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }
+05-01 08:01:15.923  2814  4860 I ActivityManager: Enqueued broadcast Intent { act=dev.warp.mobile.TERM_SET_SCROLL_OFFSET flg=0x400000 pkg=dev.warp.mobile (has extras) }: 0
+05-01 08:01:15.925 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3187 ts=164668399
+05-01 08:01:15.926 19994 19994 D warp-android-host: android_logger: android_logger: log::set_logger failed: attempted to set a logger after the logging system was already initialized
+05-01 08:01:15.926 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_set_scroll_offset requested=0 clamped=0
+05-01 08:01:15.926 19994 19994 I WarpTerminal: TERM_SET_SCROLL_OFFSET offset=0 info=scrollback_len=1000,scrollback_max=1000,scroll_offset=0
+05-01 08:01:15.927  2814  3004 I ActivityManager: Broadcast completed: result=0
+05-01 08:01:15.934 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: dynamic_grid_fast_path_ok dt_ms=1 instances=667 fast_path_updates=205 full_reinits=1
+05-01 08:01:15.935  1672  6806 I sensors-hal: handle_sns_std_sensor_event:131, [SSC_LIGHT] A: 0(0),c:1,b:15,m:13,cl:0,l:0,s:0,l0:0,l1:0,s0:0,s1:0,acl:1,opr:0.02,f(r):77,u(bl):100,if:0,wi:0,si:0,po:0(N:0)
+05-01 08:01:15.935  1672  2564 I sensors-hal: handle_sns_std_sensor_event:409, [SSC_LIGHT] P: 0(0),c:1,b:15,m:13,cl:0,l:0,s:0,l0:0,l1:0,s0:0,s1:0,acl:1,opr:0.02,f(r):77,u(bl):100,if:0,wi:0,si:0,po:0(N:0)
+05-01 08:01:15.936 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3188 ts=164668410
+05-01 08:01:15.936 19994 19994 I warp-android-host: warp_mobile_android_host: terminal_push_frame_dynamic ok=true cells=1920 rows=24 cols=80
+05-01 08:01:15.942 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3189 ts=164668416
+05-01 08:01:15.951 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3190 ts=164668424
+05-01 08:01:15.959 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3191 ts=164668433
+05-01 08:01:15.961  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:15.968 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3192 ts=164668441
+05-01 08:01:15.975 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3193 ts=164668449
+05-01 08:01:15.980  1667  4712 D vendor.qti.bluetooth@1.1-wake_lock: Release wakelock is released 
+05-01 08:01:15.984 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3194 ts=164668458
+05-01 08:01:15.992 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3195 ts=164668466
+05-01 08:01:16.001 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3196 ts=164668474
+05-01 08:01:16.009 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3197 ts=164668482
+05-01 08:01:16.017 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3198 ts=164668491
+05-01 08:01:16.026 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3199 ts=164668499
+05-01 08:01:16.034 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3200 ts=164668508
+05-01 08:01:16.043 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3201 ts=164668516
+05-01 08:01:16.051 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3202 ts=164668524
+05-01 08:01:16.059 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3203 ts=164668533
+05-01 08:01:16.061  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.067 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3204 ts=164668541
+05-01 08:01:16.075 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3205 ts=164668549
+05-01 08:01:16.084 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3206 ts=164668557
+05-01 08:01:16.092 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3207 ts=164668565
+05-01 08:01:16.100 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3208 ts=164668574
+05-01 08:01:16.109 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3209 ts=164668582
+05-01 08:01:16.116  1684 20720 I HYPER-HAL: [RequestManager.cpp]releaseLocked(): Released ID : 4008713
+05-01 08:01:16.117 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3210 ts=164668591
+05-01 08:01:16.126 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3211 ts=164668600
+05-01 08:01:16.134 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3212 ts=164668608
+05-01 08:01:16.143 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3213 ts=164668617
+05-01 08:01:16.151 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3214 ts=164668625
+05-01 08:01:16.160 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3215 ts=164668633
+05-01 08:01:16.162  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.168 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3216 ts=164668642
+05-01 08:01:16.176 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3217 ts=164668650
+05-01 08:01:16.184 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3218 ts=164668658
+05-01 08:01:16.193 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3219 ts=164668666
+05-01 08:01:16.201 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3220 ts=164668675
+05-01 08:01:16.210 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3221 ts=164668683
+05-01 08:01:16.218 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3222 ts=164668692
+05-01 08:01:16.225 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3223 ts=164668699
+05-01 08:01:16.234 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3224 ts=164668707
+05-01 08:01:16.241 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3225 ts=164668715
+05-01 08:01:16.250 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3226 ts=164668724
+05-01 08:01:16.259 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3227 ts=164668732
+05-01 08:01:16.262  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.268 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3228 ts=164668741
+05-01 08:01:16.276 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3229 ts=164668750
+05-01 08:01:16.284 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3230 ts=164668757
+05-01 08:01:16.292 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3231 ts=164668765
+05-01 08:01:16.300 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3232 ts=164668774
+05-01 08:01:16.304  2814  3899 D NetdEventListenerService: DNS Requested by 101, 10275(com.google.android.youtube), 4(FAIL), isBlocked=true, 0ms
+05-01 08:01:16.309 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3233 ts=164668782
+05-01 08:01:16.317 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3234 ts=164668791
+05-01 08:01:16.326 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3235 ts=164668800
+05-01 08:01:16.334 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3236 ts=164668807
+05-01 08:01:16.342 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3237 ts=164668816
+05-01 08:01:16.351 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3238 ts=164668824
+05-01 08:01:16.356  2814  3899 D NetdEventListenerService: DNS Requested by 101, 10440(com.openai.chatgpt), 4(FAIL), isBlocked=true, 0ms
+05-01 08:01:16.359 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3239 ts=164668833
+05-01 08:01:16.367 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3240 ts=164668841
+05-01 08:01:16.369  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.376 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3241 ts=164668850
+05-01 08:01:16.384 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3242 ts=164668857
+05-01 08:01:16.392 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3243 ts=164668866
+05-01 08:01:16.401 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3244 ts=164668875
+05-01 08:01:16.409 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3245 ts=164668883
+05-01 08:01:16.417 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3246 ts=164668891
+05-01 08:01:16.426 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3247 ts=164668899
+05-01 08:01:16.434 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3248 ts=164668907
+05-01 08:01:16.442 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3249 ts=164668916
+05-01 08:01:16.451 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3250 ts=164668924
+05-01 08:01:16.459 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3251 ts=164668932
+05-01 08:01:16.468 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3252 ts=164668942
+05-01 08:01:16.469  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.476 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3253 ts=164668950
+05-01 08:01:16.484 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3254 ts=164668957
+05-01 08:01:16.492 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3255 ts=164668966
+05-01 08:01:16.500 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3256 ts=164668974
+05-01 08:01:16.508 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3257 ts=164668982
+05-01 08:01:16.517 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3258 ts=164668991
+05-01 08:01:16.525 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3259 ts=164668999
+05-01 08:01:16.533 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3260 ts=164669007
+05-01 08:01:16.543 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3261 ts=164669016
+05-01 08:01:16.551 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3262 ts=164669024
+05-01 08:01:16.558 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3263 ts=164669032
+05-01 08:01:16.567 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3264 ts=164669041
+05-01 08:01:16.570  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.576 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3265 ts=164669050
+05-01 08:01:16.584 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3266 ts=164669057
+05-01 08:01:16.592 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3267 ts=164669066
+05-01 08:01:16.600 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3268 ts=164669074
+05-01 08:01:16.609 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3269 ts=164669083
+05-01 08:01:16.617 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3270 ts=164669091
+05-01 08:01:16.625 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3271 ts=164669099
+05-01 08:01:16.633 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3272 ts=164669107
+05-01 08:01:16.642 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3273 ts=164669115
+05-01 08:01:16.650 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3274 ts=164669124
+05-01 08:01:16.659 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3275 ts=164669132
+05-01 08:01:16.667 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3276 ts=164669141
+05-01 08:01:16.670  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.676 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3277 ts=164669149
+05-01 08:01:16.683 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3278 ts=164669157
+05-01 08:01:16.692 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3279 ts=164669165
+05-01 08:01:16.700 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3280 ts=164669174
+05-01 08:01:16.709 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3281 ts=164669182
+05-01 08:01:16.717 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3282 ts=164669191
+05-01 08:01:16.725 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3283 ts=164669199
+05-01 08:01:16.734 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3284 ts=164669207
+05-01 08:01:16.741 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3285 ts=164669215
+05-01 08:01:16.746  1792  1822 E HeatmapThread: ECT Thread time in milliseconds: 1777593676
+05-01 08:01:16.750 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3286 ts=164669224
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ batteryplugType : 2
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ batteryLevel : 100  batteryTemperature : 321 
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ Heatmap currtime: 29626561
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ Heatmap prevtime: 29626554
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ Heatmap plugstarttime: 29625649
+05-01 08:01:16.751  1792  1822 D HeatmapThread: !@ Heatmap prevv_dsoh_update_time: 29626542
+05-01 08:01:16.751  1792  1822 E HeatmapThread: !@ CAM New BSOH: 100
+05-01 08:01:16.751  1792  1822 E HeatmapThread: !@ CAM is Working
+05-01 08:01:16.758 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3287 ts=164669232
+05-01 08:01:16.767 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3288 ts=164669241
+05-01 08:01:16.775 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3289 ts=164669249
+05-01 08:01:16.777  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.784 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3290 ts=164669258
+05-01 08:01:16.792 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3291 ts=164669266
+05-01 08:01:16.793  2814  4860 W ActivityManager: Unable to start service Intent { act=com.skms.android.agent.remote.SKMSAgentProxyService xflg=0x4 pkg=com.skms.android.agent.remote } U=0: not found
+05-01 08:01:16.801 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3292 ts=164669275
+05-01 08:01:16.809 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3293 ts=164669283
+05-01 08:01:16.817 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3294 ts=164669290
+05-01 08:01:16.825 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3295 ts=164669299
+05-01 08:01:16.833 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3296 ts=164669307
+05-01 08:01:16.842 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3297 ts=164669315
+05-01 08:01:16.850 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3298 ts=164669324
+05-01 08:01:16.855  1186  1186 D io_stats: !@   8,0 r 25108752 370015176 w 13821737 212414168 d 1119520 383495628 f 501606 1540811 iot 5432856 0 th 0 0 0 pt 0 inp 0 0 164669.329
+05-01 08:01:16.858 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3299 ts=164669332
+05-01 08:01:16.866 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3300 ts=164669340
+05-01 08:01:16.875 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3301 ts=164669349
+05-01 08:01:16.878  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.884  2814  9585 I AfterimageCompensationService: AfcThread mLuminance : 14 , AfpcPeriodCount : 1428 , rotation : 0 , AOD : false
+05-01 08:01:16.884 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3302 ts=164669357
+05-01 08:01:16.886  2814  9585 I SurfaceComposerClient: captureDisplay:Display-4630946315032985731
+05-01 08:01:16.889  1802  4719 I SurfaceFlinger: Capture layer list: 	 Background for ae097b SurfaceView[dev.warp.mobile/dev.warp.mobile.MainActivity]@0#44012(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I SurfaceFlinger: Capture layer list: 	 ae097b SurfaceView[dev.warp.mobile/dev.warp.mobile.MainActivity]@0(BLAST)#44011(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I SurfaceFlinger: Capture layer list: 	 dev.warp.mobile/dev.warp.mobile.MainActivity$_19994#44006(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I SurfaceFlinger: Capture layer list: 	 StatusBar$_3998#107(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I SurfaceFlinger: Capture layer list: 	 com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService$_4483#42931(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I SurfaceFlinger: Capture layer list: 	 NavigationBar0$_3998#103(seamlessTransition:0)
+05-01 08:01:16.890  1802  4719 I CompositionEngine: [setDisplaySize] size=(1080, 2340)
+05-01 08:01:16.890  1802  4719 E HwcComposer: getLuts failed Status(-129, EX_TRANSACTION_FAILED): 'UNKNOWN_TRANSACTION: '
+05-01 08:01:16.891  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer ScreenCaptureFillLayer at index 0
+05-01 08:01:16.891  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer ae097b SurfaceView[dev.warp.mobile/dev.warp.mobile.MainActivity]@0(BLAST)#44011 at index 1
+05-01 08:01:16.891 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3303 ts=164669365
+05-01 08:01:16.891  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer dev.warp.mobile/dev.warp.mobile.MainActivity$_19994#44006 at index 2
+05-01 08:01:16.891  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer StatusBar$_3998#107 at index 3
+05-01 08:01:16.892  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService$_4483#42931 at index 4
+05-01 08:01:16.892  1802  1907 D RenderEngine: [SEC_SF_EFFECTS] drawLayersInternal,1483, Rendering layer NavigationBar0$_3998#103 at index 5
+05-01 08:01:16.896  2814  9585 D system_server: mAFPC_Read - w = 1080, h = 2340, s = 8, f = 4, s_size = 10183680, luminance = 14, count = 1428, captureOrientation = 0
+05-01 08:01:16.899 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3304 ts=164669373
+05-01 08:01:16.908 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3305 ts=164669381
+05-01 08:01:16.916 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3306 ts=164669389
+05-01 08:01:16.924 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3307 ts=164669398
+05-01 08:01:16.933 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3308 ts=164669407
+05-01 08:01:16.941 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3309 ts=164669415
+05-01 08:01:16.950 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3310 ts=164669423
+05-01 08:01:16.958 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3311 ts=164669432
+05-01 08:01:16.966 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3312 ts=164669440
+05-01 08:01:16.975 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3313 ts=164669449
+05-01 08:01:16.978  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:16.984 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3314 ts=164669457
+05-01 08:01:16.991 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3315 ts=164669465
+05-01 08:01:17.000 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3316 ts=164669473
+05-01 08:01:17.009 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3317 ts=164669483
+05-01 08:01:17.017 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3318 ts=164669491
+05-01 08:01:17.025 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3319 ts=164669499
+05-01 08:01:17.033 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3320 ts=164669507
+05-01 08:01:17.042 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3321 ts=164669515
+05-01 08:01:17.050 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3322 ts=164669523
+05-01 08:01:17.058 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3323 ts=164669532
+05-01 08:01:17.066 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3324 ts=164669540
+05-01 08:01:17.075 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3325 ts=164669548
+05-01 08:01:17.078  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:17.083 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3326 ts=164669557
+05-01 08:01:17.091 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3327 ts=164669565
+05-01 08:01:17.100 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3328 ts=164669573
+05-01 08:01:17.108 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3329 ts=164669582
+05-01 08:01:17.116 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3330 ts=164669590
+05-01 08:01:17.125 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3331 ts=164669598
+05-01 08:01:17.133 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3332 ts=164669607
+05-01 08:01:17.142 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3333 ts=164669615
+05-01 08:01:17.150 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3334 ts=164669624
+05-01 08:01:17.158 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3335 ts=164669632
+05-01 08:01:17.166 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3336 ts=164669640
+05-01 08:01:17.175 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3337 ts=164669648
+05-01 08:01:17.183 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3338 ts=164669657
+05-01 08:01:17.185  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:17.192 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3339 ts=164669666
+05-01 08:01:17.199 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3340 ts=164669673
+05-01 08:01:17.208 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3341 ts=164669682
+05-01 08:01:17.214  1672  2586 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 245390376655085 ns; value = [0, 0, 5, 5, 0, 15, 0, 0, 0, 0]
+05-01 08:01:17.216 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3342 ts=164669690
+05-01 08:01:17.225 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3343 ts=164669698
+05-01 08:01:17.233 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3344 ts=164669707
+05-01 08:01:17.241 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3345 ts=164669715
+05-01 08:01:17.249 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3346 ts=164669723
+05-01 08:01:17.258 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3347 ts=164669731
+05-01 08:01:17.266 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3348 ts=164669740
+05-01 08:01:17.275 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3349 ts=164669748
+05-01 08:01:17.283 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3350 ts=164669757
+05-01 08:01:17.285  1802  2321 I CompositionEngine: [setDisplaySize] size=(434, 42)
+05-01 08:01:17.291 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3351 ts=164669765
+05-01 08:01:17.299 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3352 ts=164669773
+05-01 08:01:17.308 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3353 ts=164669782
+05-01 08:01:17.316 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3354 ts=164669789
+05-01 08:01:17.324 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3355 ts=164669798
+05-01 08:01:17.332 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3356 ts=164669806
+05-01 08:01:17.341 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3357 ts=164669814
+05-01 08:01:17.348 19994 19994 I warp-android-host: warp_mobile_android_host::vulkan: present_ok frame=3358 ts=164669822
