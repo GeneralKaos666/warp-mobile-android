@@ -1,6 +1,8 @@
 {
   "story": "M3-S10",
   "title": "APK size budget — release ≤80MB / combined ≤120MB",
+  "apk_release_bytes": 7775816,
+  "apk_release_with_bootstrap_bytes": 7775816,
   "device_class": "flagship-target (size measured on host build, not device)",
   "release_apk": {
     "path": "android/app/build/outputs/apk/release/app-release-unsigned.apk",
