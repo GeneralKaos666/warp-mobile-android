@@ -1,0 +1,44 @@
+Warp Mobile is an open-source Android port of Warp Terminal
+(https://github.com/warpdotdev/Warp) — the GPU-accelerated terminal with
+Block-style command grouping, DCS-hook-driven Block detection, and AI-aware
+shell workflow. This port runs Warp's own native warpui framework (Vulkan +
+cosmic-text) on-device via Android NDK, and bundles a forked Termux runtime
+(zsh + GNU coreutils + APT) so device shells get a real Linux-style $PREFIX
+ecosystem.
+
+Status (2026-05-01): M3 closed CONDITIONAL GO. Layer 2b integration done —
+PTY → terminal model → Vulkan renderer pipeline runs at 60fps with p95 = 13ms
+on Galaxy S24 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / API 36). DCS hook
+parser populates the Block model end-to-end with synthetic + real shell
+inputs. M4 in progress: Termux runtime integration (43 MB bootstrap zip
+extracts atomically on first launch, sha-pinned to upstream Termux apt
+snapshot for reproducible rebuilds). 7 of 15 M4 stories closed at time of
+publish.
+
+What works today on flagship devices:
+
+• 60fps per-cell dynamic_grid renderer with active touch-drag scroll
+• Real PTY (cargo-ndk + libc fork/exec) → warp_terminal model → Vulkan render
+• SGR ANSI color (RED/GREEN/BLUE/RESET) routed through the renderer
+• Per-cell colored glyph rendering via cosmic-text + Android system fonts
+  (CJK characters render correctly via fallback; "Hello, 世界" smoke-tested)
+• Swapchain recreate across onPause/onResume/rotation (p95 < 200ms)
+• Block model: start_time + command + exit_code populated via DCS hooks
+• Scrollback: 1000 lines retained from a 2000-line injection
+• Touch-drag scroll: 195 distinct clamped offset positions over 5s gesture
+• Gboard (English + Pinyin) IME with composing-text support
+• WindowInsets reserves bottom region for IME
+
+Minimum supported: Android 12 (API 31), Adreno 6xx+ GPU. Mali-G71-era
+devices (Galaxy S8 / Note 8) are explicitly out of scope per Plan
+Amendment 3 — they fail the 200ms swapchain recreate gate.
+
+Distribution: AGPL-3.0-only, source-available at github.com/ImL1s/warp-mobile-android.
+The Warp upstream fork (github.com/ImL1s/warp on warp-mobile/m0-facade) and
+the termux-packages fork (github.com/ImL1s/termux-packages on warp-mobile/main)
+are vendored at F-Droid build time. Bootstrap zip is sha-pinned to a specific
+upstream Termux apt snapshot for byte-reproducible rebuilds.
+
+This is solo-developer beta software on a 12-18 month constrained-beta
+timeline. Bugs and rough edges expected. Issues + PRs welcome at the GitHub
+repo.

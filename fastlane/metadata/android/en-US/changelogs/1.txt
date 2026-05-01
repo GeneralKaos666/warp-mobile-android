@@ -1,0 +1,6 @@
+v0.1.0-m4 — first F-Droid release at end of M4 milestone.
+
+* M0+M1+M2+M3 closed (CONDITIONAL GO milestones; flagship-pathway only)
+* M4 partial: bootstrap zip pipeline + atomic extraction + zsh PTY (7 of
+  15 stories closed)
+* AGPL-3.0-only source-available release
