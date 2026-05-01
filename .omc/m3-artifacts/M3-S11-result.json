@@ -13,7 +13,7 @@
     "ac1_unify_4_m2_era_duplicates": {
       "status": "DOCUMENTED_DIVERGENCE",
       "decision": "Option C — architectural divergence (NOT Option A path-dep, NOT Option B delete-mirror)",
-      "rationale": "Both literal options are infeasible at M3-S11 scope: Option A (main consumes warp-src via Cargo.toml path dep) was explicitly REJECTED by M2-S04 because warpui has Metal transitive deps that block cargo ndk check on aarch64-linux-android (per M0-facade-scaffold.md:18 + crates/android-host/Cargo.toml:33-36 comment). Option B (delete main mirrors) is architecturally infeasible because main repo's lib.rs declares font_render/static_grid/ime/input as sibling modules (lib.rs:5,10,15,18) with 16+ JNI export call-sites referencing them via `crate::ime::` / `crate::input::` / `crate::static_grid::` (lib.rs:627,650,665,681,696,721,735,754,768,782,804,817,832 + vulkan.rs:101,1385,1440,1746); deletion would break the cdylib linker. The right answer is to document the divergence as Option C and carry forward to M4 IF the standalone-cdylib architecture changes (e.g. M4 introduces a lighter facade-only Cargo edge that doesn't pull warpui's Metal stack).",
+      "rationale": "Codex round-1 correction: M0-facade-scaffold.md:18 was a HOST Metal failure for `cargo doc`, not the Android-side blocker; `cargo ndk -t arm64-v8a check -p warpui` actually passes. The real blockers for Option A (main consumes warp-src via Cargo.toml path dep) and Option B (delete main mirrors) at M3-S11 scope are: (1) `warpui::platform::android::*` modules are NOT public exports — they're crate-private internals reachable only inside warpui itself (e.g. `font::AndroidFontDB`, `static_grid::StaticGridState`, `ime::ImeState`, `input::TouchState` are not re-exported through warpui's public API); (2) main repo's `crates/android-host/src/lib.rs` declares font_render/static_grid/ime/input as sibling modules (lib.rs:5,10,15,18) with 16+ JNI export call-sites referencing them via `crate::ime::` / `crate::input::` / `crate::static_grid::` (lib.rs:627,650,665,681,696,721,735,754,768,782,804,817,832 + vulkan.rs:101,1385,1440,1746); deletion or path-dep redirect would break the cdylib linker because the JNI exports need the symbols at the CRATE ROOT for `Java_dev_warp_mobile_NativeBridge_*` resolution. Option D (introduce a shared rlib `warp_terminal_mobile_facade_android_link` that exposes the platform/android types as a public API both warpui and android-host could consume) is a real M4 refactor candidate per codex round-1; out of scope for M3-S11 housekeeping. The right answer for M3-S11 is to document the divergence as Option C and revisit at M4 via Option D shared-rlib API split.",
       "files_kept_as_documented_divergence": [
         "crates/android-host/src/font_render.rs (651 LOC) ↔ warp-src/crates/warpui/src/platform/android/font.rs (canonical)",
         "crates/android-host/src/static_grid.rs (1182 LOC) ↔ warp-src/crates/warpui/src/platform/android/static_grid.rs (canonical)",
@@ -38,11 +38,20 @@
       "total_conflicting_files": 3,
       "conflict_count_per_crate": {
         "app": 1,
+        "warpui": 1,
+        "warpui_core": 1,
+        "facade": 0,
+        "warp_terminal": 0,
+        "warp_core": 0
+      },
+      "_conflict_count_per_crate_legacy_paths": {
+        "_note": "Codex round-1 finding #2 — keys renamed to short forms; legacy long-path keys preserved here for traceability",
+        "app": 1,
         "crates/warpui": 1,
-        "crates/warp_terminal": 0,
+        "crates/warpui_core": 1,
         "crates/warp_terminal_mobile_facade": 0,
-        "crates/warp_core": 0,
-        "other": 1
+        "crates/warp_terminal": 0,
+        "crates/warp_core": 0
       },
       "conflict_files": [
         "app/src/remote_server/ssh_transport.rs (commit 99f80df — 'Fix bad merge for remote server' #9652)",
@@ -100,7 +109,9 @@
         },
         {
           "id": "5.4_subpixel_mask_emoji_smoke_test",
-          "status": "FIXED",
+          "status": "FIXED_AS_CLASSIFIER_ONLY",
+          "scope_clarification": "Codex round-1 finding #4 — these tests pin classify_char (the Unicode-range routing) but do NOT exercise the SubpixelMask/Color raster paths in font_render.rs:498 / canonical font.rs:902. That is deliberate: the rasterizer is `#![cfg(target_os = \"android\")]`-gated and requires a live FontFace + Vulkan command buffer (cosmic-text + ash). Host-runnable smoke is limited to the classifier; the actual SubpixelMask/Color raster smoke is carry-forward to M5 (or earlier if a hardware-bound integration test harness is added). The classifier-only smoke is still load-bearing because a misclassification routes emoji codepoints to the Latin font BEFORE the raster path is reached, producing tofu — so this test catches the most common failure mode on M3 devices.",
+          "carry_forward_to_m5": "Live emoji raster path on-device: spawn PTY → echo 🎉 → screenshot → assert non-tofu RGB pixel content + alpha mask present. Requires Termux GNU coreutils (M5 dependency for emoji-emitting shell scripts).",
           "file": "crates/android-host/src/lib.rs:1208-1340 (new `m3_s11_emoji_smoke_tests` module)",
           "tests_added": [
             "emoji_codepoints_classify_as_emoji — 8 codepoints across all 4 supported Unicode blocks (U+1F300, U+1F900, U+1FA00, U+2600)",
@@ -201,7 +212,7 @@
     "warp_src_head_post_m3_s11": "94bf0ff (UNCHANGED — no warp-src commits this story; upstream remote add stays in .git/config without a commit)",
     "main_branch": "main",
     "main_head_pre_m3_s11": "933c9ae",
-    "main_head_post_m3_s11": "294b0d4"
+    "main_head_post_m3_s11": "7336f99 (backfilled from prior 294b0d4 per codex round-1 finding #3 — actual HEAD post-S11)"
   },
   "sop_compliance": {
     "worker_self_pass": false,
