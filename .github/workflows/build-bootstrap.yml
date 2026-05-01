@@ -11,6 +11,13 @@ name: Build Termux Bootstrap (M4-S03)
 #   - Retarget paths com.termux → dev.warp.mobile in text files.
 #   - ELF binary path patching is deferred to M4-S05 atomic extractor.
 
+env:
+  # Opt JavaScript actions into Node.js 24 ahead of GitHub's June 2026
+  # forced switch (Node 20 removal on September 16, 2026). Same rationale
+  # as test.yml + release.yml.
+  # Refs: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 on:
   workflow_dispatch:
     inputs:
