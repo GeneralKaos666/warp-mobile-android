@@ -1,0 +1,48 @@
+Cherry-pick dry-run: 10 commits from upstream/master~10..upstream/master
+Branch: m3-s11-cherry-pick-scratch (scratch; will reset before push)
+
+=== [1/10] cherry-pick e5dbdb4 — Fix git operations button alignment in code review header (#9480) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [2/10] cherry-pick 805b3e2 — Increase timeout for linux builds (#9645) ===
+  CLEAN: applied in 1s, no conflicts
+
+=== [3/10] cherry-pick 99f80df — Fix bad merge for remote server (#9652) ===
+  CONFLICT: 1 files, took 0s
+    - app/src/remote_server/ssh_transport.rs
+
+=== [4/10] cherry-pick f61ef1d — Fix schema generator binary recompilation during release bundling. (#9632) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [5/10] cherry-pick 85ebd33 — Fix issue on dev with agent history menu not working. (#9656) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [6/10] cherry-pick 2f84587 — Bump core-text version to fix font descriptor leak (#9665) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [7/10] cherry-pick e6098a8 — Get warp compiling on FreeBSD (#9362) ===
+  CONFLICT: 2 files, took 0s
+    - crates/warpui/src/platform/mod.rs
+    - crates/warpui_core/Cargo.toml
+
+=== [8/10] cherry-pick f696f5b — Revert "Fix schema generator binary recompilation during release bundling." (#9676) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [9/10] cherry-pick 73074ba — remove @moirahuang from context chips from stakeholders (#9654) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== [10/10] cherry-pick 91dee6d — Fix settings popup items (View as / Density) being unclickable (#9540) ===
+  CLEAN: applied in 0s, no conflicts
+
+=== SUMMARY ===
+Total time: 2s (0.03 min)
+Total conflicting files (across 10 commits): 3
+Per-crate conflicts:
+  app/                              : 1
+  crates/warpui/                    : 1
+  crates/warp_terminal/             : 0
+  crates/warp_terminal_mobile_facade: 0
+  crates/warp_core/                 : 0
+  other                             : 1
+
+Result JSON: /tmp/cherry-pick-result.json

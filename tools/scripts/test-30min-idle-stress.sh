@@ -17,7 +17,14 @@ fi
 
 DEVICE="$1"
 PKG="dev.warp.mobile"
-ADB="${ADB_PATH:-/Users/iml1s/Library/Android/sdk/platform-tools/adb}"
+# M3-S11 nit fix (2026-05-01): use $ADB / $ADB_PATH override or fall back to
+# whatever `which adb` resolves to (was hardcoded /Users/iml1s/.../adb fallback
+# which only works on the M1-era owner machine).
+ADB="${ADB:-${ADB_PATH:-$(which adb)}}"
+if [[ -z "$ADB" || ! -x "$ADB" ]]; then
+    print "ERROR: adb not found on PATH and ADB not set; install Android platform-tools or pass ADB=/path/to/adb." >&2
+    exit 1
+fi
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ARTIFACT_DIR="${REPO_ROOT}/.omc/m1-artifacts"
 ARTIFACT_FILE="${ARTIFACT_DIR}/M1-stress-test.md"

@@ -55,8 +55,10 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private var attachedWidth = -1
     private var attachedHeight = -1
     // M2-S08: when true, doFrame calls renderDrawGridFrame instead of
-    // renderClearFrame. Toggled by the START_STATIC_GRID broadcast (driver
-    // path) or by intent extras at launch.
+    // renderClearFrame. Toggled by intent extras at launch (`--ez grid_mode
+    // true`); a `START_STATIC_GRID` BroadcastReceiver was scoped originally
+    // but never landed because the launch-extras path covered every M2/M3
+    // driver use-case (M3-S11 housekeeping nit fix 2026-05-01).
     @Volatile
     private var gridMode = false
     @Volatile
@@ -133,9 +135,11 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     /**
      * M2-S08: initialize + start the static-grid render path.
      *
-     * Called either from `onCreate` (when launched with `--ez grid_mode true`
-     * + grid params) or from the START_STATIC_GRID broadcast. The grid init
-     * is idempotent on the Rust side, so multiple calls are safe.
+     * Called from `onCreate` when launched with `--ez grid_mode true`
+     * (+ grid params). The grid init is idempotent on the Rust side, so
+     * repeated calls are safe; a `START_STATIC_GRID` broadcast was scoped
+     * but never implemented because the launch-extras driver path covered
+     * every M2/M3 use-case (M3-S11 housekeeping nit fix 2026-05-01).
      *
      * Logs `static_grid_started rows=… cols=… text=…` for the driver to grep.
      */
@@ -272,11 +276,16 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // normal mode sysBars.bottom is the nav-bar height and ime.bottom is
         // 0 when the keyboard is hidden — both collapse to the right value.
         //
-        // Refs (M2-S12, 2026-04-30):
+        // Refs (M2-S12, 2026-04-30; M3-S11 nit fix 2026-05-01 — stale
+        // /develop/ui/views/layout/insets/handle-ime-keyboard-visibility URL
+        // replaced with the canonical /touch-and-input/keyboard-input/visibility
+        // landing page that the Android team currently maintains; the old path
+        // 302-redirects but produces a "page not found" inline doc on Android
+        // Studio's hover preview):
         //   https://developer.android.com/reference/androidx/core/view/WindowInsetsCompat
         //   https://developer.android.com/develop/ui/views/layout/edge-to-edge
         //   https://developer.android.com/reference/androidx/core/view/ViewCompat#setOnApplyWindowInsetsListener(android.view.View,androidx.core.view.OnApplyWindowInsetsListener)
-        //   https://developer.android.com/develop/ui/views/layout/insets/handle-ime-keyboard-visibility
+        //   https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility
         ViewCompat.setOnApplyWindowInsetsListener(frame) { _, insets ->
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -431,12 +440,37 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         //   am start --ez ime_mode true
         // to request the soft keyboard popup so logcat captures
         // setComposingText/commitText events end-to-end.
+        //
+        // M3-S11 nit fix (2026-05-01): switched the primary path to
+        // `WindowInsetsControllerCompat.show(Type.ime())` per Android 11+
+        // (API 30) guidance — this is the future-proof, system-aware way
+        // to surface the IME (also tracks Type.ime() insets correctly so
+        // the listener registered above forwards `ime.bottom` to the Rust
+        // renderer without a re-layout race). The legacy
+        // `InputMethodManager.showSoftInput` call is kept as a fallback
+        // for stricter OEMs (Samsung Knox blocks the controller path on
+        // some debug builds — observed in M2-S12 sub-test 1) and for log
+        // parity (driver still greps `showSoftInput shown=…`).
+        //
+        // Refs:
+        //   https://developer.android.com/reference/androidx/core/view/WindowInsetsControllerCompat#show(int)
+        //   https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility
         if (intent.getBooleanExtra("ime_mode", false)) {
             // Wait for the View to be attached to the window before showing
             // the soft keyboard (otherwise InputMethodManager.showSoftInput
             // returns false silently). post() runs after layout pass.
             warpInputView?.post {
                 warpInputView?.requestFocus()
+                // Primary (API 30+ canonical): WindowInsetsControllerCompat.
+                val controllerShown = try {
+                    val controller = WindowInsetsControllerCompat(window, warpInputView!!)
+                    controller.show(WindowInsetsCompat.Type.ime())
+                    true
+                } catch (t: Throwable) {
+                    Log.w(TAG, "ime_mode: WindowInsetsControllerCompat.show(ime()) threw: ${t.message}")
+                    false
+                }
+                // Fallback (legacy + Knox quirk): InputMethodManager.showSoftInput.
                 val imm =
                     getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                 // SHOW_IMPLICIT is preferred over deprecated SHOW_FORCED on
@@ -444,7 +478,7 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 val shown = imm?.showSoftInput(warpInputView, InputMethodManager.SHOW_IMPLICIT) ?: false
                 Log.i(
                     TAG,
-                    "ime_mode requested: showSoftInput shown=$shown focus=${warpInputView?.isFocused} ime_visible_post_call=${imm?.isAcceptingText}"
+                    "ime_mode requested: controllerShown=$controllerShown showSoftInput shown=$shown focus=${warpInputView?.isFocused} ime_visible_post_call=${imm?.isAcceptingText}"
                 )
             }
         }

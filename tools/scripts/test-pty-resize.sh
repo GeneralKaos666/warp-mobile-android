@@ -22,7 +22,13 @@ DEVICE="$1"
 ROWS="${2:-24}"
 COLS="${3:-80}"
 PKG="dev.warp.mobile"
-ADB="/Users/iml1s/Library/Android/sdk/platform-tools/adb"
+# M3-S11 nit fix (2026-05-01): hardcoded /Users/iml1s/.../adb replaced with
+# ${ADB:-$(which adb)} for portability across worker machines.
+ADB="${ADB:-$(which adb)}"
+if [[ -z "$ADB" || ! -x "$ADB" ]]; then
+    print "ERROR: adb not found on PATH and ADB not set; install Android platform-tools or pass ADB=/path/to/adb." >&2
+    exit 1
+fi
 LOGCAT_TAG="WarpTerminal:PtyOutput"
 SCRIPT_VERSION="1.0"
 GIT_COMMIT="$(git -C "$(dirname "$0")" rev-parse HEAD 2>/dev/null || print 'unknown')"

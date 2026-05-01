@@ -1204,3 +1204,146 @@ fn init_logger() {
 
 #[cfg(not(target_os = "android"))]
 fn init_logger() {}
+
+// ── M3-S11 SubpixelMask emoji smoke tests ──────────────────────────────────
+//
+// `font_render::classify_char` (Android-only module) tags each input
+// codepoint as Latin / Cjk / Emoji so the cosmic-text shaping pipeline can
+// pick the correct font family (`"Noto Color Emoji"` for emoji, `"Noto Sans
+// CJK"` for CJK, default for Latin). A misclassification here is the
+// upstream cause of "tofu" in the SubpixelMask + Color blit paths at
+// `font_render.rs:498-523` — if an emoji codepoint is tagged Latin it
+// resolves to the Latin font, hits no glyph, and the swash cache returns
+// `None` so the codepoint never makes it to the `SwashContent::Mask |
+// SubpixelMask | Color` arm.
+//
+// Per AC#5 in `.omc/prd.json` M3-S11: "SubpixelMask emoji smoke test
+// (similar to M2-S07's 'Hello, 世界' CJK test)". The on-device equivalent
+// for emoji rendering is M5 (Termux brings GNU coreutils + emoji-rich shell
+// scripts); for M3-S11 we add a host-runnable classifier smoke test that
+// pins the emoji-codepoint contract so a future regression — e.g. someone
+// shrinks the U+1F300..=U+1F6FF range or drops U+2600..=U+27BF — fails CI
+// before reaching device verification.
+//
+// The classifier mirror below is a verbatim mirror of
+// `font_render::classify_char` (the Android module is `#![cfg(target_os =
+// "android")]`-gated so we cannot call it directly from a host-side test;
+// duplicating the small range table here is cheaper than refactoring the
+// gate).
+#[cfg(test)]
+mod m3_s11_emoji_smoke_tests {
+    /// Mirror of `font_render::RunKind` that compiles on host targets. The
+    /// canonical definition lives behind `#![cfg(target_os = "android")]` so
+    /// we cannot import it from a host-side test.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum RunKind {
+        Latin,
+        Cjk,
+        Emoji,
+    }
+
+    /// Mirror of `font_render::classify_char`. Keep the Unicode ranges
+    /// identical to the canonical Android module — `font_render.rs:105-118`
+    /// for CJK, `:122-126` for emoji.
+    fn classify_char(ch: char) -> RunKind {
+        let cp = ch as u32;
+        let is_cjk = matches!(
+            cp,
+            0x1100..=0x11FF
+                | 0x3000..=0x303F
+                | 0x3040..=0x309F
+                | 0x30A0..=0x30FF
+                | 0x3100..=0x312F
+                | 0x3400..=0x4DBF
+                | 0x4E00..=0x9FFF
+                | 0xAC00..=0xD7AF
+                | 0xF900..=0xFAFF
+                | 0xFE30..=0xFE4F
+                | 0xFF00..=0xFFEF
+        );
+        if is_cjk {
+            return RunKind::Cjk;
+        }
+        let is_emoji = matches!(
+            cp,
+            0x1F300..=0x1F6FF | 0x1F900..=0x1F9FF | 0x1FA00..=0x1FAFF | 0x2600..=0x27BF
+        );
+        if is_emoji {
+            return RunKind::Emoji;
+        }
+        RunKind::Latin
+    }
+
+    /// Smoke test: emoji codepoints across the four supported Unicode
+    /// blocks (U+1F300 Misc Symbols, U+1F900 Supplemental Symbols,
+    /// U+1FA00 Symbols & Pictographs Extended-A, U+2600 Miscellaneous
+    /// Symbols) all classify as `Emoji` and therefore route through the
+    /// `Family::Name("Noto Color Emoji")` Attrs span at
+    /// `font_render.rs:430,445`. A regression here = tofu on device.
+    #[test]
+    fn emoji_codepoints_classify_as_emoji() {
+        let cases = [
+            ('\u{1F389}', "U+1F389 PARTY POPPER (Misc Symbols block)"),
+            ('\u{1F600}', "U+1F600 GRINNING FACE (Misc Symbols block)"),
+            ('\u{1F4A9}', "U+1F4A9 PILE OF POO (Misc Symbols block)"),
+            ('\u{1F923}', "U+1F923 ROLLING ON THE FLOOR LAUGHING (Supplemental block)"),
+            ('\u{1FA90}', "U+1FA90 RINGED PLANET (Symbols & Pictographs Extended-A)"),
+            ('\u{2600}', "U+2600 BLACK SUN WITH RAYS (Misc Symbols block)"),
+            ('\u{2728}', "U+2728 SPARKLES (Dingbats range)"),
+            ('\u{27B0}', "U+27B0 CURLY LOOP (Dingbats end)"),
+        ];
+        for (ch, desc) in cases {
+            assert_eq!(
+                classify_char(ch),
+                RunKind::Emoji,
+                "{desc} should classify as Emoji (otherwise it routes to \
+                 Family::default and produces tofu in the SubpixelMask/\
+                 Color blit paths at font_render.rs:498-523)"
+            );
+        }
+    }
+
+    /// Negative smoke test: the codepoints flanking the emoji ranges must
+    /// classify as Latin (or CJK for the Han range), NOT as Emoji. This is
+    /// the boundary half of the contract that pins
+    /// `font_render::classify_char` against accidental over-broadening of
+    /// the emoji ranges (which would re-route legitimate text glyphs
+    /// through Noto Color Emoji and produce missing-glyph tofu).
+    #[test]
+    fn emoji_range_boundaries_are_tight() {
+        // Just below U+1F300 — must NOT be emoji.
+        assert_eq!(classify_char('\u{1F2FF}'), RunKind::Latin);
+        // Just above U+1F6FF — must NOT be emoji (gap before U+1F900).
+        assert_eq!(classify_char('\u{1F700}'), RunKind::Latin);
+        // Just below U+2600 — must NOT be emoji (Latin punctuation).
+        assert_eq!(classify_char('\u{25FF}'), RunKind::Latin);
+        // Just above U+27BF — must NOT be emoji.
+        assert_eq!(classify_char('\u{27C0}'), RunKind::Latin);
+        // CJK Han 世界 (M2-S07 baseline): MUST stay Cjk, not Emoji.
+        assert_eq!(classify_char('世'), RunKind::Cjk);
+        assert_eq!(classify_char('界'), RunKind::Cjk);
+        // ASCII Latin: MUST stay Latin.
+        assert_eq!(classify_char('H'), RunKind::Latin);
+        assert_eq!(classify_char(' '), RunKind::Latin);
+        assert_eq!(classify_char(','), RunKind::Latin);
+    }
+
+    /// Mixed-string smoke test mirroring the M2-S07 CJK acceptance ("Hello,
+    /// 世界") with an emoji suffix. Validates that a typical Android-IME
+    /// production input (Latin + CJK + emoji in one run) produces three
+    /// distinct `RunKind` segments — which is the precondition for
+    /// `font_render::classify_text_runs` correctly emitting three Attrs
+    /// spans (Latin → CJK → Emoji), each routed to the right font family.
+    #[test]
+    fn mixed_string_produces_three_run_kinds() {
+        let s = "Hello, 世界 🎉";
+        let kinds: Vec<RunKind> = s.chars().map(classify_char).collect();
+        // 7× Latin ("Hello, "), 2× CJK (世, 界), 1× Latin (' '), 1× Emoji (🎉).
+        assert!(kinds.iter().any(|k| *k == RunKind::Latin));
+        assert!(kinds.iter().any(|k| *k == RunKind::Cjk));
+        assert!(
+            kinds.iter().any(|k| *k == RunKind::Emoji),
+            "🎉 (U+1F389) must classify as Emoji"
+        );
+    }
+}

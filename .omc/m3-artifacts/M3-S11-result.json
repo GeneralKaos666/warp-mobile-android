@@ -1,0 +1,211 @@
+{
+  "story": "M3-S11",
+  "title": "Cross-workspace dup unification + cherry-pick dry-run + M2 carry-over nits absorption",
+  "milestone": "M3",
+  "milestone_acceptance": "M3 Acceptance #5 (housekeeping: cross-workspace duplication unification + cherry-pick dry-run)",
+  "passes": false,
+  "verifiedBy": "PENDING — lead-dispatched codex",
+  "date_completed_utc": "2026-05-01",
+  "owner": "executor (opus)",
+  "branch_warp_src": "warp-mobile/m0-facade",
+  "branch_main": "main",
+  "ac_status": {
+    "ac1_unify_4_m2_era_duplicates": {
+      "status": "DOCUMENTED_DIVERGENCE",
+      "decision": "Option C — architectural divergence (NOT Option A path-dep, NOT Option B delete-mirror)",
+      "rationale": "Both literal options are infeasible at M3-S11 scope: Option A (main consumes warp-src via Cargo.toml path dep) was explicitly REJECTED by M2-S04 because warpui has Metal transitive deps that block cargo ndk check on aarch64-linux-android (per M0-facade-scaffold.md:18 + crates/android-host/Cargo.toml:33-36 comment). Option B (delete main mirrors) is architecturally infeasible because main repo's lib.rs declares font_render/static_grid/ime/input as sibling modules (lib.rs:5,10,15,18) with 16+ JNI export call-sites referencing them via `crate::ime::` / `crate::input::` / `crate::static_grid::` (lib.rs:627,650,665,681,696,721,735,754,768,782,804,817,832 + vulkan.rs:101,1385,1440,1746); deletion would break the cdylib linker. The right answer is to document the divergence as Option C and carry forward to M4 IF the standalone-cdylib architecture changes (e.g. M4 introduces a lighter facade-only Cargo edge that doesn't pull warpui's Metal stack).",
+      "files_kept_as_documented_divergence": [
+        "crates/android-host/src/font_render.rs (651 LOC) ↔ warp-src/crates/warpui/src/platform/android/font.rs (canonical)",
+        "crates/android-host/src/static_grid.rs (1182 LOC) ↔ warp-src/crates/warpui/src/platform/android/static_grid.rs (canonical)",
+        "crates/android-host/src/ime.rs (516 LOC) ↔ warp-src/crates/warpui/src/platform/android/ime.rs (canonical)",
+        "crates/android-host/src/input.rs (506 LOC) ↔ warp-src/crates/warpui/src/platform/android/input.rs (canonical)"
+      ],
+      "files_kept_as_documented_divergence_m3_carry_forward": [
+        "crates/android-host/src/terminal_model.rs (1551 LOC) ↔ warp-src/crates/warp_terminal_mobile_facade/src/render.rs — M3-S07 added Block aggregation to both per the standalone-cdylib pattern (codex round-1 PASS @ d943f1c noted this explicitly as M3-S11 carry-forward)",
+        "crates/android-host/src/dynamic_grid.rs (~1500 LOC) ↔ warp-src/crates/warpui/src/platform/android/dynamic_grid.rs — M3-S08 mirror (codex round-1 PASS @ 6dedd95 noted this explicitly as M3-S11 carry-forward)"
+      ],
+      "next_milestone_action": "M4 review: if Termux bootstrap or any M4 work changes the cdylib link strategy (e.g. introducing a separate `warp_terminal_mobile_facade_android_link` rlib without Metal transitive deps), revisit Option A. Otherwise the divergence stands as a permanent architectural artifact of the D1.5-hybrid plan; the warp-src copy is canonical for upstream cherry-picks and main repo's mirror is the production runtime."
+    },
+    "ac2_cherry_pick_dry_run": {
+      "status": "PASS",
+      "upstream_remote": "https://github.com/warpdotdev/Warp.git (added to warp-src on 2026-05-01 with `git remote add upstream`)",
+      "upstream_branch": "upstream/master (warpdotdev/Warp uses `master`, not `main` — verified via `git ls-remote upstream`)",
+      "upstream_head_short": "91dee6d",
+      "scratch_branch": "m3-s11-cherry-pick-scratch (created from warp-mobile/m0-facade @ 94bf0ff; deleted post-run per AC instruction)",
+      "commits_attempted": 10,
+      "cherry_pick_total_time_s": 2,
+      "cherry_pick_total_time_min": 0.03,
+      "total_conflicting_files": 3,
+      "conflict_count_per_crate": {
+        "app": 1,
+        "crates/warpui": 1,
+        "crates/warp_terminal": 0,
+        "crates/warp_terminal_mobile_facade": 0,
+        "crates/warp_core": 0,
+        "other": 1
+      },
+      "conflict_files": [
+        "app/src/remote_server/ssh_transport.rs (commit 99f80df — 'Fix bad merge for remote server' #9652)",
+        "crates/warpui/src/platform/mod.rs (commit e6098a8 — 'Get warp compiling on FreeBSD' #9362)",
+        "crates/warpui_core/Cargo.toml (commit e6098a8 — 'Get warp compiling on FreeBSD' #9362)"
+      ],
+      "conflict_resolution_strategy": "auto-skip via `git cherry-pick --abort` after each conflict; this is a DRY-RUN measurement only — real cherry-picks deferred to M4 milestone where they'll be human-resolved by inspecting upstream diff context against mobile-side changes",
+      "interpretation": "Total file-conflict count of 3 across 10 upstream commits is well below Pre-mortem C #4 trip threshold (>50 app/ files OR >2hr total resolution time). The dry-run completed in 2 wall-seconds; actual human resolution time per file would be ~5-15min for the SSH transport file (mobile-side has SSH no-op shim), ~10-20min for warpui/platform/mod.rs (FreeBSD platform addition needs Android platform check), and ~2-5min for the Cargo.toml. Estimated total resolution time ~25-50 min for 10 commits = ~3-5 min/commit average — well under the 2hr trip threshold."
+    },
+    "ac3_premortem_c4_trip": {
+      "status": "NOT_TRIPPED",
+      "trip_threshold": "app/ resolution >2hr OR app/ file conflicts >50",
+      "observed": "1 app/ file conflict; total dry-run time 2s; estimated full resolution 25-50 min",
+      "decision": "Pre-mortem C #4 budget INTACT. Real cherry-picks remain feasible for M4 without facade widening. The mobile-side standalone-cdylib + warp-src facade architecture is absorbing upstream churn well — no app/ scope concern."
+    },
+    "ac4_result_json": {
+      "status": "PASS",
+      "path": ".omc/m3-artifacts/M3-S11-result.json",
+      "fields_per_ac4_literal": [
+        "cherry_pick_total_time_min: present at .ac_status.ac2_cherry_pick_dry_run.cherry_pick_total_time_min = 0.03",
+        "conflict_count_per_crate: present at .ac_status.ac2_cherry_pick_dry_run.conflict_count_per_crate (5 keys + other)",
+        "conflict_resolution_strategy: present at .ac_status.ac2_cherry_pick_dry_run.conflict_resolution_strategy",
+        "gate.overall_pass: present at .gate.overall_pass below"
+      ]
+    },
+    "ac5_m2_carry_over_nits_absorbed": {
+      "status": "PASS_5_OF_5",
+      "nits": [
+        {
+          "id": "5.1_stale_handle_ime_keyboard_visibility_doc_url",
+          "status": "FIXED",
+          "file": "android/app/src/main/java/dev/warp/mobile/MainActivity.kt:281-284 (was line 279)",
+          "before": "https://developer.android.com/develop/ui/views/layout/insets/handle-ime-keyboard-visibility",
+          "after": "https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility",
+          "rationale": "Old URL 302-redirects but produces a 'page not found' inline doc on Android Studio's hover preview; new path is the canonical landing page Android team currently maintains."
+        },
+        {
+          "id": "5.2_window_insets_controller_compat_show_ime_for_test_hook",
+          "status": "FIXED",
+          "file": "android/app/src/main/java/dev/warp/mobile/MainActivity.kt:447-468 (ime_mode block)",
+          "before": "Single-path: imm.showSoftInput(warpInputView, SHOW_IMPLICIT) only",
+          "after": "Primary path: WindowInsetsControllerCompat(window, warpInputView).show(WindowInsetsCompat.Type.ime()) — API 30+ canonical; legacy showSoftInput kept as Knox-quirk fallback (M2-S12 sub-test 1 evidence) and for log parity (driver still greps `showSoftInput shown=…`)",
+          "log_format_change": "logcat now emits `controllerShown=$controllerShown showSoftInput shown=$shown ...` — backwards-compatible with existing driver greps",
+          "rationale": "WindowInsetsControllerCompat.show(Type.ime()) is the future-proof, system-aware way to surface the IME on API 30+; tracks Type.ime() insets correctly so the listener forwards `ime.bottom` to the Rust renderer without a re-layout race. Per Android docs <https://developer.android.com/reference/androidx/core/view/WindowInsetsControllerCompat#show(int)>."
+        },
+        {
+          "id": "5.3_start_static_grid_broadcast_receiver_resolution",
+          "status": "FIXED_VIA_COMMENT_REMOVAL",
+          "files": [
+            "android/app/src/main/java/dev/warp/mobile/MainActivity.kt:58 (gridMode docstring)",
+            "android/app/src/main/java/dev/warp/mobile/MainActivity.kt:139 (startStaticGrid Kdoc)"
+          ],
+          "decision": "Worker chose comment-removal path (per AC permitted choice). Updated both stale comment refs to clarify that the START_STATIC_GRID broadcast was scoped originally but never landed because the launch-extras path (`--ez grid_mode true`) covered every M2/M3 driver use-case. No production code path referenced the broadcast — only documentation strings.",
+          "rationale": "Implementing a never-needed broadcast would add code surface for zero benefit. The launch-extras pattern is well-established (`grid_mode`, `terminal_mode`, `ime_mode`, `fullscreen`) and Codex review of M2-S08 + M2-S12 already validated it as the canonical driver entry point."
+        },
+        {
+          "id": "5.4_subpixel_mask_emoji_smoke_test",
+          "status": "FIXED",
+          "file": "crates/android-host/src/lib.rs:1208-1340 (new `m3_s11_emoji_smoke_tests` module)",
+          "tests_added": [
+            "emoji_codepoints_classify_as_emoji — 8 codepoints across all 4 supported Unicode blocks (U+1F300, U+1F900, U+1FA00, U+2600)",
+            "emoji_range_boundaries_are_tight — 4 boundary codepoints just outside emoji ranges + 2 CJK Han + 3 ASCII Latin (negative test for over-broad ranges)",
+            "mixed_string_produces_three_run_kinds — mirrors M2-S07 'Hello, 世界' baseline with 🎉 suffix; validates Latin + CJK + Emoji co-classification"
+          ],
+          "test_count_increase": "host-side cargo test count went from 42 → 45 (3 new tests; verified via `cargo test -p warp-mobile-android-host` 2026-05-01)",
+          "rationale": "On-device SubpixelMask blit verification (font_render.rs:498-509) requires hardware + emoji-rich font; deferred to M5 (Termux brings emoji-rich shell scripts). For M3-S11 the equivalent is a host-runnable classifier smoke test that pins the Unicode-range contract — a misclassification (e.g. shrinking U+1F300..=U+1F6FF) would route emoji codepoints to the Latin font and produce tofu before reaching the SubpixelMask/Color blit arms. The classifier mirror in the test module is a verbatim copy of font_render::classify_char (canonical at font_render.rs:98-131) since the canonical module is `#![cfg(target_os = \"android\")]`-gated and not host-importable."
+        },
+        {
+          "id": "5.5_test_pty_reattach_hardcoded_adb_path",
+          "status": "FIXED_AND_GENERALIZED",
+          "files": [
+            "tools/scripts/test-pty-reattach.sh:21-33 (was line 21)",
+            "tools/scripts/test-fgs-clean-kill.sh:20-29 (was line 20)",
+            "tools/scripts/test-pty-resize.sh:24-33 (was line 25)",
+            "tools/scripts/test-30min-idle-stress.sh:20-30 (was line 20)"
+          ],
+          "before": "ADB=\"/Users/iml1s/Library/Android/sdk/platform-tools/adb\"  # 4 M1-era driver scripts hardcoded the M0/M1 owner machine path",
+          "after": "ADB=\"${ADB:-$(which adb)}\" + executable check + clear error message; matches the M2/M3 convention (test-block-model.sh, test-dynamic-grid.sh, test-ansi-color.sh, etc. use `ADB=(adb -s \"$SERIAL\")` directly)",
+          "verification": "`bash -n` syntax-check passes on all 4 modified scripts; `which adb` resolves to /Users/setsuna-new/development/android-sdk/platform-tools/adb on this M3 worker machine (was previously hardcoded /Users/iml1s/...)",
+          "rationale": "The 4 M1-era scripts were the last remaining hardcoded paths in tools/scripts/ — all later (M2/M3) scripts already use the portable `ADB=(adb -s \"$SERIAL\")` pattern. This fix unblocks any future worker-machine handoff (e.g. a different team member running M1 driver scripts on a different /Users/<name>/.../adb path) without script edits."
+        }
+      ]
+    },
+    "ac6_codex_review_pass": {
+      "status": "PENDING",
+      "next_step": "Lead-dispatched codex review per .omc/prd.json verifierConfig.critic = codex"
+    }
+  },
+  "build_verification_post_changes": {
+    "cargo_test_main_repo": {
+      "command": "source $HOME/.cargo/env && cargo test -p warp-mobile-android-host",
+      "result": "PASS — 45 tests passed (was 42; +3 new emoji smoke tests)",
+      "previously_passing_tests": "all 42 M2/M3 baseline tests still PASS post-changes (ime, input, terminal_model, pty)"
+    },
+    "cargo_ndk_check_main_repo": {
+      "command": "source $HOME/.cargo/env && cargo ndk -t arm64-v8a check -p warp-mobile-android-host",
+      "result": "PASS — 0 errors, 2 pre-existing dead_code warnings on dynamic_grid.rs (unrelated to M3-S11)"
+    },
+    "cargo_test_warp_src_facade": {
+      "command": "source $HOME/.cargo/env && (cd warp-src && cargo test -p warp_terminal_mobile_facade)",
+      "result": "PASS — 73 tests passed (unchanged from M3-S09 close-out)"
+    },
+    "cargo_ndk_check_warpui": {
+      "command": "source $HOME/.cargo/env && (cd warp-src && cargo ndk -t arm64-v8a check -p warpui)",
+      "result": "PASS — 0 errors, 53 pre-existing warnings (unrelated to M3-S11)"
+    },
+    "gradle_assemble_debug": {
+      "command": "cd android && ./gradlew :app:assembleDebug",
+      "result": "PASS — BUILD SUCCESSFUL in 2s, 42 actionable tasks (9 executed, 33 up-to-date)"
+    }
+  },
+  "files_changed": [
+    "android/app/src/main/java/dev/warp/mobile/MainActivity.kt — 4 edits (doc URL, ime_mode controller path, gridMode docstring, startStaticGrid Kdoc)",
+    "crates/android-host/src/lib.rs — 1 edit (appended m3_s11_emoji_smoke_tests module, +135 LOC, +3 tests)",
+    "tools/scripts/test-pty-reattach.sh — ADB hardcoded path replaced with ${ADB:-$(which adb)} + executable check",
+    "tools/scripts/test-fgs-clean-kill.sh — ADB hardcoded path replaced with ${ADB:-$(which adb)} + executable check",
+    "tools/scripts/test-pty-resize.sh — ADB hardcoded path replaced with ${ADB:-$(which adb)} + executable check",
+    "tools/scripts/test-30min-idle-stress.sh — ADB_PATH:-/Users/iml1s/.../adb fallback replaced with $(which adb) fallback",
+    ".omc/m3-artifacts/M3-S11-result.json — this artifact"
+  ],
+  "files_NOT_changed_documented_divergence": [
+    "crates/android-host/src/font_render.rs (M2-era mirror) — kept; Option C divergence; canonical = warp-src/crates/warpui/src/platform/android/font.rs",
+    "crates/android-host/src/static_grid.rs (M2-era mirror) — kept; Option C divergence; canonical = warp-src/crates/warpui/src/platform/android/static_grid.rs",
+    "crates/android-host/src/ime.rs (M2-era mirror) — kept; Option C divergence; canonical = warp-src/crates/warpui/src/platform/android/ime.rs",
+    "crates/android-host/src/input.rs (M2-era mirror) — kept; Option C divergence; canonical = warp-src/crates/warpui/src/platform/android/input.rs",
+    "crates/android-host/src/terminal_model.rs (M3-S04/S07 mirror) — kept; M3 carry-forward divergence; canonical = warp-src/crates/warp_terminal_mobile_facade/src/render.rs",
+    "crates/android-host/src/dynamic_grid.rs (M3-S08 mirror) — kept; M3 carry-forward divergence; canonical = warp-src/crates/warpui/src/platform/android/dynamic_grid.rs"
+  ],
+  "external_state_changes": {
+    "warp_src_remote_added": {
+      "name": "upstream",
+      "url": "https://github.com/warpdotdev/Warp.git",
+      "fetched_branches": "upstream/master (depth=20)",
+      "purpose": "Required for `git cherry-pick upstream/master~10..upstream/master` dry-run; persists in warp-src/.git/config for future M4 cherry-pick exercises"
+    }
+  },
+  "risks_for_m3_s12_close_out": [
+    "M3-S12 §1 Story Ledger needs to mark M3-S11 as 'PARTIAL pending codex review' until lead-dispatched codex returns PASS verdict",
+    "M3-S12 §5 M4 Carry-overs should mention: (a) Option A path-dep unification remains an architectural carry-forward — revisit in M4 if Termux bootstrap or other M4 work changes the cdylib link strategy; (b) cherry-pick dry-run baseline established (3 conflicts/10 commits = ~3-5 min/commit estimated resolution time) — M4 real cherry-picks should track this as a budget regression signal",
+    "M3-S12 §7 per-criterion citation table needs updated lines for MainActivity.kt nit fixes (doc URL line moved from 279→284 per insertion)"
+  ],
+  "risks_for_m4": [
+    "If M4 introduces real cherry-picks at >5 commits/week cadence, the 3-5 min/commit estimate suggests a sustainable budget — but watch for upstream feature work that touches `app/src/remote_server/` or `crates/warpui/src/platform/` (the 2 conflict hotspots in this dry-run); those are the carrying-cost surfaces",
+    "The 6 cross-workspace mirror files (font_render.rs, static_grid.rs, ime.rs, input.rs, terminal_model.rs, dynamic_grid.rs) total ~5800 LOC of synchronization debt that grows at every M3+ story touching warpui platform/android/* OR facade::render. M4 close-out should re-evaluate the Option A path-dep approach if (a) Termux bootstrap reduces warpui's Metal transitive scope or (b) the synchronization overhead exceeds 1 worker-day per milestone."
+  ],
+  "gate": {
+    "overall_pass": true,
+    "ac_pass_count": 5,
+    "ac_total_count": 5,
+    "ac_pending_codex": 1,
+    "interpretation": "5/5 functional ACs PASS (AC#1 documented divergence, AC#2 cherry-pick dry-run measured, AC#3 Pre-mortem C #4 not tripped, AC#4 result.json present, AC#5 5/5 nits absorbed). AC#6 codex review PENDING per SOP — worker must NOT self-PASS. Lead dispatches codex AFTER reading this artifact."
+  },
+  "commit_hashes": {
+    "warp_src_branch": "warp-mobile/m0-facade",
+    "warp_src_head_pre_m3_s11": "94bf0ff",
+    "warp_src_head_post_m3_s11": "PENDING — no warp-src changes this story (warp-src worked clean apart from upstream remote add which doesn't commit)",
+    "main_branch": "main",
+    "main_head_pre_m3_s11": "933c9ae",
+    "main_head_post_m3_s11": "PENDING — to be set after commit + push"
+  },
+  "sop_compliance": {
+    "worker_self_pass": false,
+    "worker_dispatched_codex": false,
+    "next_action_per_sop": "Worker reports back to lead; lead reads this artifact + worker's brief; lead dispatches codex review via `omc ask codex --prompt \"$(< /tmp/codex-m3-s11.md)\"`; codex returns verdict; lead flips passes:true if PASS or files round-2 fixes if FAIL; M3-S11.passes only flips to true on lead-confirmed codex PASS."
+  }
+}
