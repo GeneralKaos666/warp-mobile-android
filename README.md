@@ -2,7 +2,9 @@
 
 An open-source Android port of [Warp Terminal](https://github.com/warpdotdev/Warp) with Block-style command grouping, DCS-hook-driven Block detection, per-cell Vulkan rendering, and a bundled Termux runtime (M4+).
 
-**Status**: M3 CLOSED — DCS+Block pipeline + per-cell Vulkan rendering on Android 12+ (API 31+) &nbsp;|&nbsp; License: AGPL-3.0-only
+[![Test (Rust + Android smoke)](https://github.com/ImL1s/warp-mobile-android/actions/workflows/test.yml/badge.svg)](https://github.com/ImL1s/warp-mobile-android/actions/workflows/test.yml)
+
+**Status**: M0–M6 CLOSED — DCS+Block pipeline + per-cell Vulkan + Termux runtime + AI integration (BYOK) on Android 12+ (API 31+) &nbsp;|&nbsp; v1-prep ACTIVE &nbsp;|&nbsp; License: AGPL-3.0-only
 
 ---
 
