@@ -233,10 +233,26 @@ object GhostSuggestController {
 
     /**
      * Schedule a Haiku stream after [DEBOUNCE_MS] of typing inactivity.
-     * Re-scheduling cancels any prior pending request.
+     * Re-scheduling cancels any prior pending request — both the
+     * Kotlin-side debounce coroutine AND the Rust-side stream task.
+     *
+     * Round-2 v1+1 carry-over closure: previously, typing during an
+     * in-flight stream cancelled the Kotlin coroutine but NOT the
+     * Rust task. The async task continued the HTTP round-trip (wasting
+     * tokens / network / latency budget on a result the user no longer
+     * cares about) until completion, with chunks accumulating in a
+     * queue nobody polled. Calling cancelActiveStream() here signals
+     * the Rust CancellationToken so the streaming task aborts at the
+     * next tokio::select! checkpoint — typically within a single
+     * SSE chunk frame (~50 ms).
      */
     private fun scheduleSuggestion() {
         debounceJob?.cancel()
+        // Cancel any in-flight Rust stream — it's about to be obsolete
+        // because the user kept typing. Atomic-claim semantics: the
+        // poll loop's finally block will be a no-op if we won the
+        // claim here (compareAndSet won't match).
+        cancelActiveStream()
         val cur = snapshot()
         if (cur.buffer.length < MIN_BUFFER_CHARS) {
             mutateState { it.copy(suggestion = "", phase = "") }
@@ -277,9 +293,20 @@ object GhostSuggestController {
             return
         }
 
-        // Cancel any prior in-flight stream first — atomic-claim semantics
-        // matching AccessoryRow / AgentBlockSheet.
-        cancelActiveStream()
+        // NOTE: previously called `cancelActiveStream()` here as a
+        // defensive guard against a leftover stream — but that was a
+        // self-cancel cascade bug. `cancelActiveStream` ends with
+        // `debounceJob?.cancel()` which CANCELS THIS VERY coroutine
+        // (we're running INSIDE debounceJob). The CancellationException
+        // would then fire at the next delay() suspend point in the
+        // poll loop, the finally block would compareAndSet+Free, and
+        // the stream would be freed within ~1 ms of starting — before
+        // any SSE chunks could arrive. User would never see :DONE:.
+        //
+        // Round-2 self-pacing fix: scheduleSuggestion() at line 255
+        // already calls cancelActiveStream BEFORE this coroutine is
+        // launched, so any stale handle is already cleared. This call
+        // is redundant + harmful, so it was removed.
 
         val prompt = "Complete this shell command. Reply with ONLY the " +
             "completed command — no explanation, no quotes, no markdown:\n\n" +
