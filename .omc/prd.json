@@ -220,6 +220,228 @@
         "§8 SOP lessons learned (M2-S11 pattern: lead-dispatched codex AFTER fix is the only valid path to passes:true; worker self-PASS is invalid)",
         "Codex 5-round iterative review SOP per M2-S14 — final round PASS"
       ]
+    },
+    {
+      "id": "M4-S01",
+      "title": "M4 kickoff doc + Plan section update + M3 carry-overs absorption note",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m4-artifacts/M4-kickoff-confirmed.md exists per M3-kickoff-confirmed.md template documenting M4 Termux runtime scope + 5 ralplan §6 M4 acceptance criteria + entry criteria (M3 closed @ 8ec75c8)",
+        "Lists 8-15 M4 stories with Phase assignment (Bootstrap Build / Asset Packaging / Runtime Integration / pkg UX / F-Droid / Acceptance / M3 Carry-overs / Close-out)",
+        "Documents M3 carry-overs absorbed: M3-S06 hook execution (zsh PATH); M3-S08 toybox-color (GNU coreutils ls --color); M3-S08 Linux pixel-similarity (re-render); M3-S11 Option D shared-rlib API split; 6 cross-workspace dups",
+        "Death-pit awareness: bootstrap zip 30-50MB inflation past 80MB APK budget (M3-S10 has 73MB headroom); termux-packages Docker build env requires Linux/CI not this Mac; cherry-pick velocity now hits termux-packages too (separate budget)",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S02",
+      "title": "Fork termux-packages with $PREFIX retargeting (warp-mobile/main branch)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Fork termux/termux-packages to ImL1s/termux-packages on branch warp-mobile/main",
+        "Search-replace $PREFIX from /data/data/com.termux/files/usr to /data/data/dev.warp.mobile/files/usr (audit + sed scripts in scripts/setup-warp-prefix.sh)",
+        "Verify build-package.sh bash produces correctly-prefixed binaries (smoke test on Linux/Docker if available, OR document the build env requirement)",
+        "Bootstrap-aarch64.zip artifact path documented in M4-kickoff-confirmed.md §4",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S03",
+      "title": "Bootstrap zip build (bash + zsh + coreutils + findutils + apt + pkg + git)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Run termux-packages/scripts/build-bootstraps.sh with package list: bash, zsh, coreutils-gnu, findutils, apt, pkg, git",
+        "Output artifact: bootstrap-aarch64.zip (target ~30-50MB compressed per ralplan §M4 #1)",
+        "SHA256 hash recorded for reproducibility manifest (M4-S08)",
+        "If Docker/Linux build env not available locally: document the requirement + CI-build expectation; defer artifact production to future session",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S04",
+      "title": "APK asset packaging for bootstrap zip + version-pin file",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "Gradle copy task stages bootstrap-aarch64.zip into android/app/src/main/assets/warp/bootstrap/ (similar pattern to M3-S06 zsh_body.sh)",
+        "Version-pin file: assets/warp/bootstrap/version.json with {sha256, build_date, package_list, prefix}",
+        "Combined APK size verification: release ≤120MB combined budget (per M3-S10 ralplan threshold; release APK + bootstrap zip ≤120MB total)",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S05",
+      "title": "First-launch atomic extraction (JNI shim with usr.tmp → usr rename + kill-mid-extract recovery)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "android/app/src/main/cpp/bootstrap_install.c (NEW) implements: extract bootstrap-aarch64.zip from APK assets to /data/data/dev.warp.mobile/files/usr.tmp/; verify SHA256; atomic rename usr.tmp/ → usr/; write version-pin",
+        "Kill-mid-extract recovery: on next launch, detect usr.tmp/ remnant and restart extraction (not skip with corrupt usr/)",
+        "JNI export Java_dev_warp_mobile_NativeBridge_bootstrapInstall returns extraction status (0=success, !=0=error code)",
+        "Subsequent launches: verify extraction by checking version.json sha256 match; instant return without re-extraction",
+        "Verification: install APK on S24 Ultra R5CX10VFFBA; first launch shows bootstrap install progress; subsequent launch instant (no progress dialog); kill-mid-extract test (am force-stop during install) recovers cleanly on next launch",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S06",
+      "title": "PTY spawn uses $PREFIX/bin/zsh instead of /system/bin/sh (closes M3-S06 hook execution deferral)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "WarpTerminalService.spawnPty default program changed from /system/bin/sh to /data/data/dev.warp.mobile/files/usr/bin/zsh",
+        "Environment: PATH=$PREFIX/bin:$PATH, HOME=$PREFIX/home, ZDOTDIR=$PREFIX/etc (where zsh_body.sh ships per M3-S06)",
+        "zsh_body.sh hooks fire correctly via precmd/preexec — verifies M3-S06 deferred path",
+        "Device verification: spawn shell on S24U R5CX10VFFBA; whoami returns u0_aXXXX (app UID); echo $0 returns zsh; ls --color=auto produces ANSI escapes (closes M3-S08 AC#5 toybox-color deferral)",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S07",
+      "title": "pkg install UX with progress + cancellation (subprocess to forked apt)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "crates/warp_terminal_mobile_facade/src/pkg.rs (NEW) wraps pkg/apt subprocess",
+        "Progress channel: parse apt stdout/stderr into PkgProgress events (downloading X%, installing Y, configuring Z, done)",
+        "Cancellation: SIGTERM to pkg subprocess + cleanup partial state",
+        "Java side: PkgInstallActivity / PkgInstallDialog shows progress UI",
+        "Acceptance verification: pkg install python on S24U; python3 --version returns 3.x post-install (per ralplan §M4 #2)",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S08",
+      "title": "Bootstrap zip reproducibility (byte-identical rebuilds)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "termux-packages fork build script produces deterministic output: SOURCE_DATE_EPOCH=fixed; tar entries sorted; mtime fixed",
+        "Two consecutive builds at same commit hash produce byte-identical bootstrap-aarch64.zip (verify via sha256 match)",
+        "Result artifact: .omc/m4-artifacts/M4-S08-result.json with build1_sha256, build2_sha256, identical:bool, gate.overall_pass",
+        "If Docker build env unavailable: document the determinism gate + defer verification to CI",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S09",
+      "title": "F-Droid metadata + reproducible-build manifest",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "metadata/dev.warp.mobile.yml (or similar) with F-Droid required fields: AutoName, Description, Categories, License (AGPL-3.0-only), RepoType (git), Builds (per-version recipe)",
+        "Bootstrap zip listed as auxiliary artifact with hash-pin (SHA256) — F-Droid validate run accepts it",
+        "fastlane/metadata/android/en-US/ for play-store-style metadata (used by F-Droid GUI repos)",
+        "Reproducible-build recipe in metadata recipe references the termux-packages fork commit hash",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S10",
+      "title": "Acceptance #1 device test — first-launch extraction + subsequent-launch instant + kill-recovery",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "tools/scripts/test-bootstrap-install.sh <serial> drives 4 sub-tests on S24 Ultra R5CX10VFFBA",
+        "Sub-test 1: Fresh install (force-stop + uninstall + install + launch) — bootstrap installed, version.json sha256 valid, files/usr/ populated",
+        "Sub-test 2: Subsequent launch — instant return (no progress dialog), files/usr/ unchanged",
+        "Sub-test 3: Kill-mid-extract — am force-stop during install; next launch detects usr.tmp/ + restarts extraction; eventually completes",
+        "Sub-test 4: Corrupt usr/ recovery — manually corrupt files/usr/version.json; next launch detects mismatch + re-extracts",
+        "result.json with extraction_time_ms, sha256_match, gate.overall_pass",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S11",
+      "title": "Acceptance #2 device test — pkg install git python end-to-end on S24U",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "tools/scripts/test-pkg-install.sh <serial> drives end-to-end test on S24 Ultra R5CX10VFFBA",
+        "Step 1: Spawn shell ($PREFIX/bin/zsh per M4-S06)",
+        "Step 2: pkg install git → success; git --version returns 2.x",
+        "Step 3: pkg install python → success; python3 --version returns 3.x",
+        "Step 4: git clone https://github.com/octocat/Hello-World.git /tmp/test-clone → success (closes ralplan §M4 verification step 'Fresh-install app → run pkg install git && git clone ...')",
+        "result.json with packages_installed, install_time_ms_per_pkg, gate.overall_pass",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S12",
+      "title": "M3 carry-over: Option D shared-rlib API split (resolves 6 cross-workspace dups)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "Per M3-S11 round-1 codex finding: introduce warp_terminal_mobile_facade_android_link rlib in warp-src/crates/ that exposes platform/android types as a public API",
+        "Both warpui (canonical) and android-host (mirror) consume this rlib instead of mirroring sources",
+        "Removes 4 M2-era dups (font_render.rs, static_grid.rs, ime.rs, input.rs) + 2 M3 carry-forwards (terminal_model.rs, dynamic_grid.rs)",
+        "Cargo.lock zero churn on warp_terminal/warpui/facade upstream edges (architecture invariant maintained)",
+        "If Option D introduces Metal transitive deps that break cargo ndk check (the original M2-S04 blocker): document failure + escalate to milestone scope review",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S13",
+      "title": "M3-S08 deferral closure: re-run colored ls -la /system with GNU coreutils ls --color=auto",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "Per M3-S08 AC#5 deferral: with M4 Termux runtime providing GNU coreutils, re-run colored ls -la /system through PTY",
+        "Spawn $PREFIX/bin/zsh; run `ls -la --color=auto /system` (now via Termux GNU ls, not toybox)",
+        "Verify SGR escape codes emitted via PTY (od -c showing \\033[ sequences)",
+        "Verify on-screen rendering shows blue dirs + green executables per ralplan §M3 AC#1 literal text",
+        "Update .omc/m4-artifacts/M4-S13-color-test.png + result.json",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S14",
+      "title": "M3-S11 carry-forward: live emoji raster smoke (closes M3-S11 SubpixelMask emoji classifier-only deferral)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "With M4 Termux runtime providing GNU coreutils echo + bash, run `echo 🎉` through PTY",
+        "Verify PTY ingest_pty_bytes correctly classifies emoji codepoint (U+1F389) per font_render::classify_char",
+        "Verify dynamic_grid renders emoji glyph (NOT tofu) — capture screenshot",
+        "Result artifact: .omc/m4-artifacts/M4-S14-emoji-test.png + result.json with emoji_glyph_present:bool, gate.overall_pass",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M4-S15",
+      "title": "M4 close-out integration document",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m4-artifacts/M4-go-no-go.md per M3-go-no-go.md template",
+        "§1 Story Ledger: all 14 M4 stories (S01-S15) with PASS/PARTIAL/FAIL + commit hash",
+        "§2 Architecture state at M4 close: Termux $PREFIX layout; Option D shared-rlib structure (if M4-S12 PASS); 0 cross-workspace dups",
+        "§3 Per-layer GO/CONDITIONAL/NO-GO: L0 PTY service unchanged; L1 warpui Android renderer unchanged; L2 facade now consumes Option D rlib; L3 Termux runtime NEW",
+        "§4 Performance baselines: bootstrap install time, pkg install time per package, APK combined size",
+        "§5 M5 carry-overs (mobile UX layer)",
+        "§6 Final verdict GO / CONDITIONAL GO / NO-GO with rationale",
+        "§7 Per-criterion citation table covering all ralplan §6 M4 ACs",
+        "§8 SOP lessons learned (M4 specific)",
+        "Codex 5-round iterative review SOP per M2-S14/M3-S12 — final round PASS"
+      ]
     }
   ],
   "verifierConfig": {
