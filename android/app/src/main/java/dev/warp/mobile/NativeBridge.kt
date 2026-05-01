@@ -1,5 +1,6 @@
 package dev.warp.mobile
 
+import android.content.res.AssetManager
 import android.view.Surface
 
 object NativeBridge {
@@ -8,6 +9,27 @@ object NativeBridge {
     }
 
     external fun ping(): String
+
+    // ── Bootstrap atomic extraction (M4-S05) ─────────────────────────────────
+    //
+    // First-launch installer: reads bootstrap-aarch64.zip + version.json from
+    // APK assets/warp/bootstrap/ via AAssetManager, sha256-verifies the zip
+    // against the metadata, extracts to /data/data/dev.warp.mobile/files/usr.tmp,
+    // applies SYMLINKS.txt, atomically renames usr.tmp → usr, and writes the
+    // .bootstrap-version.json sha-pin marker. Idempotent: subsequent launches
+    // short-circuit on sha-pin match.
+    //
+    // Returns an integer status code (0 = success; non-zero = error per
+    // bootstrap.rs::InstallStatus).
+    //
+    //     0 — Success (or already installed)
+    //     1 — InvalidAssetManager
+    //     2 — AssetNotFound
+    //     3 — Sha256Mismatch
+    //     4 — IoError
+    //     5 — MalformedSymlinks
+    //     6 — AtomicRenameFailed
+    external fun bootstrapInstall(assetManager: AssetManager, dataDir: String): Int
 
     // ── PTY (M1) ─────────────────────────────────────────────────────────────
 

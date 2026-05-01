@@ -28,6 +28,14 @@ use warp_mobile_android_link::{dynamic_grid, static_grid};
 // too so `cargo test -p warp-mobile-android-host` exercises ingest/dirty/snapshot.
 pub mod terminal_model;
 
+// M4-S05: bootstrap zip atomic extraction. Pure Rust I/O + sha2 + zip +
+// serde_json. The Android-only JNI export
+// `Java_dev_warp_mobile_NativeBridge_bootstrapInstall` is gated inside the
+// module via `#[cfg(target_os = "android")]`; the extraction/symlink/rename
+// logic is host-buildable so `cargo test -p warp-mobile-android-host`
+// exercises 11 unit tests without cross-compilation.
+pub mod bootstrap;
+
 #[cfg(target_os = "android")]
 mod vulkan;
 

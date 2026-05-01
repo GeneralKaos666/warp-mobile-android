@@ -15,6 +15,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -187,6 +190,21 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // M4-S05: kick off bootstrap atomic extraction on a background thread.
+        // First launch extracts ~50 MB to /data/data/dev.warp.mobile/files/usr;
+        // subsequent launches short-circuit on sha-pin match (~instant). Logging
+        // is the only feedback in this round; M4-S07+ adds a progress UI.
+        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) {
+            val t0 = System.currentTimeMillis()
+            val status = NativeBridge.bootstrapInstall(assets, applicationInfo.dataDir)
+            val elapsed = System.currentTimeMillis() - t0
+            Log.i(
+                "warp.bootstrap",
+                "M4-S05 bootstrapInstall: status=$status elapsedMs=$elapsed dataDir=${applicationInfo.dataDir}"
+            )
+        }
 
         // Keep the screen on while this Activity is in the foreground.
         // Same flag YouTube/Netflix/etc. use — survives Samsung One UI's
