@@ -201,9 +201,22 @@ pub struct Block {
     /// `0..0`; M3-S08 (per-cell renderer) populates it.
     output_range_start: usize,
     output_range_end: usize,
+    /// V1-prep: captured output bytes between Preexec and CommandFinished.
+    /// Capped at [`Block::OUTPUT_CAP_BYTES`] to bound memory on `find /`-
+    /// style commands. Stored as bytes (not String) so partial multi-byte
+    /// UTF-8 sequences at the cap boundary don't panic; JSON serialization
+    /// does a lossy decode at dump time.
+    output: Vec<u8>,
 }
 
 impl Block {
+    /// Per-block output capture cap. 64 KB is enough for typical command
+    /// output (`ls -la`, `git log -10`, `du -sh /`) and keeps total memory
+    /// bounded even with thousands of blocks. Beyond this we drop bytes
+    /// silently — the user can still see the live output in the grid /
+    /// scrollback, just not in the captured Block.output for AI context.
+    pub const OUTPUT_CAP_BYTES: usize = 64 * 1024;
+
     pub fn new_pending(id: String, start_time_unix_ms: u64) -> Self {
         Self {
             id,
@@ -213,6 +226,7 @@ impl Block {
             end_time_unix_ms: None,
             output_range_start: 0,
             output_range_end: 0,
+            output: Vec::new(),
         }
     }
 
@@ -223,6 +237,16 @@ impl Block {
     pub fn finalize(&mut self, exit_code: i32, end_time_unix_ms: u64) {
         self.exit_code = Some(exit_code);
         self.end_time_unix_ms = Some(end_time_unix_ms);
+    }
+
+    /// Append a byte to this block's captured output buffer. No-op once
+    /// the buffer reaches [`Block::OUTPUT_CAP_BYTES`]. Called from
+    /// [`handle_ground_byte`] when the aggregator is in "capturing" mode
+    /// (between Preexec and CommandFinished).
+    pub fn append_output_byte(&mut self, b: u8) {
+        if self.output.len() < Self::OUTPUT_CAP_BYTES {
+            self.output.push(b);
+        }
     }
 
     pub fn id(&self) -> &str {
@@ -239,6 +263,9 @@ impl Block {
     }
     pub fn end_time_unix_ms(&self) -> Option<u64> {
         self.end_time_unix_ms
+    }
+    pub fn output_bytes(&self) -> &[u8] {
+        &self.output
     }
 }
 
@@ -266,6 +293,16 @@ impl BlockList {
         &self.blocks
     }
 
+    /// Mutable slice access — used by V1-prep output capture in
+    /// [`handle_ground_byte`] to append stdout bytes to a specific
+    /// block by index. Not exposed publicly for general mutation
+    /// because the BlockList invariant is "append-only via push +
+    /// last_mut for the current block"; index-mutation is allowed
+    /// only for this narrow capture path.
+    pub fn blocks_mut(&mut self) -> &mut [Block] {
+        &mut self.blocks
+    }
+
     /// JSON array of `{id, start_time_unix_ms, command, exit_code,
     /// end_time_unix_ms}`. Wire-format identical to the canonical facade
     /// `BlockList::to_dump_json`.
@@ -286,9 +323,17 @@ impl BlockList {
                 Some(t) => format!("{}", t),
                 None => "null".to_string(),
             };
+            // V1-prep: include captured output bytes (UTF-8-lossy decode).
+            // The mirror keeps Block.output as Vec<u8> so partial multi-byte
+            // sequences at the OUTPUT_CAP_BYTES boundary don't panic. The
+            // canonical facade Block doesn't expose this field; the Kotlin
+            // consumer (BlockActionsSheet) already does optString("output",
+            // "") so absence in the facade-side dump is graceful.
+            let output_str = String::from_utf8_lossy(&b.output);
+            let output_escaped = json_escape(&output_str);
             out.push_str(&format!(
-                "{{\"id\":\"{}\",\"start_time_unix_ms\":{},\"command\":\"{}\",\"exit_code\":{},\"end_time_unix_ms\":{}}}",
-                id, b.start_time_unix_ms, cmd, exit, end
+                "{{\"id\":\"{}\",\"start_time_unix_ms\":{},\"command\":\"{}\",\"exit_code\":{},\"end_time_unix_ms\":{},\"output\":\"{}\"}}",
+                id, b.start_time_unix_ms, cmd, exit, end, output_escaped
             ));
         }
         out.push(']');
@@ -411,6 +456,13 @@ struct TerminalState {
     // ── M3-S07: Block aggregation (mirror) ──────────────────────────────
     blocks: BlockList,
     block_events: Vec<BlockEvent>,
+    /// V1-prep: index into `blocks` of the block currently capturing
+    /// stdout/stderr bytes. Set on Preexec, cleared on CommandFinished.
+    /// `None` means "not in capture mode" — typical between blocks
+    /// (after a CommandFinished and before the next Precmd) or at startup.
+    /// Used by [`handle_ground_byte`] to also append printable bytes to
+    /// the targeted block's output buffer.
+    capturing_to_block_idx: Option<usize>,
 
     // ── M3-S09: scrollback ring + viewport offset (mirror) ─────────────
     scrollback: VecDeque<Vec<Cell>>,
@@ -440,6 +492,7 @@ impl TerminalModel {
                 dcs_error_count: 0,
                 blocks: BlockList::new(),
                 block_events: Vec::new(),
+                capturing_to_block_idx: None,
                 scrollback: VecDeque::with_capacity(SCROLLBACK_MAX_LINES),
                 scroll_offset: 0,
             }),
@@ -821,6 +874,30 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
 }
 
 fn handle_ground_byte(state: &mut TerminalState, b: u8) {
+    // V1-prep: capture printable + LF/CR bytes into the current block's
+    // output buffer if we're between Preexec and CommandFinished. Skip
+    // truly invisible control bytes (NUL, BEL, BS, DEL) so the captured
+    // output is shell-readable; \n and \r ARE captured because they're
+    // structural to multi-line output.
+    if let Some(idx) = state.capturing_to_block_idx {
+        let capturable = match b {
+            0x00 | 0x07 | 0x08 | 0x7F => false,
+            // Tab is structural — capture so columns line up in the
+            // recorded output (e.g. `ls -la` aligned columns).
+            b'\t' | b'\n' | b'\r' => true,
+            // Other C0 controls (0x01..=0x1F minus the structural ones
+            // above) are typically terminal control codes that aren't
+            // meaningful in the captured-text view (e.g. ^G bell).
+            c if c < 0x20 => false,
+            _ => true,
+        };
+        if capturable {
+            if let Some(block) = state.blocks.blocks_mut().get_mut(idx) {
+                block.append_output_byte(b);
+            }
+        }
+    }
+
     match b {
         0x00 => {}
         0x07 => {}
@@ -1185,6 +1262,10 @@ fn handle_block_hook(state: &mut TerminalState, hook: MirrorHook) {
                         command: p.command,
                     },
                 );
+                // V1-prep: start capturing stdout/stderr bytes into
+                // this block's output buffer. handle_ground_byte will
+                // append from now until the next CommandFinished.
+                state.capturing_to_block_idx = Some(state.blocks.len() - 1);
             } else {
                 log::warn!(
                     target: "WarpTerminalModel",
@@ -1205,6 +1286,9 @@ fn handle_block_hook(state: &mut TerminalState, hook: MirrorHook) {
                         end_time_unix_ms: now_ms,
                     },
                 );
+                // V1-prep: stop capturing. The next block (if any) will
+                // start capturing on its own Preexec.
+                state.capturing_to_block_idx = None;
             } else {
                 log::warn!(
                     target: "WarpTerminalModel",
@@ -1724,11 +1808,67 @@ mod tests {
             "command",
             "exit_code",
             "end_time_unix_ms",
+            "output",
         ] {
             assert!(entry.get(key).is_some(), "missing key: {}", key);
         }
         assert_eq!(entry["command"], "echo hello");
         assert_eq!(entry["exit_code"], 0);
+        assert_eq!(entry["output"], "");
+    }
+
+    /// V1-prep: Block.output captures bytes between Preexec and
+    /// CommandFinished. Verifies the capture state machine + cap.
+    #[test]
+    fn block_output_captures_stdout_between_preexec_and_finished() {
+        let m = TerminalModel::new(4, 32);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/x","ps1":"$","session_id":1}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"echo hi"}}"#,
+        ));
+        // Output bytes that should be captured.
+        m.ingest_pty_bytes(b"hello world\n");
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0,"next_block_id":"session-1-1"}}"#,
+        ));
+        // Bytes after CommandFinished should NOT be captured into block 0.
+        m.ingest_pty_bytes(b"prompt$");
+
+        let json = m.blocks_dump_json();
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(v[0]["command"], "echo hi");
+        assert_eq!(v[0]["output"], "hello world\n");
+    }
+
+    /// V1-prep: capture cap is enforced; bytes beyond OUTPUT_CAP_BYTES
+    /// are silently dropped (the live grid still shows them, only the
+    /// captured Block.output is bounded).
+    #[test]
+    fn block_output_cap_drops_overflow_bytes() {
+        let m = TerminalModel::new(4, 32);
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Precmd","value":{"pwd":"/x","ps1":"$","session_id":2}}"#,
+        ));
+        m.ingest_pty_bytes(&build_dcs_frame_local(
+            r#"{"hook":"Preexec","value":{"command":"yes"}}"#,
+        ));
+        // Push more than OUTPUT_CAP_BYTES (64 KB) of printable bytes.
+        let cap = Block::OUTPUT_CAP_BYTES;
+        let payload = vec![b'a'; cap + 1024];
+        m.ingest_pty_bytes(&payload);
+
+        // Block.output should be exactly OUTPUT_CAP_BYTES, not cap + 1024.
+        let blocks_snapshot = {
+            let s = m.inner.lock().unwrap();
+            s.blocks.blocks().to_vec()
+        };
+        assert_eq!(
+            blocks_snapshot[0].output_bytes().len(),
+            cap,
+            "output should be capped at OUTPUT_CAP_BYTES"
+        );
     }
 
     // ── M3-S09: scrollback + viewport offset (mirror) ──────────────────

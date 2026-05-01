@@ -23,13 +23,19 @@ import org.json.JSONArray
  * M5-S03 BottomSheet UI scaffold + M6-S04 round-2 real-Block-context closure.
  *
  * Opens as a bottom-anchored Dialog showing the most-recent terminal block
- * (command + truncated output preview + exit code) with 3 actions:
+ * (command + captured output + exit code) with 3 actions:
  *   - Copy: write `$ command\noutput\n[exit N]\n` to ClipboardManager,
  *     EXTRA_IS_SENSITIVE on Android 13+ (matches AccessoryRow.Copy All)
  *   - Re-run: write `command\r` to PTY (re-executes the last command)
  *   - 🤖 Explain: open AgentBlockSheet with composedPrompt that includes
- *     real shell context (M6-S04 round-2 close — was hardcoded prompt
- *     in round-1)
+ *     real shell context (M6-S04 round-2 close)
+ *
+ * Output capture (v1-prep): the Block model now captures stdout/stderr
+ * bytes between Preexec and CommandFinished into Block.output (capped
+ * at 64 KB). Empty output here means either (a) the command produced
+ * no output, or (b) the command was injected synthetically (test driver)
+ * without subsequent ground-byte ingestion. The Kotlin parser falls back
+ * to "(no output captured)" gracefully when output is absent or empty.
  *
  * Round-1 scope: most-recent block only (no per-block hit-testing on the
  * SurfaceView). The round-1 entry point is the new "📋" AccessoryRow
