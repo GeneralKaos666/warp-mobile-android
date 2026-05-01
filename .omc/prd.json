@@ -238,8 +238,8 @@
     {
       "id": "M4-S02",
       "title": "Fork termux-packages with $PREFIX retargeting (warp-mobile/main branch)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-2 PASS @ main aa65a59 + termux-packages 30039a892d (idempotency fixed; 13 unique tracked-file audit reproduced)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Fork termux/termux-packages to ImL1s/termux-packages on branch warp-mobile/main",
