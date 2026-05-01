@@ -119,6 +119,15 @@ Items that would polish the v1.0 ship but aren't release-blocking:
 ```
 Today (2026-05-02) ───── Generate keystore + populate keystore.properties (user)
                     │
+                    ├── Refresh upstream Termux snapshot pin
+                    │   (M4-S08 reproducibility gate — release.sh
+                    │    refuses to build until current pin matches
+                    │    upstream).
+                    │   $ UPDATE_SNAPSHOT=1 \
+                    │       tools/scripts/build-bootstrap.sh aarch64
+                    │   $ git add tools/scripts/m4-bootstrap-snapshot.sha256
+                    │   $ git commit -m "release: refresh bootstrap pin"
+                    │
                     ├── git tag -a v1.0.0-rc1 -m "v1.0 release candidate"
                     │   git push origin v1.0.0-rc1
                     │       └─→ .github/workflows/release.yml fires
