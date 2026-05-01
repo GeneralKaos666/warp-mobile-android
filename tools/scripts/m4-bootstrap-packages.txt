@@ -1,0 +1,7 @@
+bash
+zsh
+coreutils-gnu
+findutils
+apt
+pkg
+git

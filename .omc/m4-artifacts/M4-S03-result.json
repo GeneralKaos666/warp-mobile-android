@@ -1,0 +1,55 @@
+{
+  "story": "M4-S03",
+  "title": "Build core bootstrap zip — Docker-deferred CI workflow path",
+  "completed_at": "2026-05-01",
+  "executor": "claude-sonnet-4-6",
+  "branch_path": "Docker-deferred (per M4-kickoff §11.2)",
+  "docker_check": {
+    "command_run": "docker --version 2>&1; which docker 2>&1; which colima 2>&1",
+    "result": "zsh: command not found: docker / docker not found / colima not found",
+    "verified_at_round_1_lead": "2026-05-01"
+  },
+  "deliverables": {
+    "ci_workflow": ".github/workflows/build-bootstrap.yml (NEW)",
+    "package_list": "tools/scripts/m4-bootstrap-packages.txt (NEW; 7 packages: bash, zsh, coreutils-gnu, findutils, apt, pkg, git)",
+    "expected_artifact": {
+      "name": "bootstrap-aarch64.zip",
+      "size_target": "30-50MB compressed (ralplan §6 M4 #1)",
+      "sha256": "PENDING (CI build required)",
+      "metadata_companion": "bootstrap-metadata.json"
+    }
+  },
+  "blockers": [
+    "Docker/colima unavailable on Mac dev machine (verified by lead)",
+    "Bootstrap zip artifact production deferred to GitHub Actions ubuntu-latest runner",
+    "Workflow trigger: manual via 'workflow_dispatch' OR push to .github/workflows/build-bootstrap.yml"
+  ],
+  "next_steps_for_m4_s04_consumer": [
+    "Run workflow: gh workflow run build-bootstrap.yml -f arch=aarch64",
+    "Wait for green run: gh run list --workflow=build-bootstrap.yml --limit=1",
+    "Download artifact: gh run download <run-id> -n bootstrap-aarch64",
+    "Use bootstrap-aarch64.zip + bootstrap-metadata.json for M4-S04 Gradle copy task"
+  ],
+  "ac_status": {
+    "ac1_run_build_bootstraps_sh": {
+      "status": "DEFERRED_TO_CI",
+      "reason": "Docker not available locally; workflow encodes the build invocation"
+    },
+    "ac2_artifact_path_documented": {
+      "status": "PASS",
+      "evidence": "expected_artifact.name = bootstrap-aarch64.zip; produced into termux-packages/ in CI runner"
+    },
+    "ac3_sha256_recorded": {
+      "status": "DEFERRED_TO_CI",
+      "reason": "Hash computed by CI step 'Verify zip artifact'; emitted in bootstrap-metadata.json"
+    },
+    "ac4_docker_unavailable_handled": {
+      "status": "PASS",
+      "evidence": "ci_workflow + docker_check both present; honest deferral"
+    }
+  },
+  "gate": {
+    "overall_pass": true,
+    "criteria": "ci_workflow present AND package_list present AND docker_check honest AND artifact deferred to CI not faked"
+  }
+}

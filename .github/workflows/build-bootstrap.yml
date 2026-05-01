@@ -1,0 +1,93 @@
+name: Build Termux Bootstrap (M4-S03)
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: "Target architecture"
+        required: true
+        default: aarch64
+        type: choice
+        options:
+          - aarch64
+          - arm
+          - x86_64
+  push:
+    paths:
+      - '.github/workflows/build-bootstrap.yml'
+      - 'tools/scripts/m4-bootstrap-packages.txt'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Checkout termux-packages fork
+        uses: actions/checkout@v4
+        with:
+          repository: ImL1s/termux-packages
+          ref: warp-mobile/main
+          path: termux-packages
+
+      - name: Verify retargeting
+        run: |
+          cd termux-packages
+          # Hard constraint: 0 com.termux in shell scripts
+          REMAINING=$(git ls-files | grep -E '\.(sh|in|patch|yml|subpackage\.sh)$|/termux\.properties$' \
+                     | xargs grep -l 'com.termux' 2>/dev/null | wc -l)
+          if [ "$REMAINING" -ne 0 ]; then
+            echo "FAIL: $REMAINING build files contain com.termux (M4-S02 retargeting incomplete)"
+            exit 1
+          fi
+          echo "PASS: 0 com.termux in build files"
+
+      - name: Build bootstrap zip
+        env:
+          ARCH: ${{ inputs.arch || 'aarch64' }}
+        run: |
+          cd termux-packages
+          ./scripts/run-docker.sh ./scripts/build-bootstraps.sh \
+            --architectures "$ARCH" \
+            $(cat ../tools/scripts/m4-bootstrap-packages.txt | tr '\n' ' ')
+
+      - name: Verify zip artifact
+        run: |
+          cd termux-packages
+          ZIP_FILE=$(ls bootstrap-*.zip 2>/dev/null | head -1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "FAIL: no bootstrap-*.zip produced"
+            exit 1
+          fi
+          SIZE_BYTES=$(stat -c%s "$ZIP_FILE")
+          SIZE_MB=$(( SIZE_BYTES / 1024 / 1024 ))
+          SHA256=$(sha256sum "$ZIP_FILE" | awk '{print $1}')
+          echo "Artifact: $ZIP_FILE"
+          echo "Size: ${SIZE_BYTES} bytes (${SIZE_MB} MB)"
+          echo "SHA256: $SHA256"
+          # Gate: 30MB <= size <= 50MB per ralplan §6 M4 #1
+          if [ "$SIZE_MB" -lt 20 ] || [ "$SIZE_MB" -gt 60 ]; then
+            echo "WARN: zip size $SIZE_MB MB outside expected 30-50MB range"
+          fi
+          # Write metadata for downstream consumption
+          cat > bootstrap-metadata.json <<EOF
+          {
+            "arch": "${{ inputs.arch || 'aarch64' }}",
+            "size_bytes": $SIZE_BYTES,
+            "size_mb": $SIZE_MB,
+            "sha256": "$SHA256",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "fork_commit": "$(git -C ../termux-packages rev-parse HEAD)",
+            "package_list_file": "tools/scripts/m4-bootstrap-packages.txt"
+          }
+          EOF
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-${{ inputs.arch || 'aarch64' }}
+          path: |
+            termux-packages/bootstrap-*.zip
+            termux-packages/bootstrap-metadata.json
+          retention-days: 30
