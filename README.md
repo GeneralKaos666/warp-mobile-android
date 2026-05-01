@@ -174,6 +174,44 @@ cd android && ./gradlew :app:assembleRelease
 du -h app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
+### Building the Termux bootstrap zip (M4+)
+
+The Termux runtime layer (zsh, GNU coreutils, APT) is shipped as a `bootstrap-aarch64.zip` extracted at first launch into `/data/data/dev.warp.mobile/files/usr/`. Building this zip is fully automated, free, and reproducible — no Android SDK, no Docker, no Rust toolchain required for this step.
+
+**Local build** (on your dev machine):
+
+```bash
+# Default: aarch64, full 7-package list (bash, zsh, coreutils-gnu,
+# findutils, apt, pkg, git + all transitive deps).
+./tools/scripts/build-bootstrap.sh
+
+# Or explicitly:
+./tools/scripts/build-bootstrap.sh aarch64 \
+    tools/scripts/m4-bootstrap-packages.txt \
+    "$PWD/_bootstrap-out"
+
+# Output:
+#   _bootstrap-out/bootstrap-aarch64.zip          ~43 MB
+#   _bootstrap-out/bootstrap-metadata.json        size, sha256, package count
+```
+
+The script uses only `bash`, `python3`, `curl`, `tar`, `xz`, and `zip` (all standard on Linux + macOS dev machines). It downloads upstream Termux prebuilt `.deb` packages from `packages-cf.termux.dev`, retargets paths from `com.termux` to `dev.warp.mobile` in shell scripts and config files, and packages the result.
+
+ELF binary path patching (the ~300 binaries with `com.termux` strings baked into `.rodata`) is deferred to the M4-S05 atomic extractor, which patches at install time. See [`.omc/m4-artifacts/M4-S03-strategy.md`](.omc/m4-artifacts/M4-S03-strategy.md) for the full strategy decision (3 failed source-compile attempts inside docker on GHA's 14 GB-disk runners → switched to upstream-prebuilt-debs + path-rewrite, the same pattern Termux's own CI uses for fast `generate-bootstraps.sh` runs).
+
+**CI build** (on GitHub Actions, free):
+
+```bash
+# From the repo, push a change to the workflow or package list:
+git push
+# Watch the run:
+gh run watch --workflow=build-bootstrap.yml
+# Download the artifact:
+gh run download --name=bootstrap-aarch64
+```
+
+The CI workflow ([`.github/workflows/build-bootstrap.yml`](.github/workflows/build-bootstrap.yml)) calls the same `build-bootstrap.sh` script on `ubuntu-latest`, completes in ~5 min, uses zero external services, and uploads the zip + metadata as a workflow artifact (30-day retention).
+
 ### Device test drivers
 
 All device drivers take `<serial>` as the first argument — never hardcoded. Find your serial with `adb devices`.

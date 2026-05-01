@@ -1,6 +1,10 @@
 # M4-S03 CI Workflow Execution Log (3 attempts, 3 distinct failures)
 
-**Status (2026-05-01)**: Workflow ships and is runnable, but **no successful zip artifact yet** after 3 attempts. Each failure had a different root cause; the third trip into a fundamental build-environment issue (Android SDK setup inside termux-packages docker on GH Actions) crosses the autopilot stop threshold.
+**Status (2026-05-01, updated)**: SUPERSEDED — strategy switched to upstream-prebuilt-debs + path-rewrite. See [`M4-S03-strategy.md`](M4-S03-strategy.md) for the decision and the new pipeline that produces a working 43 MB `bootstrap-aarch64.zip` in ~5 min on free GHA ubuntu-latest. This log is preserved for forensics on the docker-source-compile path.
+
+---
+
+**Original status (2026-05-01)**: Workflow ships and is runnable, but **no successful zip artifact yet** after 3 attempts. Each failure had a different root cause; the third trip into a fundamental build-environment issue (Android SDK setup inside termux-packages docker on GH Actions) crosses the autopilot stop threshold.
 
 ## Run history
 

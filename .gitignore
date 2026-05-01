@@ -99,6 +99,11 @@ spikes/*/runs/
 # Generated APKs go to dist/ if shipping
 dist/
 
+# Bootstrap zip output (M4-S03+) — produced by tools/scripts/build-bootstrap.sh,
+# 30-50 MB binary artifact, never commit. CI uploads as workflow artifact;
+# release builds publish to GitHub Releases.
+_bootstrap-out/
+
 # Tools cache
 tools/.cache/
 
