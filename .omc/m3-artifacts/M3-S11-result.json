@@ -198,10 +198,10 @@
   "commit_hashes": {
     "warp_src_branch": "warp-mobile/m0-facade",
     "warp_src_head_pre_m3_s11": "94bf0ff",
-    "warp_src_head_post_m3_s11": "PENDING — no warp-src changes this story (warp-src worked clean apart from upstream remote add which doesn't commit)",
+    "warp_src_head_post_m3_s11": "94bf0ff (UNCHANGED — no warp-src commits this story; upstream remote add stays in .git/config without a commit)",
     "main_branch": "main",
     "main_head_pre_m3_s11": "933c9ae",
-    "main_head_post_m3_s11": "PENDING — to be set after commit + push"
+    "main_head_post_m3_s11": "294b0d4"
   },
   "sop_compliance": {
     "worker_self_pass": false,
