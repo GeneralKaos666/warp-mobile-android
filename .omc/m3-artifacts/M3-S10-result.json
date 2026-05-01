@@ -1,0 +1,67 @@
+{
+  "story": "M3-S10",
+  "title": "APK size budget — release ≤80MB / combined ≤120MB",
+  "device_class": "flagship-target (size measured on host build, not device)",
+  "release_apk": {
+    "path": "android/app/build/outputs/apk/release/app-release-unsigned.apk",
+    "bytes": 7775816,
+    "human_readable": "7.4M",
+    "gate_threshold_bytes": 83886080,
+    "gate_threshold_human": "80M",
+    "margin_percent": 90.7,
+    "expected": "≤80MB (83886080 bytes)",
+    "pass": true
+  },
+  "combined_with_bootstrap": {
+    "release_apk_bytes": 7775816,
+    "bootstrap_already_in_apk": true,
+    "additional_m4_precursor_bytes": 0,
+    "total_bytes": 7775816,
+    "human_readable": "7.4M",
+    "gate_threshold_bytes": 125829120,
+    "gate_threshold_human": "120M",
+    "margin_percent": 93.8,
+    "expected": "≤120MB (125829120 bytes)",
+    "pass": true
+  },
+  "validation_layer_in_release": {
+    "expected": "ZERO (validation layer must be debug-only)",
+    "found": "ZERO (no VkLayer/validation entries in release APK)",
+    "pass": true
+  },
+  "top_10_contributors": [
+    { "rank": 1, "size_bytes": 5745332, "size_human": "5.5M", "path": "classes.dex", "note": "Compiled Kotlin/Java + Android support libs" },
+    { "rank": 2, "size_bytes": 4046624, "size_human": "3.9M", "path": "lib/arm64-v8a/libwarp_mobile_android_host.so", "note": "Release-stripped JNI .so (vs 67MB debug — strip removed ~94% via release profile)" },
+    { "rank": 3, "size_bytes": 248940, "size_human": "243K", "path": "resources.arsc", "note": "Android resources table" },
+    { "rank": 4, "size_bytes": 66492, "size_human": "65K", "path": "assets/warp/zsh_body.sh", "note": "M3-S06 bootstrap asset (verbatim upstream)" },
+    { "rank": 5, "size_bytes": 18640, "size_human": "18K", "path": "kotlin/kotlin.kotlin_builtins", "note": "Kotlin builtin metadata" },
+    { "rank": 6, "size_bytes": 11404, "size_human": "11K", "path": "AndroidManifest.xml", "note": "App manifest with all M2/M3 receivers" },
+    { "rank": 7, "size_bytes": 3685, "size_human": "3.6K", "path": "kotlin/collections/collections.kotlin_builtins", "note": "Kotlin collections metadata" },
+    { "rank": 8, "size_bytes": 3472, "size_human": "3.4K", "path": "res/dO.xml", "note": "Resource (R8 obfuscated name)" },
+    { "rank": 9, "size_bytes": 3399, "size_human": "3.3K", "path": "kotlin/ranges/ranges.kotlin_builtins", "note": "Kotlin ranges metadata" },
+    { "rank": 10, "size_bytes": 2834, "size_human": "2.8K", "path": "res/qD.9.png", "note": "9-patch resource" }
+  ],
+  "build_environment": {
+    "gradle_version": "8.6",
+    "ndk_target": "arm64-v8a",
+    "rust_profile": "release (strip=symbols, opt-level=3, lto=true)",
+    "minify_enabled": true,
+    "shrink_resources": true
+  },
+  "trade_offs_documented": [
+    "Release Rust .so is 4MB vs debug 67MB; release profile strips debug info + LTO consolidates",
+    "Validation layer libVkLayer_khronos_validation.so (24MB) excluded from release per M2-S04 round-3 design — only debug variant fetches and ships it",
+    "classes.dex 5.7MB dominated by Kotlin std + AndroidX support libs — typical baseline for any Compose-free app",
+    "M4 will add Termux runtime (zsh + GNU coreutils + APT package manager) as a SEPARATE bundle — not packaged in this APK; the 120MB combined budget covers M4-precursor additions only"
+  ],
+  "gate": {
+    "overall_pass": true,
+    "criteria": "release_apk.pass AND combined.pass AND validation_layer_in_release.pass",
+    "evaluated": "release=7.4MB <80MB ✓; combined=7.4MB <120MB ✓; validation_layer absent ✓"
+  },
+  "build_command": "cd android && ./gradlew :app:assembleRelease",
+  "verification_artifacts": {
+    "apk": "android/app/build/outputs/apk/release/app-release-unsigned.apk (7775816 bytes)",
+    "unzip_listing": ".omc/m3-artifacts/M3-S10-apk-listing.txt"
+  }
+}

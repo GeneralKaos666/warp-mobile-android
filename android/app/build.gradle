@@ -401,6 +401,15 @@ afterEvaluate {
     tasks.matching { it.name == "packageRelease" }.configureEach  { dependsOn copyWarpAssets }
     tasks.matching { it.name == "assembleDebug" }.configureEach   { dependsOn copyWarpAssets }
     tasks.matching { it.name == "assembleRelease" }.configureEach { dependsOn copyWarpAssets }
+    // M3-S10: AGP's lint vital tasks scan src/main/assets/ during release lint —
+    // declare copyWarpAssets as their input so Gradle 8.6+ implicit-dependency
+    // validation doesn't fail with "uses output of copyWarpAssets without declaring
+    // dependency". Match all variants of generateReleaseLintVitalReportModel and
+    // its siblings.
+    tasks.matching { it.name.startsWith("generateReleaseLint") }.configureEach { dependsOn copyWarpAssets }
+    tasks.matching { it.name.startsWith("generateDebugLint") }.configureEach   { dependsOn copyWarpAssets }
+    tasks.matching { it.name.startsWith("lintVital") }.configureEach           { dependsOn copyWarpAssets }
+    tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach         { dependsOn copyWarpAssets }
 
     // Merge tasks are the canonical jniLibs consumer when AGP generates them.
     tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
