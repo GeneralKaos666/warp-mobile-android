@@ -411,3 +411,84 @@ M5 deliverables are mostly NEW state-machine code with full host test coverage (
 - **`#clear` doesn't work on apt compile-time defaults**: apt.conf is a runtime-config OVERLAY on top of compile-time defaults baked into the binary. `#clear KEY::` clears USER-CONFIG list entries but not the compile-time seeds. Tried and verified on device; deferred to v1-release Option C from-source recompile.
 - **Honest "PARTIAL" status > overclaim**: M5-S01/S02/S03 ship 50-70% of the AC text; the remaining 30-50% is interactive UI integration that requires touch wiring + Vulkan overlay work. Marking these PARTIAL with explicit "v1-release scope" in verifiedBy is more useful than either claiming PASS (false) or marking incomplete (blocks story counting).
 - **Cross-repo commits are clean if main repo's gitignore is set right**: warp-src is gitignored in the main repo (correct — it's a separate git repo). My `git add warp-src/...` from the main repo failed loud-and-clear ("paths are ignored"). Then `git -C warp-src add ...` + `git -C warp-src commit` + `git -C warp-src push` cleanly commits to warp-src's own remote. Pattern: separate add/commit/push for each repo.
+
+---
+
+## Iteration 16 — M6 milestone CLOSED CONDITIONAL GO + same-day v1-prep (2026-05-02)
+
+**Final state**: 7/7 M6 stories PASS, all 4 carry-overs closed same-day. v1-prep work continued:
+signing config, release packaging script + GHA workflow, Block.output capture, color emoji
+COLR v1 root-cause diagnosis, GhostSuggestController hardened against multiple race
+conditions caught by self-review.
+
+### Stories closed in iteration 16
+
+| Story / Carry-over | Status | Closing commit |
+|--------------------|--------|----------------|
+| M6-S01 | PASS | `16d7bbf` |
+| M6-S02 BYOK + Test Connection | PASS | `16d7bbf` |
+| M6-S03 SSE streaming via Haiku | PASS | `d87ce9d` + `68d51f9` + `2930c85` + `c1dc07a` |
+| M6-S04 Agent BottomSheet | PASS | `f5d716a` |
+| M6-S05 Offline degrade | PASS | `f5d716a` |
+| M6-S06 Telemetry | PASS | `f5d716a` |
+| M6-S07 close-out doc | PASS | `40954d7` |
+| M6 carry-over #1 IME ghost auto-trigger | CLOSED | `4f010c7` + `dcce36f` + `c1dc07a` + `fa0171a` |
+| M6 carry-over #2 Real Block context | CLOSED | `06c86d7` |
+| M6 carry-over #3 Listener-based grey-out | CLOSED | `8c3ffa1` |
+| M6 carry-over #4 Round-2 prompt-injection hardening | CLOSED | `06c86d7` |
+| M4-S14 live emoji raster smoke | PASS | `1e732c5` |
+| M5-S03 BottomSheet UI scaffold | PASS | `06c86d7` |
+
+### v1-release prep work (post-M6)
+
+| Item | Closing commit |
+|------|----------------|
+| Signing config + version 0.6.0-m6 | `245f05a` |
+| Release packaging script + GHA workflow | `9fd3584` |
+| Block.output capture + 64 KB cap + ANSI exclusion | `fea4aed` |
+| Color emoji COLR v1 root-cause diagnosis (4 fix paths) | `452e3c5` |
+| Dead `output_range_*` field cleanup | `2bbadd0` |
+| CLAUDE.md refresh with M5+M6 + v1-prep state | `82602be` |
+| GhostSuggest backspace tracking (closes buffer drift) | `fa0171a` |
+
+### Lessons learned (iteration 16)
+
+- **Self-review pre-commit catches race conditions unit tests can't**: Three different self-review
+  passes (code-reviewer + security-reviewer + architect) caught 1 CRITICAL TOCTOU UAF on
+  `activeStreamHandle` (commit `f5d716a`'s round-3 review), 2 HIGH races on `current` field
+  state-mutation in M6-CO1 (commit `dcce36f`), and 1 hidden self-cancel cascade that broke the
+  ENTIRE M6-CO1 feature in production but was masked by the test API key always returning 401
+  in ~600 ms (commit `c1dc07a`). Unit tests don't reproduce these without adversarial
+  multithreading harnesses; multi-agent reviews caught them by inspection. Worth keeping in the
+  M7+ playbook.
+
+- **Diagnostic instrumentation > attempted fix when upstream-blocked**: M4-S14 emoji color
+  rendering looked like a bug-to-fix until per-glyph swash content logging (commit `452e3c5`)
+  proved swash 0.1.x simply doesn't decode COLR v1 (the modern Noto Color Emoji format on
+  Android 15). The fix is upstream (cosmic-text fork → swash 0.2). Documenting 4 alternative
+  paths in the result JSON saves any future contributor from repeating the investigation. The
+  log lines are also kept in for production diagnostics behind log level Debug.
+
+- **`debounceJob?.cancel()` inside `cancelActiveStream()` was a self-cancel trap**: Pre-existing
+  bug in M6-CO1 round-1: `fireSuggestion` defensively called `cancelActiveStream` at its top to
+  release any leftover stream, but `cancelActiveStream` ends with `debounceJob?.cancel()` —
+  cancelling THE VERY COROUTINE running `fireSuggestion`. The CancellationException fired at
+  the next `delay()` in the poll loop, the finally block freed the handle, and the stream was
+  released within ~1 ms of starting. With a valid API key this would NEVER produce :DONE:.
+  The 401 from the test key arrived in ~600 ms (after the orphan tokio task) — which is what
+  let me ship round-1 thinking it worked. Lesson: when adding a "defensive" call that touches
+  shared state, trace the side effects all the way down.
+
+- **API consumer surface boundaries matter for v1-prep**: The `Block.output: Vec<u8>` capture
+  could have been a stringified field, but storing raw bytes lets us bound the cap precisely
+  (64 KB) without worrying about partial multi-byte UTF-8 splitting. JSON dump does
+  `String::from_utf8_lossy` at serialization time. Pattern: capture raw, serialize lossy at
+  the boundary.
+
+- **AGP signingConfig graceful degradation**: The build.gradle pattern
+  `if (hasKeystore) { signingConfig signingConfigs.release }` lets the same source tree build
+  signed APKs locally (with `keystore.properties`) AND unsigned APKs in CI / F-Droid (without).
+  No conditional compilation, no fork. The keystore.properties file is gitignored; the
+  generation instructions live as comments in the same build.gradle block where the config
+  reads from it. This is the "secret-where-it's-used" pattern — anyone touching signing
+  reads the docs by being in the right file.
