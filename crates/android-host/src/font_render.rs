@@ -203,9 +203,19 @@ pub(crate) struct FontRenderStats {
 }
 
 /// Build a `FontSystem` populated from `/system/fonts`. The returned tuple is
-/// `(system, primary_family, cjk_family, fonts_loaded, via)`.
+/// `(system, primary_family, cjk_family, emoji_family, fonts_loaded, via)`.
+///
+/// V1-prep: emoji_family is detected separately from the hardcoded
+/// "Noto Color Emoji" — on Samsung devices, NotoColorEmoji.ttf ships
+/// COLR v1 (which swash 0.1.x can't decode → falls through to monochrome
+/// outline) but SamsungColorEmoji.ttf has CBDT/CBLC bitmaps (which swash
+/// 0.1.x DOES decode). Routing emoji glyphs to Samsung's font on Samsung
+/// devices yields actual color rendering for free. On non-Samsung devices,
+/// falls back to Noto Color Emoji (still monochrome until upstream fixes
+/// the COLR v1 decoder, but the routing logic doesn't care).
 fn build_font_system() -> (
     FontSystem,
+    Option<String>,
     Option<String>,
     Option<String>,
     usize,
@@ -220,6 +230,7 @@ fn build_font_system() -> (
     let mut loaded: usize = 0;
     let mut primary_family: Option<String> = None;
     let mut cjk_family: Option<String> = None;
+    let mut emoji_family: Option<String> = None;
     let mut all_family_names: std::collections::HashSet<String> =
         std::collections::HashSet::new();
     for d in discovered {
@@ -249,6 +260,29 @@ fn build_font_system() -> (
                 {
                     cjk_family = Some(family_name.clone());
                 }
+                // V1-prep: prefer Samsung Color Emoji on Samsung devices —
+                // its CBDT/CBLC bitmaps decode under swash 0.1.x where
+                // Noto Color Emoji's COLR v1 doesn't. Detection by name
+                // matches "Samsung Color Emoji", "SEC Color Emoji",
+                // "SamsungColorEmoji" etc.
+                if emoji_family.is_none()
+                    && lower.contains("samsung")
+                    && lower.contains("emoji")
+                {
+                    emoji_family = Some(family_name.clone());
+                }
+            }
+        }
+    }
+    // Fallback: prefer any *bitmap-based* color emoji family if Samsung's
+    // wasn't found. Currently just "Noto Color Emoji" — caller logs which
+    // path was taken so M4-S14-style verification can confirm.
+    if emoji_family.is_none() {
+        for name in &all_family_names {
+            let lower = name.to_ascii_lowercase();
+            if lower.contains("noto") && lower.contains("emoji") {
+                emoji_family = Some(name.clone());
+                break;
             }
         }
     }
@@ -323,15 +357,16 @@ fn build_font_system() -> (
     db.set_serif_family("Noto Serif");
     log::info!(
         target: "WarpFont",
-        "discovered={} loaded={} via={} primary={:?} cjk={:?}",
+        "discovered={} loaded={} via={} primary={:?} cjk={:?} emoji={:?}",
         total,
         loaded,
         via,
         primary_family,
-        cjk_family
+        cjk_family,
+        emoji_family
     );
     let system = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
-    (system, primary_family, cjk_family, loaded, via)
+    (system, primary_family, cjk_family, emoji_family, loaded, via)
 }
 
 /// Composite shaped glyphs of `text` onto an RGBA buffer at the given baseline.
@@ -354,7 +389,7 @@ pub(crate) fn compose_text_on_rgba(
     baseline_x: f32,
     baseline_y: f32,
 ) -> FontRenderStats {
-    let (mut system, primary_family, cjk_family, fonts_loaded, via) = build_font_system();
+    let (mut system, primary_family, cjk_family, emoji_family, fonts_loaded, via) = build_font_system();
     if fonts_loaded == 0 {
         log::error!(
             target: "WarpFont",
@@ -401,17 +436,24 @@ pub(crate) fn compose_text_on_rgba(
     //   <https://github.com/pop-os/cosmic-text/blob/15198be/src/font/fallback/unix.rs>
     let primary_owned = primary_family.clone();
     let cjk_owned = cjk_family.clone();
+    let emoji_owned = emoji_family.clone();
     let primary_str = primary_owned.as_deref().unwrap_or("Roboto");
     // Pick a CJK family if discovered. Otherwise default to "Noto Sans CJK SC"
     // — fontdb's `Family::Name` lookup will fail gracefully (returning the
     // first family in DB) if the device doesn't ship one, so the empty-DB
     // path stays graceful.
     let cjk_str = cjk_owned.as_deref().unwrap_or("Noto Sans CJK SC");
+    // V1-prep: emoji_family is "Samsung Color Emoji" on Samsung devices
+    // (CBDT/CBLC — color decodable by swash 0.1.x), or "Noto Color Emoji"
+    // on stock Android (COLR v1 — currently rasterizes monochrome until
+    // upstream cosmic-text absorbs swash 0.2). See M4-S14 post-close diag.
+    let emoji_str = emoji_owned.as_deref().unwrap_or("Noto Color Emoji");
     log::info!(
         target: "warp-android-host",
-        "compose_text_on_rgba: using primary='{}' cjk='{}' emoji='Noto Color Emoji'",
+        "compose_text_on_rgba: using primary='{}' cjk='{}' emoji='{}'",
         primary_str,
-        cjk_str
+        cjk_str,
+        emoji_str
     );
     // Diagnostic: enumerate faces matching the chosen CJK family so we can
     // verify the lookup will succeed at shape time.
@@ -427,7 +469,7 @@ pub(crate) fn compose_text_on_rgba(
     );
     let primary_attrs = Attrs::new().family(cosmic_text::Family::Name(primary_str));
     let cjk_attrs = Attrs::new().family(cosmic_text::Family::Name(cjk_str));
-    let emoji_attrs = Attrs::new().family(cosmic_text::Family::Name("Noto Color Emoji"));
+    let emoji_attrs = Attrs::new().family(cosmic_text::Family::Name(emoji_str));
 
     let mut attrs_list = AttrsList::new(primary_attrs);
     let runs_classified = classify_text_runs(combined.as_str());
