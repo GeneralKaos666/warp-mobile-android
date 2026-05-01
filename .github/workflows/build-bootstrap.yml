@@ -41,11 +41,15 @@ jobs:
       - name: Install minimal tooling
         run: |
           # ubuntu-latest already has python3, curl, zip, unzip, tar, xz, file,
-          # sha256sum, find, sed, grep, awk. Nothing else needed — no docker,
-          # no Android SDK, no rust toolchain.
-          for cmd in python3 curl zip unzip tar xz file sha256sum; do
+          # sha256sum, find, sed, grep, awk. We add patchelf for ELF RUNPATH
+          # rewriting (Codex M4-S03 round-4 blocker fix). No docker, no Android
+          # SDK, no rust toolchain.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends patchelf
+          for cmd in python3 curl zip unzip tar xz file sha256sum patchelf; do
             command -v "$cmd" >/dev/null || { echo "missing: $cmd"; exit 1; }
           done
+          patchelf --version
           echo "Toolchain OK"
 
       - name: Build bootstrap zip
@@ -67,13 +71,21 @@ jobs:
             exit 1
           fi
           SIZE_MB=$(jq -r '.size_mb' "$META")
-          # M4-S03 zip-size envelope (ralplan §6 M4 #1): 30-50MB for the full
-          # 7-package list. Our smoke test with 2 packages was 22MB; full set
-          # should land in range.
-          if [ "$SIZE_MB" -lt 15 ] || [ "$SIZE_MB" -gt 80 ]; then
-            echo "WARN: zip size ${SIZE_MB} MB outside expected 30-50 MB range"
+          # M4-S03 zip-size envelope (ralplan §6 M4 #1): 30-50 MB hard gate.
+          # Codex round-4 finding: workflow must FAIL outside the canonical
+          # range, not just warn.
+          if [ "$SIZE_MB" -lt 30 ] || [ "$SIZE_MB" -gt 50 ]; then
+            echo "FAIL: zip size ${SIZE_MB} MB outside required 30-50 MB envelope"
+            exit 1
           fi
-          echo "PASS: artifact present, ${SIZE_MB} MB"
+          # ELF RUNPATH retargeting must have caught at least one binary; if
+          # zero ELFs were patched, the patchelf step probably no-op'd.
+          ELF_PATCHED=$(jq -r '.elf_runpath_patched' "$META")
+          if [ "$ELF_PATCHED" -lt 1 ]; then
+            echo "FAIL: 0 ELF binaries had RUNPATH patched (broken patchelf step?)"
+            exit 1
+          fi
+          echo "PASS: ${SIZE_MB} MB, ${ELF_PATCHED} ELF RUNPATHs retargeted"
           jq . "$META"
 
       - name: Verify retargeting (M4-S02 audit)

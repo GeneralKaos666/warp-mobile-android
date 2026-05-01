@@ -44,17 +44,31 @@ The previous in-flight workflow (build-bootstraps.sh + docker) is preserved in g
 - Clone-and-build works on Linux, macOS, and CI without any environment setup beyond `python3`, `curl`, `zip`, `unzip`, `tar`, `xz`.
 - Same script in CI and locally → no "works on CI but not on my laptop" surprises.
 
-## What this defers
+## What this handles in M4-S03 (after Codex round-4 review)
 
-**Binary path patching (~300 ELF binaries with `com.termux` strings in `.rodata`)** — handled at install time by M4-S05 atomic extractor + runtime `$PREFIX` env override. The reasoning:
+**ELF DT_RUNPATH retargeting**: `patchelf --set-rpath` rewrites the runpath on every shared object and executable so the dynamic linker resolves libraries at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH=...` at every spawn. Codex round-4 caught this (the original strategy doc claimed leftovers were ".rodata cosmetic" — verifiably wrong: `objdump -p bin/zsh` shows `RUNPATH /data/data/com.termux/files/usr/lib`, which is dynamic-linker-critical). After the patchelf step, 307 of 308 ELF files have correct RUNPATH (the 1 unpatched is a static binary with no RUNPATH entry).
 
-1. **Length mismatch**: `com.termux` (10 chars) vs `dev.warp.mobile` (15 chars) — naive in-place sed can't replace; `.dynsym` and `.strtab` offsets would shift.
-2. **Most termux binaries respect `$PREFIX`** at runtime (intentional design choice in termux-packages — paths are not hardcoded except as defaults). Setting `PREFIX=/data/data/dev.warp.mobile/files/usr` in the JNI process spawn covers the vast majority of cases.
-3. **Remaining edge cases** (default config-file lookup paths in some libraries) are addressable at extract time:
-   - For text configs: M4-S05 sed-rewrite during extraction (same logic as the bootstrap script, applied at install time).
-   - For binary path references: option to ship a per-binary patch list (the audit count `307` is small enough to enumerate); option to use `proot` (~5-10% perf overhead) for transparent rewriting; option to symlink from app-private locations.
+**Symlink target retargeting**: 20 absolute symlinks pointing into `/data/data/com.termux/...` are rewritten to `/data/data/dev.warp.mobile/...` and stored in `SYMLINKS.txt` (the format the Termux app extractor expects).
 
-The deferral is not a limitation of this strategy — it's the natural seam between M4-S03 (build artifact) and M4-S05 (extract-time orchestration). The smaller, simpler M4-S03 means we can ship a working bootstrap to subsequent stories now and refine the binary handling iteratively.
+**Text-file content retargeting**: 215 shell scripts, configs, and pure-text files have `com.termux` literal-string-replaced with `dev.warp.mobile`.
+
+## What this defers (M4-S05 / M4-S06 carry-forwards)
+
+**Residual `com.termux` strings in 116 ELF binaries** — config defaults baked in at compile time:
+
+- zsh's `module_path` default → `/data/data/com.termux/files/usr/lib/zsh/5.9` → overridable via `MODULE_PATH` env var
+- zsh's `FPATH` default → overridable via `FPATH` env var
+- Default `HOME` → overridable via `HOME` env var
+- System rcfile lookup paths (`/etc/zshenv` etc.) → if absent, zsh skips silently; if needed, M4-S06 ships an explicit `~/.zshenv` that sources the right path
+
+These are NOT dynamic-linker concerns (RUNPATH is fixed via patchelf above) — they are runtime config defaults that any termux-derived runtime traditionally overrides via env. M4-S06's `WarpTerminalService.spawnPty` env-var setup is the natural home for these (its existing AC includes `PATH`, `HOME`, `ZDOTDIR`; round-4 amended to add `FPATH`, `MODULE_PATH`).
+
+**Binary-string patching as a future option**: if `MODULE_PATH`+`FPATH` env override doesn't fully cover all 116 cases on real-device verification (M4-S05/M4-S10 acceptance), we revisit and either:
+- Add a binary-patch step using a same-length placeholder (e.g., compile-time `/data/data/com.termux./files/...` → strip the trailing dot at runtime — hacky but cheap)
+- Use `patchelf --add-rpath` plus a binary `sed -i` for non-RUNPATH paths in `.rodata` (length-aware, replaces only at fixed offsets)
+- Switch to a proot-wrapped spawn (~5-10% perf overhead) so the entire `/data/data/com.termux/` namespace is virtualized
+
+For now: env-var override is the simplest, well-trodden path and matches what every termux fork does for non-RUNPATH defaults.
 
 ## Why not the other options
 

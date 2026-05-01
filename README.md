@@ -176,28 +176,36 @@ du -h app/build/outputs/apk/release/app-release-unsigned.apk
 
 ### Building the Termux bootstrap zip (M4+)
 
-The Termux runtime layer (zsh, GNU coreutils, APT) is shipped as a `bootstrap-aarch64.zip` extracted at first launch into `/data/data/dev.warp.mobile/files/usr/`. Building this zip is fully automated, free, and reproducible — no Android SDK, no Docker, no Rust toolchain required for this step.
+The Termux runtime layer (zsh, GNU coreutils, APT) is shipped as a `bootstrap-aarch64.zip` extracted at first launch into `/data/data/dev.warp.mobile/files/usr/`. Building this zip is fully automated and free — no Android SDK, no Docker, no Rust toolchain required for this step. Byte-stable reproducibility (rebuilding at a fixed upstream snapshot to produce identical SHA256) is M4-S08 work.
+
+**Required tooling**: `bash`, `python3`, `curl`, `tar`, `xz`, `zip`, `unzip`, `find`, `grep`, `sed`, `awk`, `file`, `sha256sum`, and `patchelf`. All are stock on Linux distros except `patchelf` (`sudo apt install patchelf`); on macOS install via Homebrew (`brew install bash coreutils patchelf`). The script verifies these on startup and fails with a clear message if anything is missing.
 
 **Local build** (on your dev machine):
 
 ```bash
 # Default: aarch64, full 7-package list (bash, zsh, coreutils-gnu,
-# findutils, apt, pkg, git + all transitive deps).
+# findutils, apt, pkg, git + all transitive deps). Output goes to $PWD.
 ./tools/scripts/build-bootstrap.sh
 
-# Or explicitly:
+# Or with explicit args (arch, package list, output dir):
 ./tools/scripts/build-bootstrap.sh aarch64 \
     tools/scripts/m4-bootstrap-packages.txt \
     "$PWD/_bootstrap-out"
 
-# Output:
-#   _bootstrap-out/bootstrap-aarch64.zip          ~43 MB
-#   _bootstrap-out/bootstrap-metadata.json        size, sha256, package count
+# Output (in the chosen output dir):
+#   bootstrap-aarch64.zip          ~43 MB, contains the entire $PREFIX rootfs
+#   bootstrap-metadata.json        size, sha256, package count, retargeting stats
 ```
 
-The script uses only `bash`, `python3`, `curl`, `tar`, `xz`, and `zip` (all standard on Linux + macOS dev machines). It downloads upstream Termux prebuilt `.deb` packages from `packages-cf.termux.dev`, retargets paths from `com.termux` to `dev.warp.mobile` in shell scripts and config files, and packages the result.
+The script downloads upstream Termux prebuilt `.deb` packages from `packages-cf.termux.dev` (the same source Termux's own CI uses for fast `generate-bootstraps.sh` runs), retargets paths from `com.termux` to `dev.warp.mobile` across:
 
-ELF binary path patching (the ~300 binaries with `com.termux` strings baked into `.rodata`) is deferred to the M4-S05 atomic extractor, which patches at install time. See [`.omc/m4-artifacts/M4-S03-strategy.md`](.omc/m4-artifacts/M4-S03-strategy.md) for the full strategy decision (3 failed source-compile attempts inside docker on GHA's 14 GB-disk runners → switched to upstream-prebuilt-debs + path-rewrite, the same pattern Termux's own CI uses for fast `generate-bootstraps.sh` runs).
+- **Shell scripts and config files**: literal-string sed replacement (`/data/data/com.termux/...` → `/data/data/dev.warp.mobile/...`). 215 text files rewritten on the canonical 7-package list.
+- **ELF dynamic-linker paths**: `patchelf --set-rpath` rewrites the `DT_RUNPATH` entry on every shared object and executable so libs resolve at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH` at every spawn. 307 ELF binaries patched.
+- **Absolute symlink targets**: 20 symlinks pointing into `/data/data/com.termux/...` are rewritten to point at `/data/data/dev.warp.mobile/...` and stored in `SYMLINKS.txt` sidecar (the format the Termux app extractor expects).
+
+Residual `com.termux` strings in ~116 files are config defaults (zsh's `module_path`, default `HOME`, system rcfile lookup paths). These are overridable via `HOME`, `ZDOTDIR`, `FPATH`, `MODULE_PATH` env vars set at PTY spawn — the M4-S06 deliverable.
+
+See [`.omc/m4-artifacts/M4-S03-strategy.md`](.omc/m4-artifacts/M4-S03-strategy.md) for the full strategy decision and rationale.
 
 **CI build** (on GitHub Actions, free):
 

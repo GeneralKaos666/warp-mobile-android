@@ -288,7 +288,8 @@
         "JNI export Java_dev_warp_mobile_NativeBridge_bootstrapInstall returns extraction status (0=success, !=0=error code)",
         "Subsequent launches: verify extraction by checking version.json sha256 match; instant return without re-extraction",
         "Verification: install APK on S24 Ultra R5CX10VFFBA; first launch shows bootstrap install progress; subsequent launch instant (no progress dialog); kill-mid-extract test (am force-stop during install) recovers cleanly on next launch",
-        "Codex review dispatched and PASS verdict received"
+        "Codex review dispatched and PASS verdict received",
+        "ELF DT_RUNPATH retargeting verification: /data/data/dev.warp.mobile/files/usr/bin/zsh and /usr/bin/git launch on S24 Ultra without LD_LIBRARY_PATH override (M4-S03 round-4 carry-forward: build-bootstrap.sh patchelf step ensures RUNPATH is correct in zip; M4-S05 verifies post-extraction that dynamic linking actually succeeds)"
       ]
     },
     {
@@ -302,7 +303,8 @@
         "Environment: PATH=$PREFIX/bin:$PATH, HOME=$PREFIX/home, ZDOTDIR=$PREFIX/etc (where zsh_body.sh ships per M3-S06)",
         "zsh_body.sh hooks fire correctly via precmd/preexec — verifies M3-S06 deferred path",
         "Device verification: spawn shell on S24U R5CX10VFFBA; whoami returns u0_aXXXX (app UID); echo $0 returns zsh; ls --color=auto produces ANSI escapes (closes M3-S08 AC#5 toybox-color deferral)",
-        "Codex review dispatched and PASS verdict received"
+        "Codex review dispatched and PASS verdict received",
+        "zsh-runtime-config env var override: HOME, ZDOTDIR, FPATH, MODULE_PATH all set at spawn so zsh respects the dev.warp.mobile prefix despite residual com.termux strings in config-default sections (M4-S03 round-4 carry-forward: 116 binary files have non-RUNPATH com.termux strings as compiled-in defaults; runtime env vars override)"
       ]
     },
     {

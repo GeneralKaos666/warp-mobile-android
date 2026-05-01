@@ -55,10 +55,23 @@ esac
 # because macOS BSD ar is incompatible with Debian-style ar archives (trailing
 # slashes in member names break both `ar -p` and `ar -x`). We use python3 +
 # tarfile/lzma instead, which works identically on Linux and macOS.
-for cmd in curl python3 zip unzip tar xz find sed grep awk file sha256sum; do
+#
+# patchelf is a small standalone utility (Linux: apt install patchelf;
+# macOS: brew install patchelf) used to rewrite the DT_RUNPATH entry on
+# every ELF binary so they search /data/data/dev.warp.mobile/files/usr/lib
+# at load time instead of the upstream com.termux path. Codex M4-S03 round-4
+# blocking finding: without this, zsh/git/apt fail to launch on device
+# unless LD_LIBRARY_PATH is set explicitly at every spawn.
+for cmd in curl python3 zip unzip tar xz find sed grep awk file sha256sum patchelf; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[!] Required command not found: $cmd" >&2
-        echo "    Install via your package manager (apt/brew/pacman)." >&2
+        if [ "$cmd" = "patchelf" ]; then
+            echo "    Install via:" >&2
+            echo "      Linux:  sudo apt install patchelf" >&2
+            echo "      macOS:  brew install patchelf" >&2
+        else
+            echo "    Install via your package manager (apt/brew/pacman)." >&2
+        fi
         exit 1
     fi
 done
@@ -339,14 +352,48 @@ if new != s:
 done < <(find "$TARGET_PREFIX" -type f -print0)
 echo "    -> Inspected $COUNT_TEXT_FILES text files; rewrote $COUNT_REWRITTEN"
 
-# 5c. Audit: count remaining files with literal com.termux. These are mostly
-# ELF binaries and embedded library data — handled by M4-S05 at extract time.
-# Use `set +o pipefail` momentarily because grep returns 1 when nothing matches
-# and that's a normal outcome here (it would mean retargeting was 100% complete).
+# 5c. Patch ELF DT_RUNPATH on every ELF binary that references the upstream
+# lib path. Codex M4-S03 round-4 blocking finding: shipping com.termux
+# RUNPATH means dynamic linker won't find libs at /data/data/dev.warp.mobile/
+# files/usr/lib unless LD_LIBRARY_PATH is set at every spawn. patchelf
+# rewrites the in-binary RUNPATH so libraries resolve correctly without
+# any runtime env-var workaround.
+echo "    -> patching ELF DT_RUNPATH (com.termux → dev.warp.mobile)..."
+COUNT_ELF_PATCHED=0
+COUNT_ELF_INSPECTED=0
+WARP_LIB="/data/data/$WARP_APP_ID/files/usr/lib"
+while IFS= read -r -d '' f; do
+    [ -L "$f" ] && continue
+    # patchelf is fast on non-ELF rejects, but a `file` pre-filter skips
+    # the bulk of non-binaries (configs, headers, etc) and avoids noisy
+    # patchelf warnings.
+    case $(file -b "$f" 2>/dev/null) in
+        *ELF*executable*|*ELF*shared\ object*)
+            COUNT_ELF_INSPECTED=$((COUNT_ELF_INSPECTED+1))
+            current_rpath=$(patchelf --print-rpath "$f" 2>/dev/null || true)
+            if [ -n "$current_rpath" ] && \
+               printf '%s' "$current_rpath" | grep -qF "$UPSTREAM_APP_ID"; then
+                # Replace com.termux with WARP_APP_ID, preserving any other
+                # paths in the rpath colon-list.
+                new_rpath=$(printf '%s' "$current_rpath" \
+                    | python3 -c "import sys; sys.stdout.write(sys.stdin.read().replace('/data/data/$UPSTREAM_APP_ID/', '/data/data/$WARP_APP_ID/'))")
+                if patchelf --set-rpath "$new_rpath" "$f" 2>/dev/null; then
+                    COUNT_ELF_PATCHED=$((COUNT_ELF_PATCHED+1))
+                fi
+            fi
+            ;;
+    esac
+done < <(find "$TARGET_PREFIX" -type f -print0)
+echo "    -> Inspected $COUNT_ELF_INSPECTED ELF files; patched RUNPATH on $COUNT_ELF_PATCHED"
+
+# 5d. Audit: count remaining files with literal com.termux. These are
+# residual config-default strings inside ELF .rodata (zsh module_path,
+# default home, etc) — overridable at runtime via env vars (M4-S06
+# deliverable: HOME, ZDOTDIR, FPATH, MODULE_PATH set at PTY spawn).
 set +o pipefail
 COUNT_REMAINING=$(find "$TARGET_PREFIX" -type f -exec grep -lF "$UPSTREAM_APP_ID" {} + 2>/dev/null | wc -l | tr -d ' ')
 set -o pipefail
-echo "    -> $COUNT_REMAINING files still contain '$UPSTREAM_APP_ID' (binaries; handled by M4-S05 at extract time)"
+echo "    -> $COUNT_REMAINING files still contain '$UPSTREAM_APP_ID' as embedded string (M4-S06 env-var override at spawn)"
 
 # ─── 6. Pack into bootstrap zip ───────────────────────────────────────────────
 echo "[6/6] Creating bootstrap-$ARCH.zip..."
@@ -399,8 +446,10 @@ cat > "$OUT_DIR/bootstrap-metadata.json" <<EOF
   "package_count": $(wc -l < "$RESOLVED_LIST" | tr -d ' '),
   "text_files_inspected": $COUNT_TEXT_FILES,
   "text_files_rewritten": $COUNT_REWRITTEN,
+  "elf_files_inspected": $COUNT_ELF_INSPECTED,
+  "elf_runpath_patched": $COUNT_ELF_PATCHED,
   "files_with_upstream_app_id_remaining": $COUNT_REMAINING,
-  "remaining_handling": "M4-S05 atomic extractor patches binaries at install time / runtime PREFIX env override"
+  "remaining_handling": "Residual com.termux strings are config defaults (zsh module_path, default HOME). M4-S06 sets HOME, ZDOTDIR, FPATH, MODULE_PATH env vars at PTY spawn to override."
 }
 EOF
 
