@@ -205,8 +205,8 @@
     {
       "id": "M3-S12",
       "title": "M3 close-out integration document",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main 90032b7 (3 rounds for citation hygiene; M3 milestone CLOSED 12/12 stories PASS)",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         ".omc/m3-artifacts/M3-go-no-go.md exists per M2-go-no-go.md template",
