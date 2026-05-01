@@ -1,26 +1,39 @@
 #!/usr/bin/env bash
 # build-bootstrap.sh — M4-S03 bootstrap zip builder for warp-mobile-android.
 #
-# Strategy (chosen per .omc/m4-artifacts/M4-S03-strategy.md):
+# Strategy (chosen per Plan Amendment 6 / .omc/m4-artifacts/M4-S03-strategy.md):
 #   - Download upstream Termux prebuilt .deb packages from packages-cf.termux.dev
 #     (the same source termux's own CI uses).
 #   - Extract them into a staging rootfs (still under /data/data/com.termux/files/usr).
-#   - Retarget paths to /data/data/dev.warp.mobile/files/usr:
+#   - Retarget paths to /data/data/dev.warp.mobile/files/usr across THREE surfaces:
 #       1. Rename the on-disk directory tree.
 #       2. Sed-rewrite text files (shebangs, configs, scripts).
-#       3. Leave ELF binaries untouched (length mismatch — handled at extract
-#          time by M4-S05 atomic extractor / runtime $PREFIX env override).
+#       3. patchelf --set-rpath rewrites DT_RUNPATH on every ELF binary
+#          (without this, the dynamic linker can't resolve libs unless
+#          LD_LIBRARY_PATH is set at every spawn — Codex M4-S03 round-4 fix).
+#       4. Symlink targets pointing at /data/data/com.termux/... rewritten
+#          to /data/data/dev.warp.mobile/... in SYMLINKS.txt sidecar.
 #   - Pack the result into bootstrap-<arch>.zip in the format the Termux app
 #     extractor expects (relative paths, SYMLINKS.txt sidecar).
 #
 # Why this script exists:
-#   - Free + fast: runs on GitHub Actions ubuntu-latest in ~5 min and on any
-#     dev laptop with bash + curl + python3 + zip.
-#   - Reproducible: avoids termux-packages's docker source-compile path which
-#     hits an Android SDK install bug inside the docker container on GHA's
-#     14 GB-disk runners (.omc/m4-artifacts/M4-S03-execution-log.md run 3).
+#   - Free + fast: runs on GitHub Actions ubuntu-latest in ~2 min and on any
+#     dev laptop with bash + python3 + curl + zip + patchelf.
+#   - Avoids termux-packages's docker source-compile path which hits an
+#     Android SDK install bug inside the docker container on GHA's 14 GB-disk
+#     runners (.omc/m4-artifacts/M4-S03-execution-log.md run 3).
 #   - Clone-and-build friendly: no Android SDK, no gradle, no rust toolchain —
-#     just stock unix tools + python3.
+#     just stock unix tools + python3 + patchelf.
+#
+# What this is NOT (yet):
+#   - Byte-reproducible: the script always pulls HEAD of the upstream Termux
+#     apt repo, so two builds on different days yield different sha256.
+#     M4-S08 deliverable: pin the apt snapshot for reproducible rebuilds.
+#   - Complete binary retargeting: 116 residual com.termux strings remain
+#     in compile-time defaults (zsh module_path, default HOME, git
+#     libexec-path). Those are runtime-overridable via shell-array
+#     assignment in $ZDOTDIR/.zshenv (zsh) and GIT_EXEC_PATH env var (git);
+#     M4-S06 deliverable.
 #
 # Usage:
 #   ./tools/scripts/build-bootstrap.sh [arch] [package_list] [output_dir]

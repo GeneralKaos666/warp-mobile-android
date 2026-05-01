@@ -1,11 +1,48 @@
 # RALPLAN: Warp Terminal on Android (Open-Source First Port)
 
 > **Mode**: DELIBERATE consensus plan (high-risk: 12-18 month porting, GPL fork, multi-platform native, AGPL compliance)
-> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 CLOSED CONDITIONAL GO** (2026-04-29) → **M1 CLOSED CONDITIONAL GO 10/10 stories PASS** (2026-04-30) → **M2 CLOSED CONDITIONAL GO 12/14 PASS** (2026-04-30) → **M3 IN PROGRESS — S01+S02 PASS, S03 PRE-MORTEM C TRIPPED 2026-04-30**
-> **Amendments**: 1 (D1 invalidated) → 2 (D1.5-hybrid) → 3 (minSdk 31) → 4 (M1: am force-stop semantics) → **5 (M3: app/ extraction, NOT cfg-gate)**
+> **Status**: APPROVED iter 2 (Planner+Architect+Critic) → **M0 CLOSED CONDITIONAL GO** (2026-04-29) → **M1 CLOSED CONDITIONAL GO 10/10 stories PASS** (2026-04-30) → **M2 CLOSED CONDITIONAL GO 12/14 PASS** (2026-04-30) → **M3 CLOSED CONDITIONAL GO 12/12 stories PASS** (2026-05-01) → **M4 IN PROGRESS — S01+S02+S03+S12 PASS 2026-05-01**
+> **Amendments**: 1 (D1 invalidated) → 2 (D1.5-hybrid) → 3 (minSdk 31) → 4 (M1: am force-stop semantics) → 5 (M3: app/ extraction, NOT cfg-gate) → **6 (M4-S03: Option-A pivot — upstream-prebuilt-debs + path-rewrite, NOT termux-packages docker source-compile)**
 > **Upstream commit referenced**: `warpdotdev/Warp@d0f045c` (just-released 2026-04-28)
-> **Author**: Planner agent (RALPLAN-DR deliberate); **Amendments 1+3+4 by team-lead@warp-mobile** post-M0/M1 autonomous tasks
-> **Date**: 2026-04-29 → 2026-04-30 (M1 close-out)
+> **Author**: Planner agent (RALPLAN-DR deliberate); **Amendments 1+3+4+6 by team-lead@warp-mobile** post-M0/M1/M4 autonomous tasks
+> **Date**: 2026-04-29 → 2026-05-01 (M4-S03 round-5 close)
+
+---
+
+## ⚠️ Amendment 6 (2026-05-01 M4-S03 round-5) — M4-S03 build pipeline pivots from termux-packages docker source-compile to upstream-prebuilt-debs + path-rewrite (Option A)
+
+**Tl;dr**: M4-S03 worker attempted the original ralplan §6 M4 row #2 plan (run `termux-packages/scripts/build-bootstraps.sh` in docker via GHA ubuntu-latest). 3 distinct failures across 3 attempts: (1) positional-args bug, (2) com.termux false-positive grep, (3) **Android SDK install errors inside termux-packages docker container on GHA's 14 GB-disk runners**. The third failure is a fundamental docker/SDK perms issue, not a tactical fix-able bug; per autopilot SOP that's the stop-and-decide threshold.
+
+**This amendment**:
+
+1. **M4-S03 build path changes** from "fork termux-packages → run docker build-bootstraps.sh → produce zip" to "use upstream Termux prebuilt .debs from packages-cf.termux.dev → retarget paths in our own script → produce zip". The fork at `ImL1s/termux-packages` (M4-S02) is preserved as the SOURCE-OF-TRUTH for retargeting policy but is no longer the BUILD pipeline.
+
+2. **The build script** lives at `tools/scripts/build-bootstrap.sh` (~280 LOC, stdlib bash + python3, cross-platform Linux/macOS, no Docker, no Android SDK, no Rust toolchain). It downloads upstream Termux .debs, parses dependencies in Python, extracts via stdlib tarfile/lzma (avoids macOS BSD ar incompatibility), retargets `com.termux` → `dev.warp.mobile` across 3 surfaces:
+   - **Text files** (shebangs, configs, scripts): literal-string sed replacement
+   - **ELF DT_RUNPATH**: `patchelf --set-rpath` rewrites the dynamic-linker RPATH on every ELF binary so libs resolve at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH` at every spawn (Codex round-4 blocking finding fix)
+   - **Absolute symlink targets**: rewritten in `SYMLINKS.txt` sidecar (the format Termux app extractor expects)
+
+3. **CI workflow** at `.github/workflows/build-bootstrap.yml` invokes the same script on free GHA ubuntu-latest in <2 min total runtime. Hard size gate 30-50 MB; ELF-RUNPATH-patched-count gate ≥1. The original termux-packages docker workflow is removed.
+
+4. **Reproducibility deferral**: byte-stable rebuilds (sha256(build1) == sha256(build2)) require pinning the upstream Termux apt snapshot (currently the script always pulls HEAD of the Cloudflare-fronted apt repo). This is M4-S08 work — outside M4-S03 scope.
+
+5. **Compile-time config-default residuals (116 binary files)**: zsh's `module_path`/`fpath` defaults, default `HOME`, git's `libexec/git-core` default, etc. are baked into binaries' `.rodata` sections at termux-packages compile time and CANNOT be patched in-place (length mismatch + section relocation complexity). These are overridden via:
+   - **zsh-specific**: ship a generated `$ZDOTDIR/.zshenv` that sets shell-array `module_path=(...)` and `fpath=(...)` (NOT env vars — zsh 5.9 reinitializes `module_path` from compile-time defaults regardless of `$MODULE_PATH` env). M4-S06 deliverable.
+   - **git-specific**: set `GIT_EXEC_PATH=$PREFIX/libexec/git-core` env var at PTY spawn. M4-S06 deliverable.
+   - **HOME / ZDOTDIR / standard env vars**: standard `setenv` at spawn. M4-S06 deliverable.
+
+6. **What this means for the M4 milestone**:
+   - **M4-S02** (fork + $PREFIX retargeting): UNCHANGED. The fork at `ImL1s/termux-packages` still serves as the policy source-of-truth for which packages we retarget.
+   - **M4-S03** (this story): build pipeline is `tools/scripts/build-bootstrap.sh` not `termux-packages/scripts/build-bootstraps.sh`. Round-5 PASS at main `879449b` / CI run `25208634206`.
+   - **M4-S05** (atomic extraction): unchanged in scope; AC amended to verify post-extraction dynamic linking succeeds without LD_LIBRARY_PATH override.
+   - **M4-S06** (PTY spawn $PREFIX/bin/zsh): scope expanded to include zsh-specific shell-array config + git GIT_EXEC_PATH. AC amended to require device verification.
+   - **M4-S08** (reproducibility): unchanged in scope; pins upstream apt snapshot for byte-stable rebuilds.
+
+7. **Plan §6 M4 row #2 should now read**: "Run `tools/scripts/build-bootstrap.sh` (Option-A pivot, see Amendment 6) — downloads upstream Termux .debs from packages-cf.termux.dev; retargets paths to dev.warp.mobile via text sed + patchelf RUNPATH + symlink retarget; outputs bootstrap-aarch64.zip + bootstrap-metadata.json." (The original "build-bootstraps.sh in docker" text is preserved for forensic reference in Amendment 6 above.)
+
+**Strategic insight**: this amendment is the same pattern as Amendment 5 (M3-S03 cfg-gate→extraction): a Pre-mortem trip on architectural assumption (docker-source-compile would Just Work on free CI) → architecture pivot (use upstream prebuilts + retarget at our seam) → milestone scope preserved. M4-S03 absorbs ~40% of what was originally M4-S05 binary-handling responsibility (RUNPATH patching) while M4-S05 retains the atomic-extract orchestration and M4-S06 absorbs the runtime config-default override responsibility.
+
+**Pattern lesson reinforced**: when a Pre-mortem trip reveals fundamental environment incompatibility (not tactical), the plan amendment is the correct response. The original M4-S03 plan's "if Docker not available locally: defer to CI" optimism was misplaced — even on CI, docker-in-docker for termux-packages's own Android SDK setup is fragile. The path-rewrite seam is robust because it's deterministic stdlib work, not "hope the upstream toolchain works".
 
 ---
 

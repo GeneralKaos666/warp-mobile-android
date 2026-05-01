@@ -10,7 +10,7 @@ After 3 failed source-compile attempts (M4-S03 round 1/2/3 logged in `M4-S03-exe
 
 **Decision**: switch from `build-bootstraps.sh` (source compile in docker) to a custom `build-bootstrap.sh` that downloads upstream Termux prebuilt `.deb` packages from `packages-cf.termux.dev` and retargets paths after extraction.
 
-**Why**: free (no docker, no Android SDK), fast (~5 min on GHA, ~3 min locally), reproducible (stdlib python3 + standard unix tools only), works identically on dev machines and CI, and matches the pattern Termux's own CI uses for `generate-bootstraps.sh` fast-track artifacts.
+**Why**: free (no docker, no Android SDK), fast (~2 min on GHA, ~3 min locally), tooling-deterministic (stdlib python3 + standard unix tools + patchelf only), works identically on dev machines and CI, and matches the pattern Termux's own CI uses for `generate-bootstraps.sh` fast-track artifacts. Byte-stable reproducibility across rebuilds at a fixed upstream apt snapshot is M4-S08 work — not claimed in M4-S03.
 
 ## What changed
 
@@ -35,9 +35,9 @@ The previous in-flight workflow (build-bootstraps.sh + docker) is preserved in g
 
 **For F-Droid distribution** (M4-S08, M4-S09):
 
-- The build is fully reproducible from a clean checkout: `./tools/scripts/build-bootstrap.sh`. No docker, no SDK, no NDK, no rust toolchain.
-- The only external dependency is `packages-cf.termux.dev` (Cloudflare-fronted Termux apt repo). Pinning a specific snapshot is a future enhancement (M4-S08 reproducibility manifest deliverable).
-- Anyone can re-run the build and verify the SHA256 in `bootstrap-metadata.json` matches the released zip — F-Droid's "build from source" requirement is satisfied at the bootstrap layer.
+- The build is **runnable** from a clean checkout: `./tools/scripts/build-bootstrap.sh`. No docker, no SDK, no NDK, no rust toolchain. Required tools: bash, python3, curl, tar, xz, zip, unzip, find, grep, sed, awk, file, sha256sum, patchelf.
+- **F-Droid-grade byte reproducibility is NOT yet achieved** — the script always pulls HEAD of `packages-cf.termux.dev` (Cloudflare-fronted Termux apt repo), so two builds on different days yield different sha256. M4-S08 pins the upstream apt snapshot (commit hash or date) so rebuilds are byte-identical at the same `warp-mobile-android` commit.
+- Anyone can re-run the build and verify the SHA256 in `bootstrap-metadata.json` against the local artifact — once M4-S08 lands the snapshot pin, this becomes the "build from source" gate F-Droid expects.
 
 **For dev experience**:
 
@@ -46,7 +46,7 @@ The previous in-flight workflow (build-bootstraps.sh + docker) is preserved in g
 
 ## What this handles in M4-S03 (after Codex round-4 review)
 
-**ELF DT_RUNPATH retargeting**: `patchelf --set-rpath` rewrites the runpath on every shared object and executable so the dynamic linker resolves libraries at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH=...` at every spawn. Codex round-4 caught this (the original strategy doc claimed leftovers were ".rodata cosmetic" — verifiably wrong: `objdump -p bin/zsh` shows `RUNPATH /data/data/com.termux/files/usr/lib`, which is dynamic-linker-critical). After the patchelf step, 307 of 308 ELF files have correct RUNPATH (the 1 unpatched is a static binary with no RUNPATH entry).
+**ELF DT_RUNPATH retargeting**: `patchelf --set-rpath` rewrites the runpath on every shared object and executable so the dynamic linker resolves libraries at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH=...` at every spawn. Codex round-4 caught this (the original strategy doc claimed leftovers were ".rodata cosmetic" — verifiably wrong: `objdump -p bin/zsh` shows `RUNPATH /data/data/com.termux/files/usr/lib`, which is dynamic-linker-critical). After the patchelf step, 307 of 308 ELF files have correct RUNPATH; the 1 unpatched is `lib/libc++_shared.so` — a dynamic shared object that has no DT_RUNPATH entry to begin with (verified via `objdump -p`), so there's nothing to patch.
 
 **Symlink target retargeting**: 20 absolute symlinks pointing into `/data/data/com.termux/...` are rewritten to `/data/data/dev.warp.mobile/...` and stored in `SYMLINKS.txt` (the format the Termux app extractor expects).
 

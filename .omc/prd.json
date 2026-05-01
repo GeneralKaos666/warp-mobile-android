@@ -253,13 +253,15 @@
       "id": "M4-S03",
       "title": "Bootstrap zip build (bash + zsh + coreutils + findutils + apt + pkg + git)",
       "passes": true,
-      "verifiedBy": "codex round-3 PASS @ main c58b9b4 (Docker-deferred CI workflow; --add zsh,git after default-package filtering + comment-skip)",
+      "verifiedBy": "codex round-5 PASS @ main 879449b (Plan Amendment 6: Option-A pivot to upstream-prebuilt-debs + tools/scripts/build-bootstrap.sh path-rewrite + patchelf RUNPATH retargeting). CI run 25208634206 GREEN; bootstrap-aarch64.zip 45,795,528 bytes / 43 MB / sha256 252327693632847872d7ee56d99193503386bbe2c4639f24216e69f1eefb5b12; 72 packages (7 requested + transitive deps); 215 text files retargeted; 307 of 308 ELF DT_RUNPATHs patched (1 dynamic ELF lib/libc++_shared.so has no RUNPATH entry); 116 residual com.termux strings in compile-time config defaults (M4-S05/M4-S06 carry-forward).",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
-        "Run termux-packages/scripts/build-bootstraps.sh with package list: bash, zsh, coreutils-gnu, findutils, apt, pkg, git",
-        "Output artifact: bootstrap-aarch64.zip (target ~30-50MB compressed per ralplan §M4 #1)",
-        "SHA256 hash recorded for reproducibility manifest (M4-S08)",
-        "If Docker/Linux build env not available locally: document the requirement + CI-build expectation; defer artifact production to future session",
+        "Run tools/scripts/build-bootstrap.sh (Plan Amendment 6 pivot from termux-packages/scripts/build-bootstraps.sh): downloads upstream Termux .debs from packages-cf.termux.dev, retargets paths to dev.warp.mobile, packages bootstrap-aarch64.zip",
+        "Output artifact: bootstrap-aarch64.zip within 30-50 MB compressed envelope per ralplan §6 M4 #1",
+        "Path retargeting: text files (shebangs, configs, scripts) sed-rewritten com.termux→dev.warp.mobile; ELF DT_RUNPATH on every binary patched via patchelf (covers ALL dynamic-linker resolution); absolute symlink targets rewritten to dev.warp.mobile in SYMLINKS.txt sidecar",
+        "SHA256 hash recorded in bootstrap-metadata.json (M4-S08 reproducibility manifest will pin upstream apt snapshot for byte-identical rebuilds)",
+        "Free + working CI/CD: GitHub Actions ubuntu-latest workflow .github/workflows/build-bootstrap.yml runs the same build-bootstrap.sh; <2 min run time; no Docker/Android SDK/Rust toolchain needed",
+        "Local rebuild: same build-bootstrap.sh runs on macOS + Linux dev machines (cross-platform via stdlib python3 ar/tar reader); README documents both CI and local paths",
         "Codex review dispatched and PASS verdict received"
       ]
     },
@@ -289,7 +291,7 @@
         "Subsequent launches: verify extraction by checking version.json sha256 match; instant return without re-extraction",
         "Verification: install APK on S24 Ultra R5CX10VFFBA; first launch shows bootstrap install progress; subsequent launch instant (no progress dialog); kill-mid-extract test (am force-stop during install) recovers cleanly on next launch",
         "Codex review dispatched and PASS verdict received",
-        "ELF DT_RUNPATH retargeting verification: /data/data/dev.warp.mobile/files/usr/bin/zsh and /usr/bin/git launch on S24 Ultra without LD_LIBRARY_PATH override (M4-S03 round-4 carry-forward: build-bootstrap.sh patchelf step ensures RUNPATH is correct in zip; M4-S05 verifies post-extraction that dynamic linking actually succeeds)"
+        "ELF DT_RUNPATH retargeting verification: $PREFIX/bin/zsh and $PREFIX/bin/git launch on S24 Ultra without LD_LIBRARY_PATH override; verify via `adb shell /data/data/dev.warp.mobile/files/usr/bin/zsh -c 'echo $0'` and `$PREFIX/bin/git --version` succeed in a fresh shell (M4-S03 round-4 carry-forward: build-bootstrap.sh patchelf step ensures RUNPATH is correct in zip; M4-S05 verifies post-extraction that dynamic linking actually succeeds)"
       ]
     },
     {
@@ -304,7 +306,8 @@
         "zsh_body.sh hooks fire correctly via precmd/preexec — verifies M3-S06 deferred path",
         "Device verification: spawn shell on S24U R5CX10VFFBA; whoami returns u0_aXXXX (app UID); echo $0 returns zsh; ls --color=auto produces ANSI escapes (closes M3-S08 AC#5 toybox-color deferral)",
         "Codex review dispatched and PASS verdict received",
-        "zsh-runtime-config env var override: HOME, ZDOTDIR, FPATH, MODULE_PATH all set at spawn so zsh respects the dev.warp.mobile prefix despite residual com.termux strings in config-default sections (M4-S03 round-4 carry-forward: 116 binary files have non-RUNPATH com.termux strings as compiled-in defaults; runtime env vars override)"
+        "zsh runtime-config override (M4-S03 round-5 carry-forward): zsh 5.9 does NOT honor inherited MODULE_PATH/FPATH env vars — it reinitializes from compiled defaults. Override via $ZDOTDIR/.zshenv: ship a generated zshenv that sets `module_path=($PREFIX/lib/zsh/5.9)` and `fpath=($PREFIX/share/zsh/5.9/functions $PREFIX/share/zsh/site-functions $fpath)` (lowercase shell array assignment, NOT MODULE_PATH=). HOME and ZDOTDIR DO work as env vars at spawn. Device verification: `zmodload zsh/zutil` succeeds (proves module_path resolves to dev.warp.mobile path) and tab-completion of `git ` shows git subcommands (proves fpath resolves)",
+        "git compile-time defaults override (M4-S03 round-5 carry-forward): git binary has /data/data/com.termux/files/usr/libexec/git-core hardcoded as exec-path default; verify on device that `git --exec-path` returns /data/data/dev.warp.mobile/files/usr/libexec/git-core (set via GIT_EXEC_PATH env var at PTY spawn or via `git config --global` writing to ~/.gitconfig). Also verify `git clone https://github.com/octocat/Hello-World.git /tmp/test` succeeds (proves git-remote-https subprocess loads correctly via the patched RUNPATH + GIT_EXEC_PATH)"
       ]
     },
     {
