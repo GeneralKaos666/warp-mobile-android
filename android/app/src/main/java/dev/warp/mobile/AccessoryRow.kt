@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
@@ -58,11 +59,43 @@ import org.json.JSONArray
 class AccessoryRow @JvmOverloads constructor(
     context: Context,
     attrs: android.util.AttributeSet? = null,
-) : HorizontalScrollView(context, attrs) {
+) : LinearLayout(context, attrs) {
 
     private val LOG_TAG = "WarpAccessoryRow"
     private val cmdId: String = "default"
-    private val rowLayout: LinearLayout
+
+    /**
+     * M6 carry-over #1: ghost-suggestion strip. Sits above the button
+     * row; visibility=GONE when no suggestion active. Tapping the strip
+     * itself ALSO accepts (in addition to Tab button), for thumb reach.
+     *
+     * Initialized inline as the first child of the root LinearLayout —
+     * declaration-site init is required because field-declared listeners
+     * (connectivityListener, ghostSuggestListener) reference these
+     * fields and Kotlin runs field initializers in declaration order
+     * BEFORE the explicit init {} block.
+     */
+    private val ghostStrip: TextView = TextView(context).apply {
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setTextColor(0xFFAAAAAA.toInt())
+        setBackgroundColor(0xFF181818.toInt())
+        setPadding(dp(12), dp(6), dp(12), dp(6))
+        typeface = android.graphics.Typeface.MONOSPACE
+        setSingleLine(true)
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        visibility = View.GONE
+    }
+    private val horizontalScroll: HorizontalScrollView = HorizontalScrollView(context).apply {
+        isFillViewport = false
+    }
+    private val rowLayout: LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+        gravity = Gravity.CENTER_VERTICAL
+    }
 
     /**
      * Sticky modifier state. When `ctrlPending` is true, the next
@@ -88,6 +121,43 @@ class AccessoryRow @JvmOverloads constructor(
     private var ghostButton: Button? = null
     private var agentButton: Button? = null
 
+    /**
+     * M6 carry-over #1: ghost-suggest controller listener. Updates the
+     * strip view + Tab button affordance whenever the controller's
+     * SuggestionState changes (typing, thinking, ready, error).
+     * Marshals to UI thread via post() — controller fires on the
+     * main handler already, so post is just defense-in-depth.
+     */
+    private val ghostSuggestListener = object : GhostSuggestController.Listener {
+        override fun onSuggestionState(state: GhostSuggestController.SuggestionState) {
+            post {
+                when (state.phase) {
+                    "ready" -> {
+                        ghostStrip.text = "💡 ${state.suggestion}  ·  Tab to accept"
+                        ghostStrip.visibility = View.VISIBLE
+                    }
+                    "thinking" -> {
+                        // Only show "thinking" if we already have a buffer
+                        // worth showing to avoid a UI flicker on every
+                        // single keystroke. >= 4 chars feels right.
+                        if (state.buffer.length >= 4) {
+                            ghostStrip.text = "💡 thinking…"
+                            ghostStrip.visibility = View.VISIBLE
+                        } else {
+                            ghostStrip.visibility = View.GONE
+                        }
+                    }
+                    "offline", "no-key", "error" -> {
+                        ghostStrip.visibility = View.GONE
+                    }
+                    else -> {
+                        ghostStrip.visibility = View.GONE
+                    }
+                }
+            }
+        }
+    }
+
     private val connectivityListener = object : AiConnectivity.Listener {
         override fun onConnectivityChanged(online: Boolean) {
             // Listener fires on a Binder thread when the network
@@ -106,18 +176,28 @@ class AccessoryRow @JvmOverloads constructor(
     }
 
     init {
-        isFillViewport = false
+        orientation = LinearLayout.VERTICAL
         setBackgroundColor(0xFF202020.toInt())
-        // No edge-to-edge background; respect the standard IME accessory aesthetic.
-        rowLayout = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+
+        // Wire the ghost strip's onClick now (couldn't do it at field
+        // declaration because acceptGhostSuggestion is a member fn).
+        ghostStrip.setOnClickListener { acceptGhostSuggestion() }
+        addView(
+            ghostStrip,
+            LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        addView(rowLayout)
+        )
+
+        horizontalScroll.addView(rowLayout)
+        addView(
+            horizontalScroll,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
         buildButtons()
     }
 
@@ -137,10 +217,22 @@ class AccessoryRow @JvmOverloads constructor(
             // tapping ESC during a streaming AI response stops the
             // stream + sends ESC byte to PTY (consistent dual purpose
             // matches Termux's ESC behavior).
+            // M6-CO1: ESC also dismisses the ghost-suggestion strip.
             cancelActiveStream()
+            try { GhostSuggestController.dismissSuggestion() } catch (_: Throwable) {}
             sendBytes(byteArrayOf(0x1B))
         }
-        addBtn("Tab")  { sendBytes(byteArrayOf(0x09)) }
+        addBtn("Tab")  {
+            // M6-CO1: if a ghost suggestion is ready, accept it
+            // instead of sending the Tab byte. The controller returns
+            // the suffix (suggestion - already-typed prefix) so the
+            // PTY sees only the new bytes, exactly as if the user
+            // had typed them. Falls back to plain Tab when no
+            // suggestion is active.
+            if (!acceptGhostSuggestion()) {
+                sendBytes(byteArrayOf(0x09))
+            }
+        }
         ctrlButton = addBtn("Ctrl") { ctrlPending = !ctrlPending }
         altButton  = addBtn("Alt")  { altPending  = !altPending }
         // Arrow keys send CSI sequences: ESC [ A/B/C/D for up/down/right/left.
@@ -696,6 +788,10 @@ class AccessoryRow @JvmOverloads constructor(
         // thread; listener marshals to UI thread before touching state).
         // M6-S05 v1 carry-over closure.
         AiConnectivity.get(context).register(connectivityListener)
+        // Subscribe to ghost-suggest state. Controller needs an
+        // application Context to read AiKeyStore + check connectivity.
+        GhostSuggestController.setContext(context)
+        GhostSuggestController.register(ghostSuggestListener)
     }
 
     override fun onDetachedFromWindow() {
@@ -709,6 +805,40 @@ class AccessoryRow @JvmOverloads constructor(
         try {
             AiConnectivity.get(context).unregister(connectivityListener)
         } catch (_: Throwable) { /* best effort */ }
+        try {
+            GhostSuggestController.unregister(ghostSuggestListener)
+        } catch (_: Throwable) { /* best effort */ }
+    }
+
+    /**
+     * M6-CO1: try to accept the active ghost suggestion. Returns true
+     * if a suggestion was active + the suffix bytes were sent to PTY,
+     * false if no suggestion (caller should fall back to plain Tab byte).
+     *
+     * Called from the Tab button + the ghost-strip's onClick handler
+     * (so users can tap either to accept).
+     */
+    private fun acceptGhostSuggestion(): Boolean {
+        val suffix = try {
+            GhostSuggestController.acceptCurrent()
+        } catch (e: Throwable) {
+            Log.w(LOG_TAG, "GhostSuggest accept failed: ${e.message}")
+            null
+        } ?: return false
+        if (suffix.isEmpty()) return false
+        // Bypass the sticky-modifier path of sendBytes() — accept is
+        // a verbatim insert, not a modifier-augmented keystroke.
+        val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+            component = ComponentName(
+                context.packageName,
+                "${context.packageName}.PtyBroadcastReceiver"
+            )
+            putExtra("cmd_id", cmdId)
+            putExtra("data", suffix)
+        }
+        context.sendBroadcast(intent)
+        Log.i(LOG_TAG, "ghost-accept: ${suffix.size} bytes to PTY")
+        return true
     }
 
     /**

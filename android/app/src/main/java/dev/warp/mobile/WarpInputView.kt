@@ -440,6 +440,14 @@ class WarpInputView @JvmOverloads constructor(
                 "IC.commitText text=${quote(s)} cursorPos=$newCursorPosition len=${s.length}"
             )
             NativeBridge.imeCommitText(s, newCursorPosition)
+            // M6 carry-over #1: forward to ghost-suggest controller for
+            // debounced auto-trigger. Controller filters / debounces /
+            // resets on Enter internally — a no-op when feature disabled.
+            try {
+                GhostSuggestController.onTextCommitted(s)
+            } catch (t: Throwable) {
+                Log.w(TAG, "GhostSuggest forward failed: ${t.message}")
+            }
             return super.commitText(text, newCursorPosition)
         }
 
@@ -455,6 +463,14 @@ class WarpInputView @JvmOverloads constructor(
                 "IC.setComposingText text=${quote(s)} cursorPos=$newCursorPosition len=${s.length} spanned=${text is Spanned}"
             )
             NativeBridge.imeSetComposingText(s, newCursorPosition)
+            // M6 carry-over #1: forward composing text to ghost-suggest
+            // controller — round-1 ignores composing (CJK candidate
+            // previews would thrash); placeholder for round-2 wiring.
+            try {
+                GhostSuggestController.onTextComposing(s)
+            } catch (t: Throwable) {
+                Log.w(TAG, "GhostSuggest compose forward failed: ${t.message}")
+            }
             return super.setComposingText(text, newCursorPosition)
         }
 
