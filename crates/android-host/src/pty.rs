@@ -237,9 +237,14 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let r = unsafe { libc::kill(pid, 0) };
         assert_eq!(r, -1, "process should be gone after drop");
+        // errno read: use std::io::Error::last_os_error for cross-platform
+        // portability — `libc::__error()` is the macOS-specific symbol
+        // (Linux uses `__errno_location`, Bionic uses `__errno`). The std
+        // wrapper picks the right one per target. Caught by CI on Linux
+        // ubuntu-latest where __error doesn't exist.
         assert_eq!(
-            unsafe { *libc::__error() },
-            libc::ESRCH,
+            io::Error::last_os_error().raw_os_error(),
+            Some(libc::ESRCH),
             "errno should be ESRCH"
         );
     }
