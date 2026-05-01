@@ -175,8 +175,8 @@
     {
       "id": "M3-S10",
       "title": "APK size budget — release ≤80MB / combined ≤120MB (M3 Acceptance #4)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-2 PASS @ main 1c22948 (release APK 7.4MB / 90% margin under 80MB gate; validation layer absent; lint task dep fix)",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "Release APK (excluding bootstrap zip) ≤80MB: `cd android && ./gradlew :app:assembleRelease` produces app-release-unsigned.apk; `du -h` ≤80MB",
