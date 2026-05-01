@@ -1,0 +1,5 @@
+# M4-S08 reproducibility pin — sha256 of (Packages.aarch64 || Packages.all)
+# concatenated then re-hashed. Bump via UPDATE_SNAPSHOT=1 ./build-bootstrap.sh.
+# Drift = upstream Termux apt repo changed; either bump pin (and rebuild) or
+# the build fails with a clear message.
+a1a64f56363a0e201467dde7a445aea51b11b11385c65ba3d447d5fd212ab505

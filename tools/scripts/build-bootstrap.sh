@@ -57,6 +57,12 @@ ARCH="${1:-aarch64}"
 PKG_LIST_FILE="${2:-tools/scripts/m4-bootstrap-packages.txt}"
 OUT_DIR="${3:-$PWD}"
 
+# Normalize OUT_DIR to an absolute path. Step 6 cd's into the staging tree
+# before invoking zip, so a relative OUT_DIR would resolve against the
+# wrong cwd and `zip -@` would fail with "Could not create output file".
+mkdir -p "$OUT_DIR"
+OUT_DIR=$(cd "$OUT_DIR" && pwd)
+
 REPO_BASE_URL="${REPO_BASE_URL:-https://packages-cf.termux.dev/apt/termux-main}"
 WARP_APP_ID="${WARP_APP_ID:-dev.warp.mobile}"
 UPSTREAM_APP_ID="com.termux"
@@ -113,6 +119,42 @@ curl -fsSL "$REPO_BASE_URL/dists/stable/main/binary-$ARCH/Packages" \
 # binary-all may not exist for all repos; tolerate 404.
 curl -fsSL "$REPO_BASE_URL/dists/stable/main/binary-all/Packages" \
     -o "$WORK/Packages.all" 2>/dev/null || : > "$WORK/Packages.all"
+
+# M4-S08 reproducibility: pin the upstream Packages snapshot. Once the snapshot
+# .sha256 file exists, every build verifies the downloaded Packages file matches
+# (transitively pinning all .deb shas because the .debs' shas are listed inside
+# Packages and verified per-download in step 3). To bump the pin, run with
+# UPDATE_SNAPSHOT=1 — the pin file is rewritten with the current upstream sha.
+SNAPSHOT_PIN_FILE="${SNAPSHOT_PIN_FILE:-tools/scripts/m4-bootstrap-snapshot.sha256}"
+# Compute by sha256-ing the file CONTENTS, not by chaining sha256sum which
+# would include the mktemp path in the inner hash and yield non-deterministic
+# results across runs.
+ACTUAL_SNAPSHOT_SHA=$(cat "$WORK/Packages.$ARCH" "$WORK/Packages.all" | sha256sum | awk '{print $1}')
+if [ "${UPDATE_SNAPSHOT:-0}" = "1" ]; then
+    mkdir -p "$(dirname "$SNAPSHOT_PIN_FILE")"
+    cat > "$SNAPSHOT_PIN_FILE" <<EOF
+# M4-S08 reproducibility pin — sha256 of (Packages.${ARCH} || Packages.all)
+# concatenated then re-hashed. Bump via UPDATE_SNAPSHOT=1 ./build-bootstrap.sh.
+# Drift = upstream Termux apt repo changed; either bump pin (and rebuild) or
+# the build fails with a clear message.
+$ACTUAL_SNAPSHOT_SHA
+EOF
+    echo "    -> [UPDATE_SNAPSHOT=1] wrote new pin to $SNAPSHOT_PIN_FILE"
+elif [ -f "$SNAPSHOT_PIN_FILE" ]; then
+    EXPECTED_SNAPSHOT_SHA=$(grep -v '^#' "$SNAPSHOT_PIN_FILE" | tr -d '[:space:]' | head -c 64)
+    if [ "$ACTUAL_SNAPSHOT_SHA" != "$EXPECTED_SNAPSHOT_SHA" ]; then
+        echo "[!] Upstream Packages snapshot drift detected (M4-S08 pin mismatch)" >&2
+        echo "    Pinned:   $EXPECTED_SNAPSHOT_SHA" >&2
+        echo "    Actual:   $ACTUAL_SNAPSHOT_SHA" >&2
+        echo "    Pin file: $SNAPSHOT_PIN_FILE" >&2
+        echo "    To accept the upstream change and re-pin:" >&2
+        echo "      UPDATE_SNAPSHOT=1 $0 $ARCH" >&2
+        exit 1
+    fi
+    echo "    -> Snapshot pin OK ($EXPECTED_SNAPSHOT_SHA)"
+else
+    echo "    -> [no pin] M4-S08 not yet pinned; run UPDATE_SNAPSHOT=1 to create $SNAPSHOT_PIN_FILE"
+fi
 
 # ─── 2. Resolve dependencies ──────────────────────────────────────────────────
 echo "[2/6] Resolving package dependencies (Python)..."
@@ -420,9 +462,48 @@ echo "[6/6] Creating bootstrap-$ARCH.zip..."
 
 # The Termux extractor expects the zip rooted at $PREFIX, with symlinks stored
 # in SYMLINKS.txt (lines: `target←linkname`) instead of as actual symlinks.
+# M4-S08 reproducibility: normalize all file mtimes to SOURCE_DATE_EPOCH
+# (default 2020-01-01 UTC = epoch 1577836800) so zip per-entry timestamps
+# are stable across runs. patchelf + sed rewrites + python extractall all
+# update mtime to "now"; without this normalization, two builds at the
+# same Packages snapshot produce zips that differ only in mtime bytes.
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1577836800}"
+echo "    -> normalizing mtimes to SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH (M4-S08)"
+# Python utime works cross-platform (BSD touch -d doesn't accept @epoch).
+# follow_symlinks=False is the equivalent of touch -h: set the link's own
+# mtime, don't follow to the target (the target may not exist post-rename).
+python3 -c "
+import os, sys
+ts = int('$SOURCE_DATE_EPOCH')
+root = '$TARGET_PREFIX'
+for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    # Set dir mtimes too so zip dir entries are stable.
+    try:
+        os.utime(dirpath, (ts, ts), follow_symlinks=False)
+    except (OSError, NotImplementedError):
+        pass
+    for name in filenames + dirnames:
+        path = os.path.join(dirpath, name)
+        try:
+            os.utime(path, (ts, ts), follow_symlinks=False)
+        except (OSError, NotImplementedError):
+            # follow_symlinks=False not supported on some platforms for
+            # non-symlinks; fall back to default which follows but the
+            # target also gets mtime-normalized in the same walk pass.
+            try:
+                os.utime(path, (ts, ts))
+            except OSError:
+                pass
+"
+
 (cd "$TARGET_PREFIX"
-    # Truncate any stale SYMLINKS.txt.
-    : > SYMLINKS.txt
+    # M4-S08 reproducibility: collect symlinks into a list first, then
+    # SORT alphabetically before writing SYMLINKS.txt. Without this, the
+    # readdir order from `find -type l` is filesystem-dependent and
+    # produces non-deterministic SYMLINKS.txt content (different sha
+    # across rebuilds even at the same Packages snapshot).
+    SYMTMP=$(mktemp -t warp-symlinks.XXXXXX)
+    : > "$SYMTMP"
     REWRITTEN_SYMLINKS=0
     while IFS= read -r -d '' link; do
         # Strip leading ./ from the link path.
@@ -437,14 +518,35 @@ echo "[6/6] Creating bootstrap-$ARCH.zip..."
                 REWRITTEN_SYMLINKS=$((REWRITTEN_SYMLINKS+1))
                 ;;
         esac
-        echo "${target}←${rel}" >> SYMLINKS.txt
+        printf '%s\xe2\x86\x90%s\n' "$target" "$rel" >> "$SYMTMP"
         rm -f "$link"
     done < <(find . -type l -print0)
+    LC_ALL=C sort "$SYMTMP" > SYMLINKS.txt
+    rm -f "$SYMTMP"
     SYMCOUNT=$(wc -l < SYMLINKS.txt | tr -d ' ')
-    echo "    -> $SYMCOUNT symlinks recorded in SYMLINKS.txt ($REWRITTEN_SYMLINKS retargeted)"
+    echo "    -> $SYMCOUNT symlinks recorded in SYMLINKS.txt ($REWRITTEN_SYMLINKS retargeted, sorted)"
 
+    # M4-S08 reproducibility: normalize SYMLINKS.txt mtime too. The earlier
+    # mtime normalization pass runs BEFORE this file is created, so without
+    # this second pass SYMLINKS.txt would carry "now" as its timestamp and
+    # cause two builds to produce different zip headers.
+    python3 -c "
+import os
+ts = int('$SOURCE_DATE_EPOCH')
+os.utime('SYMLINKS.txt', (ts, ts))
+"
+
+    # M4-S08 reproducibility: zip from a SORTED file list so entry order is
+    # deterministic. Plain `zip -r9` walks the tree in filesystem readdir
+    # order which is platform-dependent. Pass via stdin using `-@`.
     # zip -X strips extended attributes for byte-stable output. -9 = max compression.
-    zip -r9 -X -q "$OUT_DIR/bootstrap-$ARCH.zip" .
+    rm -f "$OUT_DIR/bootstrap-$ARCH.zip"
+    # Only files (not dirs) — zip preserves directory structure from file
+    # paths and would otherwise emit "cannot repeat names" when both a dir
+    # entry AND files in it are passed to `zip -@`.
+    find . -type f 2>/dev/null \
+        | LC_ALL=C sort \
+        | zip -9 -X -q -@ "$OUT_DIR/bootstrap-$ARCH.zip"
 )
 
 # ─── Metadata ─────────────────────────────────────────────────────────────────
