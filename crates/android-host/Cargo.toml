@@ -2,10 +2,10 @@
 name = "warp-mobile-android-host"
 version = "0.1.0"
 edition = "2021"
-# M2-S08: build.rs compiles GLSL -> SPIR-V via NDK's glslc on the host. The
-# target Android binary embeds the resulting .spv via include_bytes!. See
-# build.rs for rationale (shaderc-rs has Android cross-compile issues).
-build = "build.rs"
+# M4-S12 round-3 (codex round-2 finding): shader compile pipeline moved to
+# `warp_mobile_android_link` (the canonical home for static_grid/dynamic_grid
+# Vulkan rendering). This crate no longer needs a build.rs — all .spv blobs
+# are include_bytes!'d from $OUT_DIR of the link crate.
 
 [lib]
 name = "warp_mobile_android_host"
