@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/android-host",
+    "crates/warp_ai_mobile",
 ]
 resolver = "2"
 

@@ -1,0 +1,56 @@
+[package]
+name = "warp_ai_mobile"
+version = "0.1.0"
+edition = "2021"
+# M6-S03 foundation: Rust async client for Anthropic Claude APIs.
+#
+# Round-1 (M6-S02) shipped a synchronous Java HttpsURLConnection client
+# (android/.../AnthropicClient.kt) sufficient for one-shot Test
+# Connection. M6-S03 needs SSE streaming + cancel-on-keystroke for
+# inline ghost-text + agent task UX, which Java's URLConnection doesn't
+# support cleanly. This crate provides the async layer.
+#
+# Modules (planned for M6-S03..M6-S05):
+#   - client.rs   — POST /v1/messages with stream=true, parse SSE chunks
+#   - ghost.rs    — debounced ghost-text completion + cancel token
+#   - agent.rs    — multi-step agent task with system prompt
+#   - connectivity.rs — online/offline state for graceful degrade
+#
+# This Cargo.toml ships the dependencies + lib.rs scaffold so the next
+# round can start writing the streaming logic without architectural
+# arguments. The actual implementation is M6-S03 round-2 work.
+
+[lib]
+name = "warp_ai_mobile"
+crate-type = ["rlib"]
+
+[dependencies]
+# Async runtime. Tokio multi-thread for the HTTPS request executor; we
+# don't need it for the Java JNI thread which already runs requests
+# from Dispatchers.IO. Keep features minimal — full tokio default
+# pulls in 800+ KB to the .so.
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros", "io-util", "time", "sync"] }
+# HTTPS client. rustls-tls (NOT default OpenSSL) for cross-compile
+# simplicity — rustls + ring cross-compile cleanly to aarch64-linux-
+# android via NDK 25c+. OpenSSL would require pkg-config / vendored
+# build for Android. `stream` feature for SSE chunks.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json", "stream"] }
+# JSON for Anthropic request/response bodies + SSE event payloads.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Streaming utilities — SSE chunks come back as a Stream<Item = Bytes>
+# from reqwest::Response::bytes_stream(). futures-util gives StreamExt.
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+# Pin webpki-roots so reqwest doesn't try to use the OS root store
+# (Android's user-cert store is locked down on API 24+; rustls + bundled
+# webpki-roots gives a deterministic CA set that doesn't depend on Knox
+# certificate-management state).
+webpki-roots = "0.26"
+# Logging facade (impl provided by the consumer crate; android-host
+# wires android_logger to receive log:: events).
+log = "0.4"
+# Cancellation primitives for tokio. `rt` feature includes the
+# CancellationToken sync primitive M6-S03 round-2 needs for cancel-on-
+# keystroke ghost-text. Round-1 doesn't reference it yet but keep the
+# dep so cross-compile pulls it once.
+tokio-util = "0.7"
