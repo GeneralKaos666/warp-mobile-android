@@ -1,0 +1,137 @@
+name: Release (v* tag)
+
+# v1-release prep: triggered by pushing a tag matching `v*` (e.g. v0.6.0-m6).
+# Builds release APK + bootstrap zip, generates SHA256SUMS, creates a
+# GitHub Release with the artifacts attached.
+#
+# Optional signing: if the repo has secrets KEYSTORE_BASE64 +
+# KEYSTORE_PASSWORD + KEY_ALIAS + KEY_PASSWORD set, the APK is signed.
+# Otherwise the release ships an unsigned APK (matches F-Droid path).
+#
+# To create a signed release locally instead, see tools/scripts/release.sh.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 0.6.0-m6) — without the 'v' prefix"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # required for gh release create
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # for `git describe --tags`
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # tag ref like refs/tags/v0.6.0-m6 -> 0.6.0-m6
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf python3 zip unzip curl
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Rust + Android NDK target
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-linux-android
+          override: true
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK r29
+        run: |
+          # The setup-android action installs the SDK; pull NDK r29
+          # explicitly to match the version pinned in build.gradle
+          # (ndkVersion '29.0.13113456').
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.13113456"
+
+      - name: Clone warp-src + termux-packages forks
+        run: |
+          git clone https://github.com/ImL1s/warp ../warp-src \
+            --branch warp-mobile/m0-facade --depth 1
+          git clone https://github.com/ImL1s/termux-packages ../termux-packages \
+            --branch warp-mobile/main --depth 1
+          bash tools/scripts/setup-cargo-config.sh
+
+      - name: Decode keystore (if signing secrets present)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            echo "Decoding keystore..."
+            echo "$KEYSTORE_BASE64" | base64 -d > android/keystore.jks
+            cat > android/keystore.properties <<EOF
+          storeFile=keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+            echo "  -> signed APK path will be used"
+          else
+            echo "  -> no signing secrets; will produce UNSIGNED APK (F-Droid path)"
+          fi
+
+      - name: Run release.sh
+        env:
+          # We expect the tag to be pushed before the workflow fires, but
+          # workflow_dispatch may run before the tag exists. release.sh's
+          # ALLOW_DIRTY_TREE escape hatch handles this — the CI environment
+          # is freshly cloned from the tag so tree is clean by construction.
+          ALLOW_DIRTY_TREE: "1"
+        run: |
+          # Don't pass --upload here; we use gh CLI separately below
+          # so we control the release notes + tag policy.
+          ./tools/scripts/release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Create + upload GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          DIST="dist/${{ steps.version.outputs.version }}"
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "Warp Mobile ${{ steps.version.outputs.version }}" \
+            --notes-file "$DIST/RELEASE_NOTES.md" \
+            "$DIST/warp-mobile-${{ steps.version.outputs.version }}.apk" \
+            "$DIST/bootstrap-aarch64-${{ steps.version.outputs.version }}.zip" \
+            "$DIST/SHA256SUMS"
+
+      - name: Cleanup keystore
+        if: always()
+        run: |
+          rm -f android/keystore.jks android/keystore.properties

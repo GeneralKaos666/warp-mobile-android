@@ -174,6 +174,22 @@ cd android && ./gradlew :app:assembleRelease
 du -h app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
+### Cutting a release (v1-prep)
+
+Solo-dev release packaging composes signed (or unsigned) APK + bootstrap zip + SHA256SUMS into one drop:
+
+```bash
+# Build artifacts only (no upload)
+./tools/scripts/release.sh 0.6.0-m6
+
+# Or build + push to GitHub Releases (requires gh CLI auth + tag pushed)
+git tag -a v0.6.0-m6 -m "M6 close-out"
+git push origin v0.6.0-m6
+./tools/scripts/release.sh 0.6.0-m6 --upload
+```
+
+For signed APKs, populate `android/keystore.properties` (gitignored — see `android/app/build.gradle` for the format). Without it, the script produces an unsigned APK matching the F-Droid build path. CI workflow `.github/workflows/release.yml` does the same on every `v*` tag push, with optional signing via `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` repo secrets.
+
 ### Building the Termux bootstrap zip (M4+)
 
 The Termux runtime layer (zsh, GNU coreutils, APT) is shipped as a `bootstrap-aarch64.zip` extracted at first launch into `/data/data/dev.warp.mobile/files/usr/`. Building this zip is fully automated and free — no Android SDK, no Docker, no Rust toolchain required for this step. Byte-stable reproducibility (rebuilding at a fixed upstream snapshot to produce identical SHA256) is M4-S08 work.
