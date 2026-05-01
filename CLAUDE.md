@@ -8,30 +8,51 @@ Open-source-first port of [Warp Terminal](https://github.com/warpdotdev/Warp) to
 
 See [`README.md`](README.md) for product description and architecture overview.
 
-## Current milestone state (2026-05-01)
+## Current milestone state (2026-05-02)
 
 - **M0** (foundation spike): CLOSED CONDITIONAL GO @ commit `24a2c1c`
 - **M1** (Android PTY/Service prototype): CLOSED CONDITIONAL GO @ commit `f7feb3f`, **10/10 stories PASS**
 - **M2** (warpui::platform::android backend): CLOSED CONDITIONAL GO @ commit `0506c35`, **12/14 stories PASS** (M2-S13 user-deferred per 「先跳過便宜手機」)
-- **M3** (Layer 2b integration: facade + DCS + Block + dynamic_grid): **CLOSED CONDITIONAL GO** @ commit `8ec75c8`, **12/12 stories PASS** (27 codex rounds; Plan Amendment 5 cfg-gate→extraction pivot)
-- **M4** (Termux runtime: zsh + GNU coreutils + APT): READY TO START
+- **M3** (Layer 2b integration: facade + DCS + Block + dynamic_grid): CLOSED CONDITIONAL GO @ commit `8ec75c8`, **12/12 stories PASS** (27 codex rounds; Plan Amendment 5 cfg-gate→extraction pivot)
+- **M4** (Termux runtime: zsh + GNU coreutils + APT): CLOSED CONDITIONAL GO @ commit `de26e3a`, **14/15 PASS** (M4-S14 closed in v1-prep follow-up @ `1e732c5`)
+- **M5** (Mobile UX: selection / accessory row / blocks / paste / UX review): CLOSED CONDITIONAL GO PARTIAL @ commit `5665b2f`, **5/8 PASS** (M5-S03 BottomSheet UI scaffold landed in v1-prep @ `06c86d7`; M5-S05 user-deferred; M5-S06+S07 v1 backlog)
+- **M6** (AI integration: BYOK + ghost-text + agent + telemetry): **CLOSED CONDITIONAL GO** @ commit `40954d7`, **7/7 stories PASS**, **all 4 carry-overs closed same-day** @ `8c3ffa1` + `06c86d7` + `4f010c7` + `dcce36f`
+- **v1-release prep**: ACTIVE — signing config + version 0.6.0-m6 (`245f05a`), release packaging script + GHA workflow (`9fd3584`), Block.output capture (`fea4aed`), color emoji COLR v1 diagnosis (`452e3c5`), GhostSuggestController self-cancel-cascade fix (`c1dc07a`)
 
-To verify currency: `git log --oneline -5` and check `.omc/prd.json` `passes` fields.
+To verify currency: `git log --oneline -10` and check `.omc/prd.json` `passes` fields. Current `versionName = "0.6.0-m6"` / `versionCode = 6`.
 
 ## How to resume / pick up work
 
 **Read in this order**:
 
 1. **This file** (`CLAUDE.md`) — you are here
-2. [`.omc/m3-artifacts/M3-go-no-go.md`](.omc/m3-artifacts/M3-go-no-go.md) — **authoritative M3 close-out document** (519 lines; CONDITIONAL GO verdict; all 12 stories ledger; per-layer GO/CONDITIONAL/NO-GO; M4 carry-overs)
-3. [`.omc/m3-artifacts/M3-kickoff-confirmed.md`](.omc/m3-artifacts/M3-kickoff-confirmed.md) — M3 kickoff doc (5-round codex PASSed)
-4. [`.omc/m2-artifacts/M2-go-no-go.md`](.omc/m2-artifacts/M2-go-no-go.md) — M2 close-out (508 lines; 12/14 PASS)
-5. [`.omc/handoffs/lead-context-snapshot.md`](.omc/handoffs/lead-context-snapshot.md) — earlier session resume doc (M0+M1 era; superseded for M2+ by go-no-go docs)
-6. [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md) — canonical plan with **5 amendments** at top (Amendment 5 = M3 cfg-gate→extraction pivot, 2026-04-30)
-7. [`.omc/prd.json`](.omc/prd.json) — current milestone story states (M3-S01..S12 all `passes:true`)
-8. [`progress.txt`](progress.txt) — iteration log with lessons learned
+2. [`.omc/m6-artifacts/M6-go-no-go.md`](.omc/m6-artifacts/M6-go-no-go.md) — **most recent close-out** (M6 + same-day carry-over closures); §5 marks all 4 v1 carry-overs as resolved
+3. [`.omc/m5-artifacts/M5-go-no-go.md`](.omc/m5-artifacts/M5-go-no-go.md) — M5 PARTIAL close (5/8 PASS; S03 closed in v1-prep)
+4. [`.omc/m4-artifacts/M4-go-no-go.md`](.omc/m4-artifacts/M4-go-no-go.md) — M4 close (14/15 PASS; S14 closed in v1-prep)
+5. [`.omc/m3-artifacts/M3-go-no-go.md`](.omc/m3-artifacts/M3-go-no-go.md) — M3 close (12/12 PASS); per-layer GO/CONDITIONAL/NO-GO map
+6. [`.omc/m2-artifacts/M2-go-no-go.md`](.omc/m2-artifacts/M2-go-no-go.md) — M2 close (12/14 PASS)
+7. [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md) — canonical plan with **5 amendments** at top (Amendment 5 = M3 cfg-gate→extraction pivot, 2026-04-30)
+8. [`.omc/prd.json`](.omc/prd.json) — current milestone story states (all M0–M6 `passes:true` except M5-S05 user-deferred + M5-S06/S07 v1 backlog)
+9. [`progress.txt`](progress.txt) — iteration log with lessons learned
 
-**Do NOT** attempt to derive state from full conversation history. The M3 close-out doc + kickoff doc are designed to be read cold.
+**Do NOT** attempt to derive state from full conversation history. The close-out docs + kickoff doc are designed to be read cold.
+
+## v1-release prep state (current focus)
+
+Active v1-release prep work (post-M6 close):
+
+- **Signing config**: opt-in via `android/keystore.properties` (gitignored) per `android/app/build.gradle` signingConfigs block. Without it, builds produce unsigned APK matching the F-Droid path. Generation instructions inline in build.gradle.
+- **Release script**: `tools/scripts/release.sh <version> [--upload]` composes APK + bootstrap zip + SHA256SUMS + RELEASE_NOTES.md into `dist/<version>/`. Modes: build-only / `--dry-run` / `--upload` (gh release create).
+- **Release CI**: `.github/workflows/release.yml` triggers on `v*` tag push. Optional signing via `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` repo secrets.
+- **Block.output capture**: M3 Block model now captures stdout/stderr bytes between Preexec/CommandFinished into `Block.output: Vec<u8>` (capped 64 KB). ANSI escapes excluded via the parser state machine. Closes M5-S03 BottomSheet "(no output captured)" caveat. JNI dump JSON includes `"output"` field.
+- **Color emoji**: ROOT-CAUSE DIAGNOSED — swash 0.1.19 (cosmic-text fork pin) supports COLR v0 only; modern NotoColorEmoji.ttf ships COLR v1. 4 fix paths captured in `.omc/m4-artifacts/M4-S14-result.json` post_close_diagnosis. Decision: defer to v1+1 unless emoji color is a v1.0 release blocker.
+
+Remaining v1 backlog (NOT urgent for code-quality release):
+
+- **M5-S05** (external tester UX review) — USER-DEFERRED, real-world tester recruitment.
+- **M5-S06** (pkg.rs Rust subprocess wrapper + Kotlin progress UI) — significant scope.
+- **M5-S07** (cosmetic apt list-append) — apt compile-time defaults; only visible in `apt-config dump`. Test driver explicitly excludes via grep. Truly tolerable as-is.
+- **GhostSuggest cursor-anchored overlay** — replaces the AccessoryRow strip with inline grey-text overlay; needs JNI accessor for cursor screen position from Vulkan.
 
 ## User governance preferences (from CLAUDE.md global instructions)
 
