@@ -645,4 +645,10 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    // M6-S02: Keystore-backed BYOK key storage. EncryptedSharedPreferences
+    // wraps SharedPreferences with AES256-GCM keys held in the Android
+    // Keystore (hardware-backed on Knox-equipped devices like S24U). API key
+    // never lands in plaintext on disk.
+    // Refs: https://developer.android.com/topic/security/data
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
 }

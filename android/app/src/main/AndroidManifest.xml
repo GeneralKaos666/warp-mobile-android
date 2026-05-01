@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="dev.warp.mobile.permission.PTY_CONTROL" />
+    <!-- M6-S02: HTTPS to api.anthropic.com for BYOK Test Connection +
+         later ghost-text + agent task streaming. No background-network
+         use; app must be foreground to make calls. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="@string/app_name"
@@ -30,6 +34,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- M6-S02: BYOK SettingsActivity. Launched via:
+             am start -n dev.warp.mobile/.SettingsActivity
+             (M6-S03 will add a settings icon entry-point in the
+             AccessoryRow so users don't need adb to reach it). -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="Warp AI · BYOK Settings" />
 
         <service
             android:name=".WarpTerminalService"

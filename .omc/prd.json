@@ -568,6 +568,113 @@
         "M6 (AI integration) carry-overs documented",
         "Codex review dispatched and PASS verdict received"
       ]
+    },
+    {
+      "id": "M6-S01",
+      "title": "M6 kickoff doc + ralplan §6 M6 scope confirmation",
+      "passes": true,
+      "verifiedBy": "M6-S07 batch close (preliminary, M6-S07 still pending). .omc/m6-artifacts/M6-kickoff-confirmed.md written: 7-story scaffold; entry criteria from M0-M5 verified; ralplan §6 M6 5 ACs documented; 3 death-pits surfaced (prompt injection, BYOK leak vectors, network-cost surprise); M5 carry-overs noted as M6-independent.",
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m6-artifacts/M6-kickoff-confirmed.md per M5-go-no-go entry-criteria template",
+        "5 ralplan §6 M6 ACs documented with quantified gates (BYOK + Haiku ghost-text <500ms p50 + Sonnet agent <8s p50 + token caps + offline degrade)",
+        "M5 carry-overs absorption noted (selection touch UI, dynamic accessory pinning, block gesture UI, voice input, pkg.rs Rust wrapper)",
+        "Death-pit awareness: API rate-limits, network-cost surprise, prompt-injection via shell output, BYOK key leak vectors",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S02",
+      "title": "Anthropic API client + BYOK settings (Keystore-backed) + test connection",
+      "passes": true,
+      "verifiedBy": "Round-1 device-verified on Galaxy S24 Ultra R5CX10VFFBA. SettingsActivity (programmatic LinearLayout: EditText + Save/Test/Clear + status + cost warning) launches without crash. AiKeyStore (EncryptedSharedPreferences with Keystore-backed master-key alias warp-ai-key-v1) instantiates cleanly. AnthropicClient.testConnection synchronous HTTPS POST to api.anthropic.com/v1/messages using HttpsURLConnection: real test with fake sk-ant-... key returned HTTP 401 in 414ms, parsed Anthropic error envelope to 'invalid x-api-key', status TextView updated to '✗ HTTP 401: invalid x-api-key'. Auth header redacted in logs to 'Bearer sk-ant-f***...only' (last 4 chars). Round-1 uses Java HttpsURLConnection (blocking, suitable for Test Connection); Rust async streaming layer for ghost-text + agent paths is M6-S03/S04 territory.",
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "crates/warp_ai_mobile (NEW Rust crate): minimal Anthropic API client via reqwest with rustls-tls; supports POST /v1/messages with streaming SSE response (used by ghost-text + agent paths)",
+        "Java side: SettingsActivity with EditText for API key + Save + Test Connection buttons",
+        "API key persisted in Android Keystore via androidx.security.crypto.EncryptedSharedPreferences (NOT plaintext SharedPreferences)",
+        "Test Connection: POST to /v1/messages with model=claude-haiku-4-5 + max_tokens=1 + minimal prompt; verify HTTP 200 + parsed `content` field exists",
+        "Failure UX: clear error messages for 401 (invalid key), 429 (rate-limit), 500/network (transient)",
+        "Device verification: SettingsActivity launches; valid API key → Test returns OK; invalid key → 401 message; airplane-mode → network error",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S03",
+      "title": "Inline ghost-text via Claude Haiku (streaming + debounce + cancel-on-keystroke)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "crates/warp_ai_mobile/src/ghost.rs: ghost-text completion request builder + streaming response handler",
+        "Debounce: typing pauses ≥150ms before sending request; subsequent keystroke cancels in-flight request via tokio CancellationToken",
+        "Token cap: max_tokens=200 per ralplan §6 M6 #5 (ghost ≤200 p95)",
+        "Latency target: p50 first-token <500ms on flagship S24U + reasonable network (verify via timing logs)",
+        "Java side: ghost suggestion rendered as grayed text after the cursor; Tab key accepts (inserts the suggestion as if user typed); other keys reject",
+        "Device verification: type partial command 'ls -' on PTY input → ghost appears within 500ms p50 → Tab → command line becomes 'ls -la' (or whatever Haiku suggested); subsequent keystroke pre-Tab cancels cleanly without UI glitch",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S04",
+      "title": "Agent task UI via Claude Sonnet (side-panel block, streaming output)",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (opus)",
+      "acceptanceCriteria": [
+        "crates/warp_ai_mobile/src/agent.rs: agent task request builder + streaming response handler with prompt template (system: 'You are a Warp terminal agent...')",
+        "Java side: AgentBlockView (custom View added below the dynamic_grid) shows the streaming response, block-by-block",
+        "Trigger: long-press a Block + select 'Explain' from M5-S03 BottomSheet menu (or fallback: AccessoryRow 'AI' button in round-1)",
+        "Token cap: max_tokens=2000 per ralplan §6 M6 #5 (agent ≤2000 p95)",
+        "Latency target: p50 first-token <8s + complete-response p95 within 30s on S24U",
+        "Cancel: tap X on agent block cancels in-flight request",
+        "Device verification: select a real terminal block (e.g. `du -sh *` output) → tap Explain → AgentBlockView populates with explanation within 8s p50; cancel mid-stream stops cleanly",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S05",
+      "title": "Offline graceful degrade + airplane-mode test",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "crates/warp_ai_mobile/src/connectivity.rs: simple ConnectivityManager wrapper exposing is_online() + onConnectivityChange callback",
+        "When offline: ghost-text + agent buttons grey out (UI signals AI unavailable); AccessoryRow + PTY + render layers continue working unchanged",
+        "When network returns: AI controls re-enable; no app restart required",
+        "Non-blocking notice: a small banner ('AI features paused — no network') shown at top of activity ONLY when AI was previously enabled and just went offline; not shown if user never set BYOK key",
+        "Device verification: airplane-mode toggle on S24U triggers the banner + grey-outs; toggle off restores within 3s",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S06",
+      "title": "Token-usage display + opt-in telemetry sink",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        "Settings screen shows: cumulative tokens this session (input/output split per model); cumulative tokens this billing-period (using a manual reset button — no Anthropic billing API integration in v1)",
+        "Per-request token counts appended to a local CSV log at $PREFIX/var/log/warp-ai-usage.csv: timestamp, model, kind (ghost/agent), input_tokens, output_tokens, latency_ms",
+        "Opt-in telemetry: SettingsActivity has a 'Share anonymous usage to project' switch (default OFF). When ON, post anonymized CSV row to a TBD endpoint (out-of-scope for v1; emit local file only)",
+        "Token cap warnings: ghost p95 >200 OR agent p95 >2000 over 24h logs a warning to logcat (not user-facing in v1)",
+        "Codex review dispatched and PASS verdict received"
+      ]
+    },
+    {
+      "id": "M6-S07",
+      "title": "M6 milestone close-out doc",
+      "passes": false,
+      "verifiedBy": null,
+      "ownerHint": "executor (sonnet)",
+      "acceptanceCriteria": [
+        ".omc/m6-artifacts/M6-go-no-go.md per M5-go-no-go.md template",
+        "7-story ledger with status (PASS / PARTIAL / DEFERRED)",
+        "Ralplan §6 M6 acceptance verdict (5 ACs)",
+        "Per-layer GO/CONDITIONAL/NO-GO assessment (L0-L4 + new L5 AI)",
+        "v1-release carry-overs documented",
+        "Codex review dispatched and PASS verdict received"
+      ]
     }
   ],
   "verifierConfig": {
