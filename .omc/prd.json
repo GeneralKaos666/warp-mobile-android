@@ -224,8 +224,8 @@
     {
       "id": "M4-S01",
       "title": "M4 kickoff doc + Plan section update + M3 carry-overs absorption note",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-2 PASS @ main eb15cea (4 narrow doc fixes; AC#4 reinstall-manifest gate; AC#1 SHA256; S02 gh auth disclosure; headroom math)",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         ".omc/m4-artifacts/M4-kickoff-confirmed.md exists per M3-kickoff-confirmed.md template documenting M4 Termux runtime scope + 5 ralplan §6 M4 acceptance criteria + entry criteria (M3 closed @ 8ec75c8)",
