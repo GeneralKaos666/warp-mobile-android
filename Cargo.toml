@@ -9,18 +9,44 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 
-# V1-prep: strip debug + symbol info from release .so. AGP doesn't
-# auto-strip the cargo-ndk-emitted .so when it's staged via per-variant
-# jniLibs.srcDirs (the path we use to avoid Gradle 8 strict-mode "two
-# tasks write to the same dir" errors). Without this, the packaged
-# libwarp_mobile_android_host.so is 8.2 MB; with `strip = "symbols"`
-# it drops to ~5.8 MB — saves ~2.4 MB off the release APK.
+# V1-prep: aggressive release profile for the cargo-ndk-emitted
+# libwarp_mobile_android_host.so (the only consumer of this profile —
+# host tests use [profile.dev]).
 #
-# `strip = "symbols"` is equivalent to `llvm-strip` default behavior:
-# removes the debug section + non-dynamic symbol table, keeps the
-# dynamic symbol table required for JNI. `"debuginfo"` is weaker
-# (~0.3 MB savings) and `"none"` is the cargo default (no strip).
+# strip = "symbols"   — equivalent to `llvm-strip` default; removes
+#                       debug + non-dynamic symtab, keeps the dynamic
+#                       symtab needed for JNI export resolution. AGP
+#                       doesn't auto-strip when the .so is staged via
+#                       per-variant jniLibs.srcDirs (Gradle 8 strict
+#                       mode "two tasks write to same dir" workaround
+#                       — see android/app/build.gradle).
+#                       8.2 MB → 5.8 MB on disk (-2.4 MB)
+#                       8.6 MB → 6.0 MB in APK (-2.5 MB uncompressed)
+#                       55 MB → 54 MB compressed APK (-1 MB)
 #
-# Refs: https://doc.rust-lang.org/cargo/reference/profiles.html#strip
+# lto = "fat"         — full cross-crate link-time optimization. Inlines
+#                       across crate boundaries (reqwest into the JNI
+#                       glue, cosmic-text into the renderer, etc.). Adds
+#                       ~30-60s to release builds; saves another ~5-15%
+#                       off the .so via dead-code-elimination + cross-
+#                       crate inlining wins.
+#
+# codegen-units = 1   — single code generation unit per crate. Trades
+#                       parallelism for tighter optimization. Pairs
+#                       with lto for maximum inlining + DCE. Default
+#                       for release is 16 (parallelism-first); 1 is
+#                       size-first.
+#
+# panic = "abort"     — replace the unwinding panic implementation with
+#                       immediate abort. Saves the unwind-tables (~50-
+#                       100 KB) + drops dependence on the panic_unwind
+#                       crate. Acceptable for an Android app where a
+#                       panic is fatal anyway (the JVM crashes the
+#                       process; we never catch_unwind across FFI).
+#
+# Refs: https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.release]
 strip = "symbols"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
