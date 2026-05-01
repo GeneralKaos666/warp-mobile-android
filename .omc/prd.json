@@ -253,7 +253,7 @@
       "id": "M4-S03",
       "title": "Bootstrap zip build (bash + zsh + coreutils + findutils + apt + pkg + git)",
       "passes": true,
-      "verifiedBy": "Pending codex round-7 PASS. Round-5 artifact evidence at main 879449b / CI run 25208634206 (GREEN) + Plan Amendment 6 added at b2a769c. Round-5 was CODEX_REVISE (3 findings); round-6 was CODEX_REVISE (5 findings) — the round-5 evidence remains valid (the bootstrap zip artifact is sound) but the surrounding source-of-truth (ralplan + PRD + docs) caught up to the build pipeline only progressively. Bootstrap-aarch64.zip: 45,795,528 bytes / 43 MB / sha256 252327693632847872d7ee56d99193503386bbe2c4639f24216e69f1eefb5b12; 72 packages (7 requested + transitive deps); 215 text files retargeted; 307 of 308 ELF DT_RUNPATHs patched (1 dynamic ELF lib/libc++_shared.so has no DT_RUNPATH entry per codex round-5 verification); 116 residual com.termux strings in compile-time config defaults (M4-S06/M4-S07 carry-forward covering zsh module_path shell-array, git GIT_EXEC_PATH, OpenSSL CA path, terminfo, locale, dpkg/apt dirs).",
+      "verifiedBy": "codex round-9 PASS @ main 2cdd9ba; round-5 artifact evidence at 879449b / CI 25208634206 still authoritative; rounds 4-8 progressively tightened ACs + docs to F-Droid-deployment-grade precision",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Run tools/scripts/build-bootstrap.sh (Plan Amendment 6 pivot from termux-packages/scripts/build-bootstraps.sh): downloads upstream Termux .debs from packages-cf.termux.dev, retargets paths to dev.warp.mobile, packages bootstrap-aarch64.zip",
