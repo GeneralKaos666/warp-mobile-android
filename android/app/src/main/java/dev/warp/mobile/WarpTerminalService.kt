@@ -264,15 +264,21 @@ class WarpTerminalService : Service() {
             |
             |# 5. Source the warp DCS-hook script extracted by M3-S06.
             |#    (Codex M4-S06 round-1 finding 1: AC #3 says hooks must fire,
-            |#    but until this round zsh never sourced the script.)
+            |#    but until that round zsh never sourced the script.)
+            |#    (Codex M4-S06 round-2 finding 1: zsh_body.sh internally
+            |#    sources ${"$"}{ZDOTDIR}/.zshenv before setting WARP_BOOTSTRAPPED,
+            |#    causing infinite recursion via this .zshenv. Guard with a
+            |#    SOURCING sentinel that's set BEFORE source and unset after.)
             |#    The script registers preexec/precmd functions that emit DCS
             |#    sequences (ESC P ${"$"} d <hex> 0x9c) consumed by the M3-S05
             |#    DCS parser to populate the Block model.
-            |if [[ -r /data/data/dev.warp.mobile/files/warp/zsh_body.sh ]]; then
+            |if [[ -r /data/data/dev.warp.mobile/files/warp/zsh_body.sh && -z ${"$"}{WARP_ZSH_BODY_SOURCING:-} ]]; then
             |    # zsh_body.sh expects WARP_SESSION_ID; default to PID if unset.
             |    : ${"$"}{WARP_SESSION_ID:=${"$"}${"$"}}
             |    export WARP_SESSION_ID
+            |    WARP_ZSH_BODY_SOURCING=1
             |    source /data/data/dev.warp.mobile/files/warp/zsh_body.sh
+            |    unset WARP_ZSH_BODY_SOURCING
             |fi
         """.trimMargin().trimStart() + "\n"
 
