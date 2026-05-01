@@ -27,6 +27,18 @@ name: Test (Rust + Android smoke)
 on:
   push:
     branches: [main]
+    # Skip CI on doc-only pushes to save runner minutes. paths-ignore
+    # only triggers when ALL changes match — any code touch alongside
+    # docs still runs CI. PR triggers below are unconditional so reviews
+    # always see a green/red signal.
+    paths-ignore:
+      - '**.md'
+      - '.omc/**'
+      - 'progress.txt'
+      - 'fastlane/**'
+      - 'metadata/**'
+      - '.gitignore'
+      - 'LICENSE*'
   pull_request:
     branches: [main]
   workflow_dispatch:
