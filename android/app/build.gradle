@@ -59,6 +59,7 @@ def jniLibsDirRelease = file("build/intermediates/rust-jnilibs/release/jniLibs/a
 def cargoFromPath = ["sh", "-lc", "command -v cargo || true"].execute().text.trim()
 def cargoPath     = cargoFromPath ?: "${System.getenv('HOME')}/.cargo/bin/cargo"
 
+
 // cargo-ndk locates the NDK via either ANDROID_HOME (SDK auto-detect) or
 // ANDROID_NDK_ROOT. Either suffices; we don't gate on ANDROID_NDK_ROOT alone.
 def hasCargoNdk = new File(cargoPath).exists() &&
@@ -230,7 +231,7 @@ def bootstrapZipDest      = new File(bootstrapAssetsDir, "bootstrap-aarch64.zip"
 def bootstrapVersionDest  = new File(bootstrapAssetsDir, "version.json")
 
 task verifyBootstrapZip {
-    description = "Fail-fast if bootstrap-aarch64.zip + metadata are missing — produce them via tools/scripts/build-bootstrap.sh."
+    description = "Fail-fast if bootstrap-aarch64.zip + metadata are missing OR if metadata sha256/size don't match the staged zip (Codex M4-S04 finding 3)."
     doLast {
         if (!bootstrapZipSrc.exists() || !bootstrapMetadataSrc.exists()) {
             throw new GradleException(
@@ -247,13 +248,51 @@ task verifyBootstrapZip {
                 "Or set WARP_BOOTSTRAP_DIR=/abs/path/to/dir-containing-zip-and-metadata"
             )
         }
-        def metaText = bootstrapMetadataSrc.text
-        if (!metaText.contains('"sha256"') || !metaText.contains('"size_bytes"')) {
+        // Codex M4-S04 round-1 finding 3: don't just text-grep the metadata —
+        // compute the actual zip's sha256+size and compare against metadata.
+        // A stale metadata + new zip pair would otherwise silently pass through
+        // and fail M4-S05 first-launch verification on device.
+        def slurper = new groovy.json.JsonSlurper()
+        def meta = slurper.parse(bootstrapMetadataSrc)
+        if (!meta.sha256 || !meta.size_bytes) {
             throw new GradleException(
                 "Bootstrap metadata missing required fields (sha256, size_bytes): ${bootstrapMetadataSrc.absolutePath}\n" +
                 "Re-run tools/scripts/build-bootstrap.sh; the script writes the canonical schema."
             )
         }
+        def zipSize = bootstrapZipSrc.length()
+        if (meta.size_bytes != zipSize) {
+            throw new GradleException(
+                "Bootstrap zip size mismatch:\n" +
+                "  metadata.size_bytes:  ${meta.size_bytes}\n" +
+                "  actual zip size:      ${zipSize}\n" +
+                "  zip path:             ${bootstrapZipSrc.absolutePath}\n" +
+                "  metadata path:        ${bootstrapMetadataSrc.absolutePath}\n" +
+                "Either the zip + metadata pair is stale (re-run tools/scripts/build-bootstrap.sh)\n" +
+                "or the zip was modified after metadata generation."
+            )
+        }
+        // Compute SHA-256 inline (avoids cross-task closure-resolution issues
+        // with Gradle's project.ext binding semantics).
+        def md = java.security.MessageDigest.getInstance("SHA-256")
+        bootstrapZipSrc.withInputStream { input ->
+            byte[] buf = new byte[8192]
+            int n
+            while ((n = input.read(buf)) >= 0) md.update(buf, 0, n)
+        }
+        def actualSha = md.digest().collect { String.format("%02x", it) }.join("")
+        if (meta.sha256 != actualSha) {
+            throw new GradleException(
+                "Bootstrap zip SHA-256 mismatch:\n" +
+                "  metadata.sha256:  ${meta.sha256}\n" +
+                "  actual zip sha:   ${actualSha}\n" +
+                "  zip path:         ${bootstrapZipSrc.absolutePath}\n" +
+                "  metadata path:    ${bootstrapMetadataSrc.absolutePath}\n" +
+                "Either the zip + metadata pair is stale (re-run tools/scripts/build-bootstrap.sh)\n" +
+                "or the zip was modified after metadata generation."
+            )
+        }
+        logger.lifecycle("verifyBootstrapZip: zip+metadata pair verified (size=${zipSize}, sha256=${actualSha})")
     }
 }
 
@@ -308,17 +347,28 @@ task generateBootstrapVersion {
 }
 
 task verifyBootstrapApkSize {
-    description = "Verify combined APK + bootstrap zip stays under 120 MB ralplan §6 M3 AC#4 budget (M4-S04)."
+    description = "Verify single APK (with bundled bootstrap zip) stays under 80 MB ralplan §6 M3 AC#4 single-APK gate (M4-S04). Codex round-1 finding 1: must run AFTER packageRelease so the APK actually exists."
+    // Codex round-1 finding 1: this task must execute AFTER the APK is
+    // produced. Wire it as `packageRelease.finalizedBy(verifyBootstrapApkSize)`
+    // (see afterEvaluate block below). The mustRunAfter lets gradle
+    // schedule it correctly even when invoked via `assembleRelease`.
+    mustRunAfter("packageRelease")
     doLast {
-        // Measure assembled release APK size (only meaningful after assembleRelease).
+        // Measure assembled release APK size. By this point packageRelease has
+        // produced the artifact; missing-file is now a real failure, not a
+        // benign skip (round-1 finding 1).
         def apkPath = file("build/outputs/apk/release/app-release-unsigned.apk")
         if (!apkPath.exists()) {
-            // Skip silently for non-release builds.
-            return
+            throw new GradleException(
+                "verifyBootstrapApkSize: expected ${apkPath.absolutePath} to exist after packageRelease.\n" +
+                "Either packageRelease did not run (re-run with `:app:assembleRelease`)\n" +
+                "or AGP changed the output path."
+            )
         }
         def apkBytes = apkPath.length()
         def apkMb = apkBytes / (1024 * 1024)
-        // The zip is now INSIDE the APK so the relevant gate is single-APK ≤80 MB.
+        // The zip is INSIDE the APK so the relevant gate is single-APK ≤80 MB
+        // per ralplan §6 M3 AC#4.
         if (apkMb > 80) {
             throw new GradleException(
                 "APK size ${apkMb} MB > 80 MB single-APK gate (ralplan §6 M3 AC#4).\n" +
@@ -502,6 +552,15 @@ android {
         }
     }
 
+    androidResources {
+        // Codex M4-S04 round-1 finding 2: keep bootstrap-aarch64.zip stored
+        // (no zip-on-zip deflate) so M4-S05 can mmap/fd the asset directly.
+        // Without this, AGP's compressDebugAssets task re-deflates the zip,
+        // which (a) wastes ~1 MB compressing already-compressed data, and (b)
+        // forces M4-S05 to copy-and-decompress instead of zero-copy mmap.
+        noCompress 'zip'
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -545,9 +604,15 @@ afterEvaluate {
     tasks.matching { it.name == "mergeDebugAssets" }.configureEach   { dependsOn copyBootstrapZip, generateBootstrapVersion }
     tasks.matching { it.name == "mergeReleaseAssets" }.configureEach { dependsOn copyBootstrapZip, generateBootstrapVersion }
     tasks.matching { it.name == "packageDebug" }.configureEach       { dependsOn copyBootstrapZip, generateBootstrapVersion }
-    tasks.matching { it.name == "packageRelease" }.configureEach     { dependsOn copyBootstrapZip, generateBootstrapVersion }
+    // Codex round-1 finding 1: verifyBootstrapApkSize must run AFTER
+    // packageRelease, not before. finalizedBy ensures it runs even if
+    // packageRelease was the explicit target (e.g. CI invokes it directly).
+    tasks.matching { it.name == "packageRelease" }.configureEach     {
+        dependsOn copyBootstrapZip, generateBootstrapVersion
+        finalizedBy verifyBootstrapApkSize
+    }
     tasks.matching { it.name == "assembleDebug" }.configureEach      { dependsOn copyBootstrapZip, generateBootstrapVersion }
-    tasks.matching { it.name == "assembleRelease" }.configureEach    { dependsOn copyBootstrapZip, generateBootstrapVersion, verifyBootstrapApkSize }
+    tasks.matching { it.name == "assembleRelease" }.configureEach    { dependsOn copyBootstrapZip, generateBootstrapVersion }
     // Lint vital scans assets/ — declare deps so Gradle 8.6+ implicit-dep
     // validation doesn't fail (same pattern as copyWarpAssets above).
     tasks.matching { it.name.startsWith("generateReleaseLint") }.configureEach { dependsOn copyBootstrapZip, generateBootstrapVersion }
