@@ -295,3 +295,65 @@ Across 11 worker dispatches + 27 codex rounds:
 - **Cross-workspace mirror divergence**: when both unification options (path-dep vs delete-mirror) are architecturally infeasible at the current cdylib link strategy, "Option C documented divergence" + carry-forward to refactor (Option D shared-rlib API split) is a defensible decision.
 - **Worker SOP compliance held across 27 codex rounds**: M2-S11 chaos pattern AVOIDED; all 11 worker dispatches respected lead-dispatched-after-fix pattern.
 - **Codex's tendency to write to prd.json**: M3-S08 round-1 codex independently wrote `passes:true` + `verifiedBy` to prd.json. Lead accepted (verdict was correct) but flagged in commit message. Future: instruct codex more explicitly NOT to mutate prd.json directly.
+
+---
+
+## Iteration 13 — M4 in progress (2026-05-01)
+
+**Initial state**: M3 closed (12/12 stories PASS) @ commit `8ec75c8`. M4 milestone scaffolded with 15 stories. Entered with M4-S01+S02 already done (kickoff doc + termux-packages fork @ ImL1s/termux-packages branch warp-mobile/main). M4-S12 done (Option D shared-rlib partial — 3/6 mirrors absorbed).
+
+### M4-S03 build pipeline pivot (Plan Amendment 6)
+
+**Problem**: 3 distinct CI failures across 3 attempts trying termux-packages docker source-compile path. The third (Android SDK install errors inside docker on GHA's 14 GB-disk runners) crossed the autopilot stop threshold (same error class across 3 cycles).
+
+**Strategic decision**: Plan Amendment 6 — pivot from `termux-packages/scripts/build-bootstraps.sh` (docker source-compile) to a custom `tools/scripts/build-bootstrap.sh` that downloads upstream Termux .debs from packages-cf.termux.dev and retargets paths after extraction. Same pattern as Amendment 5 (M3-S03 cfg-gate→extraction): Pre-mortem trip on architectural assumption → architecture pivot → milestone scope preserved.
+
+**Three retargeting surfaces**:
+1. Text files (shebangs, configs, scripts): literal-string sed
+2. ELF DT_RUNPATH on every binary: `patchelf --set-rpath` rewrite
+3. Absolute symlink targets: rewritten in `SYMLINKS.txt` sidecar
+
+**Closed via 9 codex rounds**: round-1+2+3 build-environment failures (positional args, grep regex, Android SDK-in-docker); round-4 BLOCKING ELF RUNPATH finding (codex caught my "leftovers are .rodata cosmetic" claim — wrong; objdump showed RUNPATH /data/data/com.termux/files/usr/lib in zsh) → patchelf step added; rounds 5-8 progressively tightened ACs + ralplan + docs to F-Droid-deployment-grade precision; round-9 PASS.
+
+**Outcome**: 43 MB bootstrap-aarch64.zip producible in ~2 min on free GHA ubuntu-latest. 72 packages (7 requested + transitive deps). 215 text retargets. 307 of 308 ELF RUNPATHs patched (1 = `lib/libc++_shared.so` dynamic ELF with no RUNPATH entry). 116 residual com.termux strings in compile-time defaults (zsh module_path, git libexec, OpenSSL CA, terminfo, locale, dpkg/apt fallbacks) → M4-S06/M4-S07 carry-forward via shell-array assignment in $ZDOTDIR/.zshenv + env vars (HOME, ZDOTDIR, GIT_EXEC_PATH, SSL_CERT_FILE, TERMINFO, LOCPATH).
+
+### M4-S04 APK asset packaging (2 codex rounds)
+
+**Scope**: Gradle copy task + version.json generation + size gate.
+
+**Round-1 REVISE**: 3 findings — verifyBootstrapApkSize ran BEFORE packageRelease (silent skip on missing APK); zip-on-zip Defl:N compression (45.1 MB compressed from 45.8 MB stored — 700 KB waste + blocks mmap); metadata not verified against staged zip (stale pair would silently pass).
+
+**Round-1 fixes**: `packageRelease.finalizedBy(verifyBootstrapApkSize)` ordering; `androidResources { noCompress 'zip' }` keeps zip Stored; verifyBootstrapZip parses metadata JSON + computes actual zip sha256 + compares both size + sha.
+
+**Round-2 PASS**. Release APK 51 MB; single-APK ≤80 MB ralplan §6 M3 AC#4 gate satisfied with 36% margin.
+
+### Repo metadata changes (autonomous)
+
+- **Public visibility**: flipped to public per user authorization (unlimited GHA minutes for free CI/CD).
+- **README rewritten** for public-facing audience: milestone table, real numbers (p95=13ms, 7.4MB APK), full architecture overview, contributor onboarding.
+- **CONTRIBUTING.md + SECURITY.md added**.
+- **Email rewrite**: `git filter-repo` rewrote all setsuna/tsubasa commits to `iml1s <aa22306546@hotmail.com>` per-repo (NOT global config; user explicit).
+- **README adds "Building the Termux bootstrap zip" section** with both local + CI commands.
+
+### M4 stories closed (5 of 15)
+
+| Story | Title | Codex rounds | Status |
+|---|---|---|---|
+| M4-S01 | Kickoff doc | 1 | PASS |
+| M4-S02 | termux-packages fork retargeting | 1 | PASS |
+| M4-S03 | Bootstrap zip build (Plan Amendment 6 pivot) | **9** | PASS |
+| M4-S04 | APK asset packaging | 2 | PASS |
+| M4-S12 | Option D shared-rlib (3/6 mirrors absorbed) | 3 | PASS |
+
+### M4 stories pending (10 of 15)
+
+S05 (atomic extraction JNI) → S06 (PTY uses zsh) → S07 (pkg install UX) → S10/S11 (acceptance device tests) + parallel S08 (reproducibility) + S09 (F-Droid metadata) + S13 (toybox color closure) + S14 (emoji raster smoke) + S15 (M4 close-out).
+
+### Lessons learned (iteration 13)
+
+- **Plan Amendment 6 reinforces Amendment 5 pattern**: when a Pre-mortem trip reveals fundamental environment incompatibility (not tactical), the plan amendment is the correct response. The original M4-S03 plan's "if Docker not available locally: defer to CI" optimism was misplaced — even on CI, docker-in-docker for termux-packages's own Android SDK setup is fragile. The path-rewrite seam is robust because it's deterministic stdlib work, not "hope the upstream toolchain works".
+- **Codex spotted "leftovers are .rodata cosmetic" claim within hours**: round-4 was the BLOCKING moment of M4-S03 — codex refused to PASS on the artifact alone; spotting `objdump -p bin/zsh` shows RUNPATH = com.termux is a verifiable fact that I missed in my initial framing. Lesson: don't claim properties of binary artifacts without running the inspector.
+- **Codex iteration on doc/AC text**: rounds 4→5→6→7→8→9 were primarily AC text precision tightening (zsh-specific module_path syntax, ralplan amendment vs row-text, verdict-trail honesty). Each fix exposed another precision gap. Worth it — the round-9 ACs are now F-Droid-deployment-grade. Pattern lesson: when the artifact is sound but ACs need more precision, allow 5-9 rounds of progressive refinement.
+- **noCompress 'zip' as M4-S05 enabler**: AGP defaults to deflating .zip assets, but bundling an already-compressed file with deflate wastes ~700 KB AND blocks mmap-based zero-copy access. M4-S05's atomic extraction can mmap the asset directly only if it's Stored. Found this during M4-S04 codex review.
+- **Cross-task closure resolution in Gradle**: `def closure = { ... }` at script level scopes to enclosing block; calling from inside `task { doLast { closure(...) } }` may fail with "no signature" if Gradle's project.ext binding isn't used correctly. Workaround: inline the closure body in the task that needs it. Tradeoff: code duplication vs dependency management.
+- **5 M4 stories in 1 session = healthy velocity**: M4-S03 (9 rounds) + M4-S04 (2 rounds) + already-done S01/S02/S12. Remaining 10 stories: estimate 15-25 codex rounds total; 8-12 weeks at solo-dev pace per ralplan §6 M4 effort estimate.
