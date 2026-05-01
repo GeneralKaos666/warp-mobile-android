@@ -15,9 +15,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import java.io.File
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -193,8 +195,18 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
         // M4-S05: kick off bootstrap atomic extraction on a background thread.
         // First launch extracts ~50 MB to /data/data/dev.warp.mobile/files/usr;
-        // subsequent launches short-circuit on sha-pin match (~instant). Logging
-        // is the only feedback in this round; M4-S07+ adds a progress UI.
+        // subsequent launches short-circuit on sha-pin match (~instant).
+        //
+        // Codex round-1 finding 2: first launch must show install progress
+        // (per `.omc/prd.json` M4-S05 AC#5). We probe the sha-pin file to
+        // detect first-launch vs subsequent: pin file absent = first launch
+        // = show indeterminate Toast; pin file present = no UI (sha-pin
+        // fast path is ~10ms and shouldn't flash UI).
+        val pinFile = File("${applicationInfo.dataDir}/files/.bootstrap-version.json")
+        val isFirstLaunch = !pinFile.exists()
+        if (isFirstLaunch) {
+            Toast.makeText(this, "Installing Termux runtime…", Toast.LENGTH_LONG).show()
+        }
         @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
         GlobalScope.launch(Dispatchers.IO) {
             val t0 = System.currentTimeMillis()
@@ -204,6 +216,16 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 "warp.bootstrap",
                 "M4-S05 bootstrapInstall: status=$status elapsedMs=$elapsed dataDir=${applicationInfo.dataDir}"
             )
+            if (isFirstLaunch) {
+                val msg = if (status == 0) {
+                    "Termux runtime installed (${elapsed} ms)"
+                } else {
+                    "Termux runtime install failed: status=$status"
+                }
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                }
+            }
         }
 
         // Keep the screen on while this Activity is in the foreground.

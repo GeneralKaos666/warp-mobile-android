@@ -42,9 +42,45 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sha2::{Digest, Sha256};
 use zip::ZipArchive;
+
+/// Process-wide single-flight guard for `install_bootstrap`. Codex M4-S05
+/// round-1 finding 3: Activity recreation (rotation, config change, etc.)
+/// can spawn multiple GlobalScope.launch coroutines targeting the same
+/// usr.tmp/ + usr/ paths. Without this guard, two overlapping calls can
+/// delete or rename each other's staging tree.
+///
+/// Semantics: the first caller to set this flag from false→true gets
+/// permission to run; subsequent callers return Ok(()) early (treat
+/// "already in progress" as success — the in-flight install will
+/// complete and the next sha-pin check will short-circuit). The flag is
+/// reset in a RAII guard regardless of success/failure path.
+static INSTALL_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+struct InstallGuard;
+impl Drop for InstallGuard {
+    fn drop(&mut self) {
+        INSTALL_IN_FLIGHT.store(false, Ordering::Release);
+    }
+}
+impl InstallGuard {
+    /// Attempts to acquire the single-flight slot. Returns Some if we
+    /// won the CAS, None if another caller is already running install.
+    fn try_acquire() -> Option<Self> {
+        match INSTALL_IN_FLIGHT.compare_exchange(
+            false,
+            true,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => Some(InstallGuard),
+            Err(_) => None,
+        }
+    }
+}
 
 #[cfg(target_os = "android")]
 use std::ffi::CString;
@@ -175,6 +211,13 @@ fn apply_symlinks_txt(root: &Path, data: &[u8]) -> io::Result<()> {
             if linkname.is_empty() {
                 continue;
             }
+            // Codex M4-S05 round-1 finding 1: path-confinement check on
+            // `linkname` BEFORE any filesystem op. Without this, a malformed
+            // `target←../escape` or `target←/abs/path` line could let
+            // remove_file/symlink operate outside the staging tree.
+            // (The zip-entry path-traversal check above handles regular
+            // files; the symlink sidecar gets its own validation here.)
+            validate_symlink_linkname(linkname)?;
             let link_path = root.join(linkname);
             if let Some(parent) = link_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -184,12 +227,47 @@ fn apply_symlinks_txt(root: &Path, data: &[u8]) -> io::Result<()> {
             // same name, but be defensive), remove it.
             let _ = fs::remove_file(&link_path);
             // symlink(target, linkname) creates `linkname → target`.
+            //
+            // Note: `target` is intentionally NOT path-validated. Symlink
+            // targets are resolved lazily by the kernel at follow time;
+            // forbidding absolute or `..`-containing targets would also
+            // forbid valid Termux usage (e.g. /system/bin/sh fallback).
+            // The tighter check belongs in build-bootstrap.sh, not here.
             symlink(target, &link_path).map_err(|e| {
                 io::Error::new(
                     e.kind(),
                     format!("symlink({} → {}): {}", linkname, target, e),
                 )
             })?;
+        }
+    }
+    Ok(())
+}
+
+/// Validate that a `linkname` from SYMLINKS.txt is path-confined within the
+/// staging root — i.e., relative AND no `..` segments that would let the
+/// resulting symlink path escape. Round-1 finding 1.
+fn validate_symlink_linkname(linkname: &str) -> io::Result<()> {
+    if linkname.starts_with('/') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "SYMLINKS.txt linkname is absolute (rejected): {}",
+                linkname
+            ),
+        ));
+    }
+    // Reject any `..` component. Split on both '/' and '\\' belt-and-
+    // suspenders — Path::components has platform path-separator semantics.
+    for component in linkname.split(|c| c == '/' || c == '\\') {
+        if component == ".." {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "SYMLINKS.txt linkname contains `..` segment (rejected): {}",
+                    linkname
+                ),
+            ));
         }
     }
     Ok(())
@@ -260,11 +338,31 @@ fn extract_zip_to(dest_root: &Path, zip_bytes: &[u8]) -> io::Result<Option<Vec<u
 ///
 /// `data_dir` is typically `/data/data/dev.warp.mobile`. The function
 /// derives `<data_dir>/files/` paths internally.
+///
+/// Concurrency: protected by a process-wide single-flight guard
+/// (INSTALL_IN_FLIGHT). Subsequent overlapping calls return Ok early
+/// without doing any I/O — the in-flight install will complete and the
+/// next sha-pin check will short-circuit. Round-1 finding 3.
 #[cfg(target_os = "android")]
 pub fn install_bootstrap(
     asset_mgr: *mut ndk_sys::AAssetManager,
     data_dir: &Path,
 ) -> io::Result<()> {
+    // Round-1 finding 3: single-flight guard. If another caller is already
+    // running install_bootstrap, return early — don't touch the staging
+    // tree. The in-flight install will complete; the next call (e.g. from
+    // the resumed Activity) will see sha-pin and skip.
+    let _guard = match InstallGuard::try_acquire() {
+        Some(g) => g,
+        None => {
+            log::info!(
+                target: "android-host",
+                "bootstrap_install: another install in flight; skipping concurrent call"
+            );
+            return Ok(());
+        }
+    };
+
     let files_dir = data_dir.join("files");
     let usr_dir = files_dir.join("usr");
     let usr_tmp = files_dir.join("usr.tmp");
@@ -540,6 +638,57 @@ mod tests {
         let link = tmp.path().join("link/inner.lnk");
         assert!(link.is_symlink());
         assert_eq!(fs::read_link(&link).unwrap().to_str().unwrap(), "target/file");
+    }
+
+    #[test]
+    fn apply_symlinks_txt_rejects_absolute_linkname() {
+        // Round-1 finding 1: linkname starting with `/` would let symlink
+        // operate outside the staging root. Must reject.
+        let tmp = TempDir::new().unwrap();
+        let data = b"target/file\xe2\x86\x90/etc/passwd\n";
+        let result = apply_symlinks_txt(tmp.path(), data);
+        assert!(result.is_err(), "expected absolute-path rejection");
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("absolute"),
+            "expected 'absolute' in error message, got: {}",
+            msg
+        );
+        // No symlinks should have been created.
+        assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn apply_symlinks_txt_rejects_dotdot_linkname() {
+        // Round-1 finding 1: linkname containing `..` segment could
+        // escape the staging root.
+        let tmp = TempDir::new().unwrap();
+        let data = b"target/file\xe2\x86\x90../escape.lnk\n";
+        let result = apply_symlinks_txt(tmp.path(), data);
+        assert!(result.is_err(), "expected `..`-segment rejection");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains(".."), "expected '..' in error message, got: {}", msg);
+        assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn apply_symlinks_txt_rejects_dotdot_in_subpath() {
+        // The `..` rejection must also catch nested cases like
+        // `bin/../../../escape`, not just leading `..`.
+        let tmp = TempDir::new().unwrap();
+        let data = b"target\xe2\x86\x90bin/../../../escape\n";
+        let result = apply_symlinks_txt(tmp.path(), data);
+        assert!(result.is_err(), "expected nested `..`-segment rejection");
+    }
+
+    #[test]
+    fn apply_symlinks_txt_rejects_dotdot_with_backslash() {
+        // Belt-and-suspenders: split treats both '/' and '\\' as separators
+        // so a Windows-style path with backslash also gets caught.
+        let tmp = TempDir::new().unwrap();
+        let data = b"target\xe2\x86\x90sub\\..\\escape\n";
+        let result = apply_symlinks_txt(tmp.path(), data);
+        assert!(result.is_err(), "expected backslash `..` rejection");
     }
 
     #[test]
