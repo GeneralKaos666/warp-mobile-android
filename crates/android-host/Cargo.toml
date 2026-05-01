@@ -54,7 +54,13 @@ warp_ai_mobile = { path = "../warp_ai_mobile" }
 # Tokio for the per-call current-thread runtime that drives the async
 # messages_complete call from the synchronous JNI thread. Round-3
 # will replace per-call runtime with a global singleton.
-tokio = { version = "1", default-features = false, features = ["rt", "macros"] }
+tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread", "macros"] }
+# M6-S03 round-3: CancellationToken for stream abort. Comes from
+# tokio-util but android-host needs direct access (StreamHandle holds
+# CancellationToken; cancel JNI calls .cancel() directly). The
+# warp_ai_mobile crate also depends on this so the token type matches
+# across the FFI boundary.
+tokio-util = "0.7"
 
 [dev-dependencies]
 # M4-S05: tempdir for bootstrap module unit tests (host-side).

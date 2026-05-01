@@ -1921,6 +1921,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "tokio-util",
  "warp_ai_mobile",
  "warp_mobile_android_link",
  "zip",

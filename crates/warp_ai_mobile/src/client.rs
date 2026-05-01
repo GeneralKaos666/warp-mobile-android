@@ -32,6 +32,9 @@
 
 use std::time::Duration;
 
+use futures_util::StreamExt;
+use tokio_util::sync::CancellationToken;
+
 /// Anthropic API endpoint. Hardcoded at https://api.anthropic.com per
 /// public docs; M6-S04 may add a Settings-screen override for
 /// enterprise / proxy deployments.
@@ -201,15 +204,181 @@ impl AnthropicClient {
         }
         Ok(out)
     }
+
+    /// Streaming variant of `messages_complete`.
+    ///
+    /// Posts to /v1/messages with `stream=true`, parses Anthropic SSE
+    /// events (`event: content_block_delta`, etc), and fires
+    /// `on_chunk(text)` for every text-delta chunk as it arrives.
+    /// Returns the assembled final string after the stream closes.
+    ///
+    /// `cancel`: a `CancellationToken` the caller can `.cancel()` to
+    /// abort the stream mid-flight. Cancellation is checked between
+    /// each network read; once cancelled, the function returns
+    /// `Err(MessagesError::Cancelled)` quickly.
+    ///
+    /// SSE event format (per Anthropic docs):
+    ///   event: message_start
+    ///   data: {"type":"message_start","message":{"id":"...",...}}
+    ///
+    ///   event: content_block_start
+    ///   data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+    ///
+    ///   event: content_block_delta
+    ///   data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+    ///
+    ///   event: content_block_delta
+    ///   data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}
+    ///
+    ///   event: content_block_stop
+    ///   data: {"type":"content_block_stop","index":0}
+    ///
+    ///   event: message_delta
+    ///   data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{...}}
+    ///
+    ///   event: message_stop
+    ///   data: {"type":"message_stop"}
+    ///
+    /// We only care about `content_block_delta` events with type
+    /// `text_delta`; everything else is metadata we ignore for round-3
+    /// (M6-S04 agent task may need stop_reason + usage in round-4).
+    pub async fn messages_stream<F>(
+        &self,
+        model: &str,
+        prompt: &str,
+        max_tokens: u32,
+        cancel: CancellationToken,
+        mut on_chunk: F,
+    ) -> Result<String, MessagesError>
+    where
+        F: FnMut(&str),
+    {
+        if self.api_key.is_empty() {
+            return Err(MessagesError::EmptyKey);
+        }
+
+        let body = serde_json::json!({
+            "model": model,
+            "max_tokens": max_tokens,
+            "stream": true,
+            "messages": [
+                { "role": "user", "content": prompt }
+            ]
+        });
+
+        let client = reqwest::Client::builder()
+            .connect_timeout(self.connect_timeout)
+            .timeout(self.request_timeout)
+            .build()
+            .map_err(|e| MessagesError::Network(format!("client build: {}", e)))?;
+
+        log::info!(
+            target: "warp_ai",
+            "STREAM POST {} model={} max_tokens={} auth={}",
+            API_ENDPOINT, model, max_tokens, self.redact()
+        );
+
+        // Race: the network response future vs the cancellation token.
+        // tokio::select! drops the loser, which closes the underlying
+        // socket on cancel.
+        let response = tokio::select! {
+            _ = cancel.cancelled() => return Err(MessagesError::Cancelled),
+            resp = client
+                .post(API_ENDPOINT)
+                .header("Content-Type", "application/json")
+                .header("Anthropic-Version", ANTHROPIC_VERSION)
+                .header("X-Api-Key", &self.api_key)
+                .json(&body)
+                .send() => resp.map_err(|e| MessagesError::Network(format!("send: {}", e)))?,
+        };
+
+        let status = response.status();
+        if !status.is_success() {
+            // Non-streaming response on error — read full body, parse
+            // Anthropic error envelope. Cancel respected on body read.
+            let text = tokio::select! {
+                _ = cancel.cancelled() => return Err(MessagesError::Cancelled),
+                t = response.text() => t.map_err(|e| MessagesError::Network(format!("error body: {}", e)))?,
+            };
+            let msg = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .and_then(|v| v.get("error")?.get("message")?.as_str().map(String::from))
+                .unwrap_or_else(|| text.chars().take(200).collect());
+            return Err(MessagesError::HttpStatus(status.as_u16(), scrub_key(&msg)));
+        }
+
+        // Stream the response body chunk-by-chunk. SSE events are
+        // separated by blank lines; each event has lines like
+        // "event: foo" and "data: {...json...}".
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let mut accumulated = String::new();
+
+        while let Some(item) = tokio::select! {
+            _ = cancel.cancelled() => return Err(MessagesError::Cancelled),
+            next = stream.next() => next,
+        } {
+            let bytes = item.map_err(|e| MessagesError::Network(format!("stream read: {}", e)))?;
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|_| MessagesError::Decode("stream chunk not UTF-8".into()))?;
+            buffer.push_str(text);
+
+            // Process complete events (separated by blank line, i.e. \n\n).
+            while let Some(end_idx) = buffer.find("\n\n") {
+                let event_block = buffer[..end_idx].to_string();
+                buffer.drain(..end_idx + 2);
+                if let Some(delta_text) = extract_text_delta(&event_block) {
+                    accumulated.push_str(&delta_text);
+                    on_chunk(&delta_text);
+                }
+            }
+        }
+
+        if accumulated.is_empty() {
+            return Err(MessagesError::Decode(
+                "stream completed with zero text deltas".into(),
+            ));
+        }
+        Ok(accumulated)
+    }
 }
 
-/// Errors returned by [`AnthropicClient::messages_complete`].
+/// Extract the `delta.text` field from an SSE event block if it's a
+/// `content_block_delta` with `type: text_delta`. Returns None for
+/// any other event type (we ignore message_start / content_block_stop
+/// / message_delta / etc.) or malformed blocks.
+fn extract_text_delta(event_block: &str) -> Option<String> {
+    // Find the `data:` line. SSE allows `data: {json}` but Anthropic
+    // emits exactly one data line per event; we don't support multi-
+    // line data blocks here.
+    let data_line = event_block.lines().find_map(|l| {
+        l.strip_prefix("data: ")
+            .or_else(|| l.strip_prefix("data:"))
+    })?;
+
+    let parsed: serde_json::Value = serde_json::from_str(data_line.trim()).ok()?;
+    let event_type = parsed.get("type")?.as_str()?;
+    if event_type != "content_block_delta" {
+        return None;
+    }
+    let delta = parsed.get("delta")?;
+    let delta_type = delta.get("type")?.as_str()?;
+    if delta_type != "text_delta" {
+        return None;
+    }
+    delta.get("text")?.as_str().map(String::from)
+}
+
+/// Errors returned by `messages_complete` / `messages_stream`.
 #[derive(Debug)]
 pub enum MessagesError {
     EmptyKey,
     Network(String),
     HttpStatus(u16, String),
     Decode(String),
+    /// `messages_stream` only: the cancellation token fired before the
+    /// stream completed.
+    Cancelled,
 }
 
 impl std::fmt::Display for MessagesError {
@@ -219,6 +388,7 @@ impl std::fmt::Display for MessagesError {
             MessagesError::Network(m) => write!(f, "Network: {}", m),
             MessagesError::HttpStatus(c, m) => write!(f, "HTTP {}: {}", c, m),
             MessagesError::Decode(m) => write!(f, "Decode: {}", m),
+            MessagesError::Cancelled => write!(f, "Cancelled"),
         }
     }
 }
@@ -344,5 +514,64 @@ mod tests {
         assert_eq!(MessagesError::HttpStatus(401, "unauthorized".into()).to_string(),
                    "HTTP 401: unauthorized");
         assert_eq!(MessagesError::Decode("bad json".into()).to_string(), "Decode: bad json");
+        assert_eq!(MessagesError::Cancelled.to_string(), "Cancelled");
+    }
+
+    // ── SSE parser tests (M6-S03 round-3) ─────────────────────────
+
+    #[test]
+    fn extract_text_delta_typical_event() {
+        let event = "event: content_block_delta\n\
+                     data: {\"type\":\"content_block_delta\",\"index\":0,\
+                     \"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}";
+        assert_eq!(extract_text_delta(event), Some("Hello".to_string()));
+    }
+
+    #[test]
+    fn extract_text_delta_unicode() {
+        let event = "event: content_block_delta\n\
+                     data: {\"type\":\"content_block_delta\",\"index\":0,\
+                     \"delta\":{\"type\":\"text_delta\",\"text\":\"你好\"}}";
+        assert_eq!(extract_text_delta(event), Some("你好".to_string()));
+    }
+
+    #[test]
+    fn extract_text_delta_skips_message_start() {
+        let event = "event: message_start\n\
+                     data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_x\"}}";
+        assert_eq!(extract_text_delta(event), None);
+    }
+
+    #[test]
+    fn extract_text_delta_skips_content_block_stop() {
+        let event = "event: content_block_stop\n\
+                     data: {\"type\":\"content_block_stop\",\"index\":0}";
+        assert_eq!(extract_text_delta(event), None);
+    }
+
+    #[test]
+    fn extract_text_delta_skips_non_text_delta() {
+        // input_json_delta is for tool use; we ignore it for ghost-text.
+        let event = "event: content_block_delta\n\
+                     data: {\"type\":\"content_block_delta\",\"index\":0,\
+                     \"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{}\"}}";
+        assert_eq!(extract_text_delta(event), None);
+    }
+
+    #[test]
+    fn extract_text_delta_handles_no_space_after_colon() {
+        // Anthropic uses `data: ` (with space), but defensively support
+        // `data:` (without space) too.
+        let event = "event:content_block_delta\n\
+                     data:{\"type\":\"content_block_delta\",\"index\":0,\
+                     \"delta\":{\"type\":\"text_delta\",\"text\":\"X\"}}";
+        assert_eq!(extract_text_delta(event), Some("X".to_string()));
+    }
+
+    #[test]
+    fn extract_text_delta_returns_none_on_garbage() {
+        assert_eq!(extract_text_delta(""), None);
+        assert_eq!(extract_text_delta("garbage"), None);
+        assert_eq!(extract_text_delta("data: not json"), None);
     }
 }

@@ -161,6 +161,243 @@ fn error_jstring(env: &mut JNIEnv, msg: &str) -> jstring {
         .unwrap_or(std::ptr::null_mut())
 }
 
+// ── M6-S03 round-3: streaming AI ghost-text ─────────────────────────────────
+//
+// Real SSE streaming via reqwest::Response::bytes_stream(). Pipe is:
+//
+//   Kotlin: aiGhostStreamStart(...) → Long handle
+//   Kotlin: 50ms-poll loop calling aiGhostStreamPoll(handle) → String
+//           (":CHUNK:..." | ":DONE:" | ":ERR:..." | "")
+//   Kotlin: when ":DONE:" or ":ERR:", calls aiGhostStreamFree(handle)
+//   Kotlin: aiGhostStreamCancel(handle) at any time → token.cancel()
+//
+// Polling beats cross-thread JNI callbacks: avoids the JavaVM::attach_
+// current_thread + GlobalRef + jthread lifecycle complexity, and 50ms
+// poll latency is invisible to user (chunks arrive in 50-200ms intervals
+// from Anthropic anyway).
+//
+// Global tokio runtime: replaces the per-call Runtime::new from round-2.
+// One LazyLock-initialized multi-thread runtime serves all streaming
+// requests across the app lifetime. Per-request resources (CancellationToken,
+// chunks queue) tracked via Arc<StreamHandle>.
+
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::VecDeque;
+use std::sync::OnceLock;
+use tokio::runtime::Runtime;
+use tokio_util::sync::CancellationToken;
+// Arc and jlong already imported at top of file (lines 43-45).
+
+/// Global tokio runtime. Lazy-init on first AI call. Multi-thread (4
+/// workers) so concurrent ghost + agent requests don't serialize.
+static TOKIO_RT: OnceLock<Runtime> = OnceLock::new();
+
+fn tokio_rt() -> &'static Runtime {
+    TOKIO_RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .thread_name("warp-ai-tokio")
+            .build()
+            .expect("failed to build global tokio runtime for AI streaming")
+    })
+}
+
+/// Per-stream state shared between the spawned tokio task (writer) and
+/// the JNI poll caller (reader).
+struct StreamHandle {
+    chunks: Mutex<VecDeque<String>>,
+    done: AtomicBool,
+    error: Mutex<Option<String>>,
+    cancel: CancellationToken,
+}
+
+impl StreamHandle {
+    fn new() -> Self {
+        Self {
+            chunks: Mutex::new(VecDeque::new()),
+            done: AtomicBool::new(false),
+            error: Mutex::new(None),
+            cancel: CancellationToken::new(),
+        }
+    }
+}
+
+/// Start a streaming ghost-text request. Returns a Long handle that
+/// the caller MUST eventually pass to `aiGhostStreamFree(handle)`. The
+/// handle is also passed to `aiGhostStreamPoll(handle)` for chunks
+/// and `aiGhostStreamCancel(handle)` to abort.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_aiGhostStreamStart(
+    mut env: JNIEnv,
+    _class: JClass,
+    api_key: JString,
+    model: JString,
+    prompt: JString,
+    max_tokens: jint,
+) -> jlong {
+    init_logger();
+
+    let api_key_str = env
+        .get_string(&api_key)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let model_str = env
+        .get_string(&model)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let prompt_str = env
+        .get_string(&prompt)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let max_t = if max_tokens <= 0 { 200 } else { max_tokens as u32 };
+
+    log::info!(
+        target: "android-host",
+        "aiGhostStreamStart: model={} max_tokens={} prompt_len={}",
+        model_str, max_t, prompt_str.len()
+    );
+
+    let handle = Arc::new(StreamHandle::new());
+    let handle_w = Arc::clone(&handle);
+    let cancel_w = handle.cancel.clone();
+
+    tokio_rt().spawn(async move {
+        let client = warp_ai_mobile::client::AnthropicClient::new(api_key_str);
+        let result = client
+            .messages_stream(&model_str, &prompt_str, max_t, cancel_w, |chunk| {
+                if let Ok(mut q) = handle_w.chunks.lock() {
+                    q.push_back(chunk.to_string());
+                }
+            })
+            .await;
+        match result {
+            Ok(_) => {
+                log::info!(target: "android-host", "aiGhostStreamStart: stream completed ok");
+            }
+            Err(e) => {
+                log::error!(target: "android-host", "aiGhostStreamStart: {}", e);
+                if let Ok(mut slot) = handle_w.error.lock() {
+                    *slot = Some(e.to_string());
+                }
+            }
+        }
+        handle_w.done.store(true, Ordering::Release);
+    });
+
+    Arc::into_raw(handle) as jlong
+}
+
+/// Poll the stream for new chunks. Returns:
+///   - `""` (empty) when there are no new chunks AND the stream is
+///     still running. Caller polls again after a short delay.
+///   - `":CHUNK:<text>"` when a new chunk is available. Multiple chunks
+///     are concatenated in one return — caller drains them all at once
+///     by stripping the prefix.
+///   - `":DONE:"` when the stream finished successfully and ALL chunks
+///     have been delivered. Caller should `aiGhostStreamFree(handle)`.
+///   - `":ERR:<message>"` when the stream failed. Caller should free.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_aiGhostStreamPoll(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jstring {
+    if handle == 0 {
+        return error_jstring(&mut env, ":ERR:null handle");
+    }
+    // Borrow the Arc without dropping. into_raw + from_raw + into_raw
+    // pattern keeps the refcount stable.
+    let h_ptr = handle as *const StreamHandle;
+    let h = unsafe { Arc::from_raw(h_ptr) };
+    let h_ref = Arc::clone(&h);
+    let _ = Arc::into_raw(h);
+
+    // Drain any queued chunks first.
+    let chunks_text: Option<String> = h_ref.chunks.lock().ok().and_then(|mut q| {
+        if q.is_empty() {
+            None
+        } else {
+            let mut concat = String::new();
+            while let Some(c) = q.pop_front() {
+                concat.push_str(&c);
+            }
+            Some(concat)
+        }
+    });
+
+    let response = if let Some(text) = chunks_text {
+        // Send the chunk(s) regardless of done state — caller still
+        // needs the data even on the very last poll.
+        format!(":CHUNK:{}", text)
+    } else if h_ref.done.load(Ordering::Acquire) {
+        // No new chunks AND stream finished. Check error slot.
+        let err_msg = h_ref.error.lock().ok().and_then(|s| s.clone());
+        if let Some(msg) = err_msg {
+            format!(":ERR:{}", msg)
+        } else {
+            ":DONE:".to_string()
+        }
+    } else {
+        // Still running, no new data — poll again later.
+        String::new()
+    };
+
+    env.new_string(response)
+        .map(|s| s.into_raw())
+        .unwrap_or_else(|_| error_jstring(&mut env, ":ERR:jstring create failed"))
+}
+
+/// Cancel an in-flight stream. Idempotent; safe to call multiple times
+/// or after the stream already completed. The handle remains valid
+/// until `aiGhostStreamFree` is called — caller should still poll once
+/// more to see ":ERR:Cancelled" then free.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_aiGhostStreamCancel(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle == 0 {
+        return;
+    }
+    let h_ptr = handle as *const StreamHandle;
+    let h = unsafe { Arc::from_raw(h_ptr) };
+    h.cancel.cancel();
+    log::info!(target: "android-host", "aiGhostStreamCancel: token cancelled");
+    let _ = Arc::into_raw(h);
+}
+
+/// Drop the stream handle. MUST be called by the caller exactly once
+/// after they observe ":DONE:" or ":ERR:" from the poll. Calling Free
+/// on an in-flight stream WITHOUT cancelling first is undefined
+/// behaviour because the spawned tokio task still holds an Arc
+/// reference; the task will continue running and eventually drop its
+/// own Arc, freeing the handle when both refs are gone. So Free is
+/// safe (memory-wise) but you'll leak the active request — always
+/// Cancel first if you're aborting.
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_aiGhostStreamFree(
+    _env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) {
+    if handle == 0 {
+        return;
+    }
+    let h_ptr = handle as *const StreamHandle;
+    // Take ownership and drop. This decrements the refcount; if the
+    // tokio task still holds the other Arc, the StreamHandle stays
+    // alive until that task finishes.
+    let _: Arc<StreamHandle> = unsafe { Arc::from_raw(h_ptr) };
+    log::info!(target: "android-host", "aiGhostStreamFree: handle dropped");
+}
+
 // ── PTY JNI bindings ────────────────────────────────────────────────────────
 
 #[allow(non_snake_case)]

@@ -429,6 +429,21 @@ class AccessoryRow @JvmOverloads constructor(
     //     (TextView at the right pixel coords) instead of toast/echo
     //   - Tab key intercept to accept
 
+    /**
+     * Round-3: streaming AI suggest. Replaces the round-2 sync
+     * round-trip with the StreamStart / StreamPoll / StreamFree JNI
+     * triple. Each :CHUNK: arrives in 50-200ms intervals; we echo
+     * each chunk to the PTY (as comment line) the moment it arrives,
+     * so the user sees progressive output instead of one big toast at
+     * the end.
+     *
+     * Cancellation: round-3 doesn't yet wire ESC to cancel because
+     * the user-typing IME interception is round-4 work. The handle
+     * is exposed via a private field so a future ESC handler in
+     * AccessoryRow.sendBytes() can call cancelActiveStream().
+     */
+    @Volatile private var activeStreamHandle: Long = 0L
+
     private fun triggerAiSuggest() {
         @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -449,53 +464,132 @@ class AccessoryRow @JvmOverloads constructor(
                 return@launch
             }
 
-            // Round-2 hardcoded prompt. Round-3 will pull the user's
-            // current shell-input line from the PTY tail.
+            // Cancel any previously-running stream + free its handle so
+            // tapping 💡 twice doesn't run two streams in parallel.
+            cancelActiveStream()
+
+            // Round-3 hardcoded prompt; round-4 will pull from PTY tail.
             val prompt = "Suggest a single shell command completion for `ls -`. " +
                 "Reply with ONLY the completed command, no explanation, no markdown."
             val t0 = System.currentTimeMillis()
-            val response = try {
-                NativeBridge.aiGhostComplete(
+            val handle = try {
+                NativeBridge.aiGhostStreamStart(
                     apiKey,
                     "claude-haiku-4-5",
                     prompt,
                     /* maxTokens = */ 50
                 )
             } catch (e: Throwable) {
-                Log.e(LOG_TAG, "ai: aiGhostComplete JNI threw: ${e.message}")
-                "ERR:JNI threw: ${e.message}"
+                Log.e(LOG_TAG, "ai: aiGhostStreamStart threw: ${e.message}")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(context, "AI start failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+                return@launch
             }
-            val elapsed = System.currentTimeMillis() - t0
-            Log.i(LOG_TAG, "ai: response_len=${response?.length ?: 0} elapsedMs=$elapsed")
+            activeStreamHandle = handle
+            Log.i(LOG_TAG, "ai: stream started handle=$handle")
 
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                if (response == null || response.startsWith("ERR:")) {
-                    Toast.makeText(
-                        context,
-                        "AI suggest failed: ${response?.removePrefix("ERR:") ?: "(null)"}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    return@withContext
+            // Open-line indicator in PTY.
+            sendPtyComment("# WARP-AI streaming…\n")
+
+            // Poll loop. 50ms cadence is invisible to user; chunks arrive
+            // in 50-200ms intervals from Anthropic anyway.
+            var assembled = StringBuilder()
+            try {
+                while (true) {
+                    // Single-shot delay between polls. yields back to
+                    // the IO dispatcher so other coroutines can run.
+                    kotlinx.coroutines.delay(50)
+                    val response = try {
+                        NativeBridge.aiGhostStreamPoll(handle)
+                    } catch (e: Throwable) {
+                        Log.e(LOG_TAG, "ai: poll threw: ${e.message}")
+                        ":ERR:JNI poll threw: ${e.message}"
+                    }
+                    when {
+                        response.isNullOrEmpty() -> {
+                            // Still running, no new chunks. Keep polling.
+                        }
+                        response.startsWith(":CHUNK:") -> {
+                            val text = response.removePrefix(":CHUNK:")
+                            assembled.append(text)
+                            // Push each chunk to PTY immediately (as a
+                            // comment fragment). Round-4 IME overlay will
+                            // render this on the SurfaceView instead.
+                            sendPtyComment(text)
+                        }
+                        response.startsWith(":DONE:") -> {
+                            val elapsed = System.currentTimeMillis() - t0
+                            Log.i(
+                                LOG_TAG,
+                                "ai: stream done elapsedMs=$elapsed total_chars=${assembled.length}"
+                            )
+                            sendPtyComment("\n# WARP-AI done (${elapsed}ms)\n")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    "AI streamed ${assembled.length} chars in ${elapsed}ms",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            break
+                        }
+                        response.startsWith(":ERR:") -> {
+                            val msg = response.removePrefix(":ERR:")
+                            Log.e(LOG_TAG, "ai: stream error: $msg")
+                            sendPtyComment("\n# WARP-AI error: $msg\n")
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    "AI error: ${msg.take(120)}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            break
+                        }
+                    }
                 }
-                val trimmed = response.trim()
-                Toast.makeText(
-                    context,
-                    "AI (${elapsed} ms): ${trimmed.take(80)}",
-                    Toast.LENGTH_LONG
-                ).show()
-                // Echo into PTY as a comment so it shows in scrollback.
-                // Keep it as a plain echo (not the actual command) to
-                // avoid surprising the user with execution; round-3 +
-                // Tab-accept makes the insertion path explicit.
-                val echoLine = "# WARP-AI suggest: ${trimmed.replace("\n", " ")}\n"
-                val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
-                    component = ComponentName(context.packageName, "${context.packageName}.PtyBroadcastReceiver")
-                    putExtra("cmd_id", cmdId)
-                    putExtra("data", echoLine.toByteArray(Charsets.UTF_8))
+            } finally {
+                // ALWAYS free the handle to drop the Arc on the Rust
+                // side. activeStreamHandle gets cleared so the next
+                // tap doesn't try to cancel a freed handle.
+                if (activeStreamHandle == handle) {
+                    activeStreamHandle = 0L
                 }
-                context.sendBroadcast(intent)
+                try {
+                    NativeBridge.aiGhostStreamFree(handle)
+                } catch (e: Throwable) {
+                    Log.e(LOG_TAG, "ai: free threw: ${e.message}")
+                }
             }
         }
+    }
+
+    /**
+     * Cancel any in-flight AI stream. Future hook: ESC key in
+     * AccessoryRow.sendBytes() will call this to abort suggestion.
+     */
+    @Suppress("unused")
+    fun cancelActiveStream() {
+        val h = activeStreamHandle
+        if (h != 0L) {
+            try {
+                NativeBridge.aiGhostStreamCancel(h)
+                Log.i(LOG_TAG, "ai: cancel requested for handle=$h")
+            } catch (e: Throwable) {
+                Log.e(LOG_TAG, "ai: cancel threw: ${e.message}")
+            }
+        }
+    }
+
+    /** Helper: send a literal string (e.g. AI streamed comment) to the PTY. */
+    private fun sendPtyComment(text: String) {
+        val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+            component = ComponentName(context.packageName, "${context.packageName}.PtyBroadcastReceiver")
+            putExtra("cmd_id", cmdId)
+            putExtra("data", text.toByteArray(Charsets.UTF_8))
+        }
+        context.sendBroadcast(intent)
     }
 
     /**

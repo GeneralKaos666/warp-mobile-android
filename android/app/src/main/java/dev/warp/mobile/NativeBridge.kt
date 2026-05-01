@@ -27,6 +27,39 @@ object NativeBridge {
         maxTokens: Int
     ): String?
 
+    // ── M6-S03 round-3: AI ghost-text STREAMING ──────────────────────────────
+    //
+    // Real SSE streaming via Anthropic /v1/messages (stream=true). The
+    // Rust task runs on a global multi-thread tokio runtime; chunks
+    // accumulate in a VecDeque inside StreamHandle. Kotlin polls every
+    // ~50ms via Handler.postDelayed.
+    //
+    // Lifecycle:
+    //   1. start = aiGhostStreamStart(...) → Long handle
+    //   2. loop: poll = aiGhostStreamPoll(start)
+    //        - "" → still running; sleep 50ms; poll again
+    //        - ":CHUNK:<text>" → render incremental text; sleep + poll
+    //        - ":DONE:" → stream finished cleanly; break loop
+    //        - ":ERR:<msg>" → error; break loop
+    //   3. cancel anytime: aiGhostStreamCancel(handle); next poll yields ":ERR:Cancelled"
+    //   4. ALWAYS finally: aiGhostStreamFree(handle) to drop the Arc
+    //
+    // The kotlin caller is responsible for the poll loop + free; the
+    // Rust side does NOT auto-free on done because the JVM thread still
+    // needs to retrieve the last chunks via poll. Forgetting to free =
+    // small memory leak (~200 bytes per orphaned handle); use a
+    // try/finally block.
+    external fun aiGhostStreamStart(
+        apiKey: String,
+        model: String,
+        prompt: String,
+        maxTokens: Int
+    ): Long
+
+    external fun aiGhostStreamPoll(handle: Long): String?
+    external fun aiGhostStreamCancel(handle: Long)
+    external fun aiGhostStreamFree(handle: Long)
+
     // ── Bootstrap atomic extraction (M4-S05) ─────────────────────────────────
     //
     // First-launch installer: reads bootstrap-aarch64.zip + version.json from
