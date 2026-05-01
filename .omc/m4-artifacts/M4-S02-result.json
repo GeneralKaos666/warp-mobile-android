@@ -97,7 +97,8 @@
       "README.md (added step 2b: clone termux-packages fork + warp-mobile/main checkout, plus directory tree update)",
       ".omc/m4-artifacts/M4-S02-result.json (this file)"
     ],
-    "main_repo_commit_hash": "PENDING — committed after this result.json is finalized"
+    "main_repo_commit_hash": "b9c7bd7c066e6cb9f0840a4f93e92964f3f67207",
+    "main_repo_commit_short": "b9c7bd7"
   },
 
   "risks_for_m4_s03": [
