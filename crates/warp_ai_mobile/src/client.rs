@@ -95,16 +95,169 @@ impl AnthropicClient {
         format!("Bearer {}***...{}", prefix, suffix)
     }
 
-    // M6-S03 round-2 will add:
-    //
-    //   pub async fn messages_stream<F: FnMut(StreamEvent)>(
-    //       &self, model: &str, prompt: &str, max_tokens: u32,
-    //       cancel: CancellationToken, mut on_event: F,
-    //   ) -> Result<MessagesResponse, MessagesError>
-    //
-    // The FnMut callback fires for each parsed SSE event so the caller
-    // (ghost-text dispatcher / agent-task UI) can stream-update the
-    // UI without buffering the full response.
+    /// Synchronous (assembled) request to /v1/messages.
+    ///
+    /// M6-S03 round-2 scope: posts a non-streaming Messages request,
+    /// awaits the full response, returns the concatenated text. Real
+    /// SSE streaming with per-token cancel is round-3 work — round-2
+    /// validates the dep tree round-trips a real Anthropic call from
+    /// the Rust path (round-1 only verified Cargo cross-compile).
+    ///
+    /// Why not streaming yet:
+    ///   - Streaming needs a global tokio runtime + GlobalRef on the
+    ///     Java callback object so Rust can fire `on_event(...)` from
+    ///     a background tokio worker. That's its own design round.
+    ///   - The async-then-sync bridge (`Runtime::new().block_on(...)`)
+    ///     is the simplest JNI thread shape: one call → one result.
+    ///   - For ghost-text, a sync 1-2s round-trip is too slow to hit
+    ///     the <500ms p50 first-token AC; round-3 makes it streaming.
+    ///     But for round-2 device verification this proves the pipe.
+    ///
+    /// `prompt` becomes the user-role message content. The caller is
+    /// expected to wrap with appropriate system-prompt scaffolding for
+    /// ghost-text vs agent (the helper `ghost_prompt_for(...)` in the
+    /// upcoming `ghost.rs` will do this; for now caller passes raw).
+    ///
+    /// Errors:
+    ///   - `MessagesError::Network` for connect / TLS / DNS failures
+    ///   - `MessagesError::HttpStatus(code, body)` for 4xx/5xx
+    ///   - `MessagesError::Decode` for unexpected response shape
+    ///   - `MessagesError::EmptyKey` if api_key was constructed empty
+    pub async fn messages_complete(
+        &self,
+        model: &str,
+        prompt: &str,
+        max_tokens: u32,
+    ) -> Result<String, MessagesError> {
+        if self.api_key.is_empty() {
+            return Err(MessagesError::EmptyKey);
+        }
+
+        let body = serde_json::json!({
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [
+                { "role": "user", "content": prompt }
+            ]
+        });
+
+        let client = reqwest::Client::builder()
+            .connect_timeout(self.connect_timeout)
+            .timeout(self.request_timeout)
+            .build()
+            .map_err(|e| MessagesError::Network(format!("client build: {}", e)))?;
+
+        log::info!(
+            target: "warp_ai",
+            "POST {} model={} max_tokens={} auth={}",
+            API_ENDPOINT, model, max_tokens, self.redact()
+        );
+
+        let resp = client
+            .post(API_ENDPOINT)
+            .header("Content-Type", "application/json")
+            .header("Anthropic-Version", ANTHROPIC_VERSION)
+            .header("X-Api-Key", &self.api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagesError::Network(format!("send: {}", e)))?;
+
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| MessagesError::Network(format!("body read: {}", e)))?;
+
+        if !status.is_success() {
+            // Try to parse the Anthropic error envelope for a clearer
+            // message: { "error": { "type": "...", "message": "..." } }.
+            let msg = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .and_then(|v| v.get("error")?.get("message")?.as_str().map(String::from))
+                .unwrap_or_else(|| text.chars().take(200).collect());
+            return Err(MessagesError::HttpStatus(status.as_u16(), scrub_key(&msg)));
+        }
+
+        // Response shape (non-streaming):
+        //   { "id": "msg_...", "type": "message",
+        //     "role": "assistant", "model": "...",
+        //     "content": [{ "type": "text", "text": "..." }],
+        //     "usage": { "input_tokens": N, "output_tokens": M } }
+        let parsed: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| MessagesError::Decode(format!("not JSON: {}", e)))?;
+        let content = parsed
+            .get("content")
+            .and_then(|c| c.as_array())
+            .ok_or_else(|| MessagesError::Decode("missing 'content' array".into()))?;
+        let mut out = String::new();
+        for block in content {
+            if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                out.push_str(t);
+            }
+        }
+        if out.is_empty() {
+            return Err(MessagesError::Decode("'content' had no text blocks".into()));
+        }
+        Ok(out)
+    }
+}
+
+/// Errors returned by [`AnthropicClient::messages_complete`].
+#[derive(Debug)]
+pub enum MessagesError {
+    EmptyKey,
+    Network(String),
+    HttpStatus(u16, String),
+    Decode(String),
+}
+
+impl std::fmt::Display for MessagesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MessagesError::EmptyKey => write!(f, "API key is empty"),
+            MessagesError::Network(m) => write!(f, "Network: {}", m),
+            MessagesError::HttpStatus(c, m) => write!(f, "HTTP {}: {}", c, m),
+            MessagesError::Decode(m) => write!(f, "Decode: {}", m),
+        }
+    }
+}
+
+impl std::error::Error for MessagesError {}
+
+/// Defense-in-depth: scrub any embedded `sk-ant-...` substring from
+/// API responses before they hit logs / UI / error returns. Mirrors
+/// the Java-side `AnthropicClient.scrub()` regex.
+fn scrub_key(text: &str) -> String {
+    // Simple pass: find "sk-ant-" prefix + take chars until non-key
+    // char. Avoids pulling in the regex crate (1MB binary cost).
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    let bytes = text.as_bytes();
+    while i < bytes.len() {
+        if i + 7 <= bytes.len() && &bytes[i..i + 7] == b"sk-ant-" {
+            out.push_str("sk-ant-***REDACTED***");
+            // Skip past the key — anything in the API-key alphabet.
+            i += 7;
+            while i < bytes.len()
+                && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'-')
+            {
+                i += 1;
+            }
+        } else {
+            // Append char (UTF-8 safe via str slicing on char boundary).
+            let ch_start = i;
+            let ch_end = ch_start
+                + text[ch_start..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(1);
+            out.push_str(&text[ch_start..ch_end]);
+            i = ch_end;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -152,5 +305,44 @@ mod tests {
     fn default_models_are_haiku_and_sonnet() {
         assert!(DEFAULT_GHOST_MODEL.contains("haiku"));
         assert!(DEFAULT_AGENT_MODEL.contains("sonnet"));
+    }
+
+    #[test]
+    fn scrub_key_removes_full_keys() {
+        let dirty = "Error: invalid sk-ant-deadbeef0123456789ABCDEF in request";
+        let cleaned = scrub_key(dirty);
+        assert!(!cleaned.contains("sk-ant-d"), "still has key: {}", cleaned);
+        assert!(cleaned.contains("REDACTED"), "missing redact marker: {}", cleaned);
+    }
+
+    #[test]
+    fn scrub_key_handles_no_keys() {
+        let plain = "Just a normal error message with no secrets";
+        assert_eq!(scrub_key(plain), plain);
+    }
+
+    #[test]
+    fn scrub_key_handles_multiple_keys() {
+        let dirty = "First sk-ant-aaa123 and second sk-ant-bbb456 keys";
+        let cleaned = scrub_key(dirty);
+        assert!(cleaned.matches("REDACTED").count() == 2, "got: {}", cleaned);
+    }
+
+    #[test]
+    fn scrub_key_preserves_unicode() {
+        let dirty = "錯誤 sk-ant-xyz 訊息";
+        let cleaned = scrub_key(dirty);
+        assert!(cleaned.contains("錯誤"));
+        assert!(cleaned.contains("訊息"));
+        assert!(cleaned.contains("REDACTED"));
+    }
+
+    #[test]
+    fn messages_error_display_formats() {
+        assert_eq!(MessagesError::EmptyKey.to_string(), "API key is empty");
+        assert_eq!(MessagesError::Network("dns".into()).to_string(), "Network: dns");
+        assert_eq!(MessagesError::HttpStatus(401, "unauthorized".into()).to_string(),
+                   "HTTP 401: unauthorized");
+        assert_eq!(MessagesError::Decode("bad json".into()).to_string(), "Decode: bad json");
     }
 }

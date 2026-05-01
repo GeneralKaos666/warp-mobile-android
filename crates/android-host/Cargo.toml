@@ -45,6 +45,17 @@ zip = { version = "2.2", default-features = false, features = ["deflate"] }
 # grep -i metal` returning empty.
 warp_mobile_android_link = { path = "../../warp-src/crates/warp_mobile_android_link" }
 
+# M6-S03 round-2: Anthropic Claude async client (warp_ai_mobile crate
+# in this same workspace). Top-level (not Android-target-only) because
+# the host-side smoke tests for the JNI shim's argument decoding can
+# call into messages_complete with mocked HTTP — no real Android
+# dependencies in the call path.
+warp_ai_mobile = { path = "../warp_ai_mobile" }
+# Tokio for the per-call current-thread runtime that drives the async
+# messages_complete call from the synchronous JNI thread. Round-3
+# will replace per-call runtime with a global singleton.
+tokio = { version = "1", default-features = false, features = ["rt", "macros"] }
+
 [dev-dependencies]
 # M4-S05: tempdir for bootstrap module unit tests (host-side).
 tempfile = "3"

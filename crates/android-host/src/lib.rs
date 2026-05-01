@@ -62,6 +62,105 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ping(
         .into_raw()
 }
 
+// ── M6-S03 round-2: AI ghost-text JNI binding ───────────────────────────────
+//
+// Synchronous (per-call tokio runtime) request to Anthropic Claude.
+// Returns the assembled response text on success or "ERR:<message>"
+// on failure. The Kotlin caller (AccessoryRow round-2) checks the
+// "ERR:" prefix to distinguish success from error.
+//
+// Per-call Runtime::new() costs ~10ms which is negligible vs the
+// 500ms-3s network round-trip. Round-3 will switch to a global
+// runtime + streaming + cancellation token, but round-2 validates
+// the Java→Rust→Anthropic→Rust→Java pipe end-to-end.
+//
+// JNI signature (Kotlin side):
+//   external fun aiGhostComplete(apiKey: String, model: String,
+//                                 prompt: String, maxTokens: Int): String
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn Java_dev_warp_mobile_NativeBridge_aiGhostComplete(
+    mut env: JNIEnv,
+    _class: JClass,
+    api_key: JString,
+    model: JString,
+    prompt: JString,
+    max_tokens: jint,
+) -> jstring {
+    init_logger();
+
+    // Decode all 3 jstrings up front; any decode failure → ERR result.
+    let api_key_str = match env.get_string(&api_key) {
+        Ok(s) => s.to_string_lossy().into_owned(),
+        Err(e) => {
+            return error_jstring(&mut env, &format!("ERR:invalid api_key jstring: {:?}", e));
+        }
+    };
+    let model_str = match env.get_string(&model) {
+        Ok(s) => s.to_string_lossy().into_owned(),
+        Err(e) => {
+            return error_jstring(&mut env, &format!("ERR:invalid model jstring: {:?}", e));
+        }
+    };
+    let prompt_str = match env.get_string(&prompt) {
+        Ok(s) => s.to_string_lossy().into_owned(),
+        Err(e) => {
+            return error_jstring(&mut env, &format!("ERR:invalid prompt jstring: {:?}", e));
+        }
+    };
+
+    let max_t = if max_tokens <= 0 { 200 } else { max_tokens as u32 };
+
+    log::info!(
+        target: "android-host",
+        "aiGhostComplete: model={} max_tokens={} prompt_len={}",
+        model_str, max_t, prompt_str.len()
+    );
+
+    // Per-call runtime. M6-S03 round-3 will replace with a global
+    // singleton + cancellation propagation.
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return error_jstring(&mut env, &format!("ERR:tokio runtime build: {}", e));
+        }
+    };
+
+    let client = warp_ai_mobile::client::AnthropicClient::new(api_key_str);
+    let result = rt.block_on(async {
+        client.messages_complete(&model_str, &prompt_str, max_t).await
+    });
+
+    match result {
+        Ok(text) => {
+            log::info!(
+                target: "android-host",
+                "aiGhostComplete: ok response_len={}",
+                text.len()
+            );
+            env.new_string(text)
+                .map(|s| s.into_raw())
+                .unwrap_or_else(|_| error_jstring(&mut env, "ERR:jstring create failed"))
+        }
+        Err(e) => {
+            log::error!(target: "android-host", "aiGhostComplete: {}", e);
+            error_jstring(&mut env, &format!("ERR:{}", e))
+        }
+    }
+}
+
+/// Helper: build a jstring "ERR:..." for the various failure paths.
+/// Returns a null jstring if even that fails (caller checks for null).
+fn error_jstring(env: &mut JNIEnv, msg: &str) -> jstring {
+    env.new_string(msg)
+        .map(|s| s.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
 // ── PTY JNI bindings ────────────────────────────────────────────────────────
 
 #[allow(non_snake_case)]

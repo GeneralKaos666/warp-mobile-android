@@ -10,6 +10,23 @@ object NativeBridge {
 
     external fun ping(): String
 
+    // ── M6-S03 round-2: AI ghost-text (synchronous round-trip) ───────────────
+    //
+    // Calls Anthropic Claude /v1/messages via the warp_ai_mobile Rust crate
+    // (reqwest + rustls + tokio). BLOCKING — caller MUST dispatch on a
+    // background thread (Dispatchers.IO). On error, return value starts
+    // with "ERR:" so caller can distinguish failure from a normal completion
+    // that happens to start with quotes/punctuation.
+    //
+    // Round-3 will add a streaming + cancel-on-keystroke variant that
+    // posts events through a callback object across the JNI boundary.
+    external fun aiGhostComplete(
+        apiKey: String,
+        model: String,
+        prompt: String,
+        maxTokens: Int
+    ): String?
+
     // ── Bootstrap atomic extraction (M4-S05) ─────────────────────────────────
     //
     // First-launch installer: reads bootstrap-aarch64.zip + version.json from

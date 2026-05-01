@@ -18,6 +18,7 @@ import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Toast
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 
 /**
@@ -139,6 +140,15 @@ class AccessoryRow @JvmOverloads constructor(
             }
             context.startActivity(intent)
         }
+        // M6-S03 round-2: AI ghost-suggest button. Sends a hardcoded
+        // "suggest a shell completion for 'ls -'" prompt to Claude
+        // Haiku via the warp_ai_mobile Rust crate (synchronous round-
+        // trip; round-3 will hook into the IME path for live typing-
+        // driven ghost-text + Tab-accept). The result is shown as a
+        // Toast and ALSO inserted into the PTY as a one-shot
+        // "echo SUGGESTION:..." line so users can see it in their
+        // terminal scrollback.
+        addBtn("💡") { triggerAiSuggest() }
         // Mic placeholder for M5-S04. Voice input via RecognizerIntent is a
         // future enhancement (need explicit RECORD_AUDIO permission flow);
         // round-1 ships paste streaming as the headline M5-S04 feature.
@@ -400,6 +410,92 @@ class AccessoryRow @JvmOverloads constructor(
         cm.setPrimaryClip(clipData)
         Log.i(LOG_TAG, "copy: ${text.length} chars copied to clipboard (sensitive flag: SDK>=33)")
         Toast.makeText(context, "Copied ${text.length} chars", Toast.LENGTH_SHORT).show()
+    }
+
+    // ── M6-S03 round-2: AI ghost-text via Claude Haiku ──────────────────
+    //
+    // Reads the saved BYOK key from AiKeyStore, sends a hardcoded sample
+    // prompt to Claude Haiku via NativeBridge.aiGhostComplete (which
+    // dispatches to warp_ai_mobile::client::messages_complete on a
+    // tokio per-call runtime). Shows result as Toast + writes to PTY
+    // as `echo "WARP-AI: <suggestion>"` so it appears in scrollback.
+    //
+    // Round-3 scope:
+    //   - read the current shell-input line from the PTY tail (need
+    //     a new JNI getter; not present in M1-M3)
+    //   - debounced auto-trigger 150ms after last keystroke
+    //   - cancel-on-keystroke via tokio CancellationToken
+    //   - render grayed suggestion as IME-cursor-anchored overlay
+    //     (TextView at the right pixel coords) instead of toast/echo
+    //   - Tab key intercept to accept
+
+    private fun triggerAiSuggest() {
+        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val apiKey = try {
+                AiKeyStore.load(context)
+            } catch (e: Throwable) {
+                Log.e(LOG_TAG, "ai: AiKeyStore load failed: ${e.message}")
+                null
+            }
+            if (apiKey.isNullOrBlank()) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "No API key — open ⚙ Settings to set one",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
+
+            // Round-2 hardcoded prompt. Round-3 will pull the user's
+            // current shell-input line from the PTY tail.
+            val prompt = "Suggest a single shell command completion for `ls -`. " +
+                "Reply with ONLY the completed command, no explanation, no markdown."
+            val t0 = System.currentTimeMillis()
+            val response = try {
+                NativeBridge.aiGhostComplete(
+                    apiKey,
+                    "claude-haiku-4-5",
+                    prompt,
+                    /* maxTokens = */ 50
+                )
+            } catch (e: Throwable) {
+                Log.e(LOG_TAG, "ai: aiGhostComplete JNI threw: ${e.message}")
+                "ERR:JNI threw: ${e.message}"
+            }
+            val elapsed = System.currentTimeMillis() - t0
+            Log.i(LOG_TAG, "ai: response_len=${response?.length ?: 0} elapsedMs=$elapsed")
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (response == null || response.startsWith("ERR:")) {
+                    Toast.makeText(
+                        context,
+                        "AI suggest failed: ${response?.removePrefix("ERR:") ?: "(null)"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@withContext
+                }
+                val trimmed = response.trim()
+                Toast.makeText(
+                    context,
+                    "AI (${elapsed} ms): ${trimmed.take(80)}",
+                    Toast.LENGTH_LONG
+                ).show()
+                // Echo into PTY as a comment so it shows in scrollback.
+                // Keep it as a plain echo (not the actual command) to
+                // avoid surprising the user with execution; round-3 +
+                // Tab-accept makes the insertion path explicit.
+                val echoLine = "# WARP-AI suggest: ${trimmed.replace("\n", " ")}\n"
+                val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+                    component = ComponentName(context.packageName, "${context.packageName}.PtyBroadcastReceiver")
+                    putExtra("cmd_id", cmdId)
+                    putExtra("data", echoLine.toByteArray(Charsets.UTF_8))
+                }
+                context.sendBroadcast(intent)
+            }
+        }
     }
 
     /**
