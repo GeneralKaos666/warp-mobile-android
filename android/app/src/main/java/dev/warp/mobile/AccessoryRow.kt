@@ -79,6 +79,29 @@ class AccessoryRow @JvmOverloads constructor(
     private lateinit var ctrlButton: Button
     private lateinit var altButton: Button
 
+    /**
+     * Refs to the AI-feature buttons (💡 ghost, 🤖 agent) so the
+     * AiConnectivity listener can grey them out when the network drops
+     * mid-session. Settings (⚙) stays enabled offline so the user can
+     * still edit / clear the API key. M6-S05 v1 carry-over closure.
+     */
+    private var ghostButton: Button? = null
+    private var agentButton: Button? = null
+
+    private val connectivityListener = object : AiConnectivity.Listener {
+        override fun onConnectivityChanged(online: Boolean) {
+            // Listener fires on a Binder thread when the network
+            // changes — marshal to the View's UI thread before
+            // touching button state (Android UI invariant).
+            post {
+                listOfNotNull(ghostButton, agentButton).forEach { btn ->
+                    btn.isEnabled = online
+                    btn.alpha = if (online) 1.0f else 0.4f
+                }
+            }
+        }
+    }
+
     init {
         isFillViewport = false
         setBackgroundColor(0xFF202020.toInt())
@@ -162,12 +185,12 @@ class AccessoryRow @JvmOverloads constructor(
         // Toast and ALSO inserted into the PTY as a one-shot
         // "echo SUGGESTION:..." line so users can see it in their
         // terminal scrollback.
-        addBtn("💡") { triggerAiSuggest() }
+        ghostButton = addBtn("💡") { triggerAiSuggest() }
         // M6-S04: agent task button. Opens AgentBlockSheet (Dialog
         // with streaming Sonnet response). Round-1 hardcoded prompt;
         // round-2 will accept a Block ID parameter from a Long-press
         // BottomSheet menu (per M5-S03 deferred UI integration).
-        addBtn("🤖") { triggerAgentTask() }
+        agentButton = addBtn("🤖") { triggerAgentTask() }
         // Mic placeholder for M5-S04. Voice input via RecognizerIntent is a
         // future enhancement (need explicit RECORD_AUDIO permission flow);
         // round-1 ships paste streaming as the headline M5-S04 feature.
@@ -649,12 +672,26 @@ class AccessoryRow @JvmOverloads constructor(
         }
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Subscribe to network state changes so 💡 / 🤖 buttons grey
+        // out within ~1s of network loss (callback fires from binder
+        // thread; listener marshals to UI thread before touching state).
+        // M6-S05 v1 carry-over closure.
+        AiConnectivity.get(context).register(connectivityListener)
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         // Cancel any in-flight stream + cancel the scope so the launched
         // coroutine doesn't keep ticking after the View detaches.
         cancelActiveStream()
         aiScope.cancel()
+        // Unregister so the singleton's listener list doesn't accumulate
+        // dead refs to detached AccessoryRow instances on rotation.
+        try {
+            AiConnectivity.get(context).unregister(connectivityListener)
+        } catch (_: Throwable) { /* best effort */ }
     }
 
     /**
