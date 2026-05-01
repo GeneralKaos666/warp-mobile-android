@@ -480,9 +480,28 @@ class WarpInputView @JvmOverloads constructor(
             return super.finishComposingText()
         }
 
-        // Note: deleteSurroundingText, sendKeyEvent, etc. are NOT routed to
-        // Rust in M2-S10 — those land in M2-S11 (touch + key dispatch). The
-        // BaseInputConnection super-class default handles them on the local
+        override fun sendKeyEvent(event: android.view.KeyEvent?): Boolean {
+            // M6 carry-over #1 round-3 review MEDIUM: hardware keyboards
+            // and some IMEs submit Enter via sendKeyEvent rather than
+            // commitText("\n"). When that happens, the ghost-suggest
+            // controller never sees the "\n" and its buffer goes stale.
+            // Detect KEYCODE_ENTER on ACTION_DOWN and forward an explicit
+            // "\n" commit to the controller (idempotent — multiple resets
+            // just clear an already-empty buffer).
+            if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN &&
+                (event.keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
+                    event.keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+                try {
+                    GhostSuggestController.onTextCommitted("\n")
+                } catch (t: Throwable) {
+                    Log.w(TAG, "GhostSuggest enter-reset failed: ${t.message}")
+                }
+            }
+            return super.sendKeyEvent(event)
+        }
+
+        // Note: deleteSurroundingText is NOT routed to Rust in M2-S10 —
+        // BaseInputConnection super-class default handles it on the local
         // Editable buffer for now so the IME doesn't get confused.
 
         private fun quote(s: String): String {

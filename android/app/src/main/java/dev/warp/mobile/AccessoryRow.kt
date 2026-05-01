@@ -90,7 +90,14 @@ class AccessoryRow @JvmOverloads constructor(
     }
     private val rowLayout: LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
-        layoutParams = android.widget.FrameLayout.LayoutParams(
+        // ViewGroup.LayoutParams (vs FrameLayout.LayoutParams or
+        // HorizontalScrollView.LayoutParams) — round-3 review LOW.
+        // The parent will be horizontalScroll (a HorizontalScrollView),
+        // which subclasses FrameLayout, but ViewGroup.LayoutParams is
+        // the broadest correct type and avoids the misleading dependency
+        // on parent-class internals. width/height are honored by all
+        // FrameLayout-derived parents.
+        layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )

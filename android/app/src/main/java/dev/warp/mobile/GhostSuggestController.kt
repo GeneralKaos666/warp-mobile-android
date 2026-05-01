@@ -10,10 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * M6 carry-over #1 (IME-bound ghost auto-trigger): debounced typing →
@@ -51,8 +49,12 @@ import kotlinx.coroutines.withContext
  *     AccessoryRow.activeStreamHandle (which is for the manual 💡
  *     button) so the two paths can coexist
  *
- * Threading: the buffer + state are protected by `synchronized(this)`.
- * The Haiku call runs on Dispatchers.IO via [aiScope].
+ * Threading: state mutations go through [updateStateAtomically] which
+ * synchronizes the read-then-write composition (round-3 review HIGH —
+ * volatile alone can't make `current = current.copy(...)` atomic across
+ * UI + IO threads). The Haiku call runs on Dispatchers.IO via [aiScope].
+ * [aiScope] is intentionally process-lifetime: this is an `object`
+ * singleton + Android process lifecycle is what bounds it.
  */
 object GhostSuggestController {
     private const val LOG_TAG = "WarpGhostSuggest"
@@ -85,7 +87,19 @@ object GhostSuggestController {
     private val aiScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeStreamHandle = AtomicLong(0L)
 
-    @Volatile private var current: SuggestionState =
+    /**
+     * Lock that serializes read-then-write composition on [current].
+     * Round-3 review HIGH: a `@Volatile var` only guarantees publication
+     * visibility, not atomicity of compound updates. Three threads
+     * compose with `current.copy(...)`:
+     *   - UI thread: onTextCommitted → appendToBuffer / resetBuffer
+     *   - IO thread: debounceJob coroutine → fireSuggestion launch
+     *   - IO thread: poll loop → updateState on chunk/done/err
+     * Without the lock, two interleaved updates lose one writer's
+     * change.
+     */
+    private val stateLock = Any()
+    private var current: SuggestionState =
         SuggestionState(buffer = "", suggestion = "", phase = "")
     @Volatile private var debounceJob: Job? = null
     @Volatile private var enabled: Boolean = true
@@ -95,17 +109,17 @@ object GhostSuggestController {
         enabled = value
         if (!value) {
             cancelActiveStream()
-            updateState(current.copy(suggestion = "", phase = ""))
+            mutateState { it.copy(suggestion = "", phase = "") }
         }
     }
 
     fun isEnabled(): Boolean = enabled
 
-    fun snapshot(): SuggestionState = current
+    fun snapshot(): SuggestionState = synchronized(stateLock) { current }
 
     fun register(l: Listener) {
         listeners.add(l)
-        l.onSuggestionState(current)
+        l.onSuggestionState(synchronized(stateLock) { current })
     }
 
     fun unregister(l: Listener) {
@@ -141,35 +155,34 @@ object GhostSuggestController {
     }
 
     /**
-     * Accept the active suggestion. Returns the bytes to send to PTY
-     * (the suffix of the suggestion that wasn't already in the
-     * buffer), or null if no active suggestion. Caller (AccessoryRow
-     * Tab button) handles the byte transmission via the existing
-     * sendBytes path.
+     * Accept the active suggestion. Returns the bytes to send to PTY,
+     * or null if no active suggestion. Caller (AccessoryRow Tab
+     * button) handles the byte transmission via PtyBroadcastReceiver.
+     *
+     * Two-mode emission:
+     *   - Suggestion is a continuation of buffer (case-insensitive
+     *     prefix match) → emit just the SUFFIX. Common case.
+     *   - Suggestion contradicts buffer (LLM rewrote the command) →
+     *     prepend Ctrl-U (0x15) to clear the current shell line, then
+     *     emit the full suggestion. Avoids the round-3 review HIGH —
+     *     "ls -" + "find . -name '*.log'" would otherwise emit
+     *     "ls -find . -name '*.log'" (garbled append).
      */
     fun acceptCurrent(): ByteArray? {
-        val s = current
+        val s = snapshot()
         if (s.suggestion.isEmpty() || s.phase != "ready") return null
-        // Compute the suffix: the suggestion minus the buffer prefix,
-        // case-insensitive matching to be robust to Haiku's stylistic
-        // capitalization. Common case: buffer="ls -" suggestion="ls -la"
-        // → suffix="la".
-        val suffix = if (s.suggestion.startsWith(s.buffer, ignoreCase = true)) {
-            s.suggestion.substring(s.buffer.length)
+        val suffixBytes: ByteArray = if (s.suggestion.startsWith(s.buffer, ignoreCase = true)) {
+            s.suggestion.substring(s.buffer.length).toByteArray(Charsets.UTF_8)
         } else {
-            // Suggestion didn't continue the buffer — accept as-is.
-            // User might have typed "wrong" prefix; the model returned
-            // a corrected command. Sending the full suggestion would
-            // duplicate characters; safer to emit just the suggestion
-            // delta from cursor: clear-line (\x15 = Ctrl-U) + suggestion.
-            // For round-1 simplicity, emit the full suggestion + let
-            // the user backspace if needed.
-            s.suggestion
+            // Ctrl-U (0x15) clears from cursor to start-of-line in
+            // POSIX shells (bash, zsh, dash, ksh) — safe across all
+            // shells we ship in the bootstrap. Then the full
+            // suggestion replaces what was on the line.
+            byteArrayOf(0x15) + s.suggestion.toByteArray(Charsets.UTF_8)
         }
-        // Clear state — user has accepted, next Enter will reset cleanly.
-        updateState(s.copy(suggestion = "", phase = ""))
-        Log.i(LOG_TAG, "accepted; sending suffix bytes=${suffix.length}")
-        return suffix.toByteArray(Charsets.UTF_8)
+        mutateState { it.copy(suggestion = "", phase = "") }
+        Log.i(LOG_TAG, "accepted; emitting bytes=${suffixBytes.size} (suffix-mode=${s.suggestion.startsWith(s.buffer, ignoreCase = true)})")
+        return suffixBytes
     }
 
     /**
@@ -178,27 +191,39 @@ object GhostSuggestController {
      */
     fun dismissSuggestion() {
         cancelActiveStream()
-        updateState(current.copy(suggestion = "", phase = ""))
+        mutateState { it.copy(suggestion = "", phase = "") }
     }
 
     private fun appendToBuffer(text: String) {
-        val newBuffer = (current.buffer + text).take(MAX_BUFFER_CHARS)
-        updateState(current.copy(buffer = newBuffer, suggestion = "", phase = "thinking"))
+        mutateState { state ->
+            val newBuffer = (state.buffer + text).take(MAX_BUFFER_CHARS)
+            state.copy(buffer = newBuffer, suggestion = "", phase = "thinking")
+        }
         scheduleSuggestion()
     }
 
     private fun resetBuffer(reason: String) {
         cancelActiveStream()
-        updateState(SuggestionState(buffer = "", suggestion = "", phase = ""))
+        mutateState { SuggestionState(buffer = "", suggestion = "", phase = "") }
         Log.i(LOG_TAG, "buffer reset: $reason")
     }
 
-    private fun updateState(state: SuggestionState) {
-        current = state
+    /**
+     * Atomic state composition. The `transform` runs under [stateLock]
+     * so concurrent UI/IO thread updates can't lose each other's
+     * changes (round-3 review HIGH closure). Listener fan-out happens
+     * AFTER the lock is released to keep the critical section tight.
+     */
+    private inline fun mutateState(transform: (SuggestionState) -> SuggestionState) {
+        val newState: SuggestionState
+        synchronized(stateLock) {
+            newState = transform(current)
+            current = newState
+        }
         mainHandler.post {
             for (l in listeners) {
                 try {
-                    l.onSuggestionState(state)
+                    l.onSuggestionState(newState)
                 } catch (t: Throwable) {
                     Log.e(LOG_TAG, "listener threw: ${t.message}")
                 }
@@ -212,31 +237,33 @@ object GhostSuggestController {
      */
     private fun scheduleSuggestion() {
         debounceJob?.cancel()
-        if (current.buffer.length < MIN_BUFFER_CHARS) {
-            updateState(current.copy(suggestion = "", phase = ""))
+        val cur = snapshot()
+        if (cur.buffer.length < MIN_BUFFER_CHARS) {
+            mutateState { it.copy(suggestion = "", phase = "") }
             return
         }
         debounceJob = aiScope.launch {
             delay(DEBOUNCE_MS)
             // Re-check buffer at fire time — it may have shrunk to
             // below threshold or been reset since the schedule.
-            val snapshot = current
-            if (snapshot.buffer.length < MIN_BUFFER_CHARS) return@launch
-            fireSuggestion(snapshot.buffer)
+            val s = snapshot()
+            if (s.buffer.length < MIN_BUFFER_CHARS) return@launch
+            fireSuggestion(s.buffer)
         }
     }
 
     private suspend fun fireSuggestion(buffer: String) {
-        // Get application context from a registered listener (via
-        // weak ref discipline). For simplicity we read it from the
-        // first non-null listener Context. If no listener has a
-        // context, skip — controller can't function without one.
         val context = contextProvider?.get() ?: run {
-            Log.w(LOG_TAG, "no Context available; skipping suggestion")
+            // Round-3 review MEDIUM #3: clear the "thinking" phase so
+            // the strip doesn't get stuck showing "thinking…" forever
+            // when typing happens before AccessoryRow.onAttachedToWindow
+            // has called setContext (e.g., very fast typing on cold start).
+            Log.w(LOG_TAG, "no Context available; clearing phase")
+            mutateState { it.copy(phase = "") }
             return
         }
         if (!AiConnectivity.get(context).isOnline()) {
-            updateState(current.copy(phase = "offline"))
+            mutateState { it.copy(phase = "offline") }
             return
         }
         val apiKey = try {
@@ -246,7 +273,7 @@ object GhostSuggestController {
             null
         }
         if (apiKey.isNullOrBlank()) {
-            updateState(current.copy(phase = "no-key"))
+            mutateState { it.copy(phase = "no-key") }
             return
         }
 
@@ -262,7 +289,7 @@ object GhostSuggestController {
             NativeBridge.aiGhostStreamStart(apiKey, GHOST_MODEL, prompt, GHOST_MAX_TOKENS)
         } catch (e: Throwable) {
             Log.e(LOG_TAG, "stream start threw: ${e.message}")
-            updateState(current.copy(phase = "error"))
+            mutateState { it.copy(phase = "error") }
             return
         }
         activeStreamHandle.set(handle)
@@ -285,7 +312,7 @@ object GhostSuggestController {
                     response.startsWith(":DONE:") -> {
                         val elapsed = System.currentTimeMillis() - t0
                         val finalText = streamingBuffer.toString().trim()
-                        updateState(current.copy(suggestion = finalText, phase = "ready"))
+                        mutateState { it.copy(suggestion = finalText, phase = "ready") }
                         AiUsageTracker.record(
                             context, kind = "ghost", model = GHOST_MODEL,
                             inputTokens = prompt.length / 4,
@@ -298,7 +325,7 @@ object GhostSuggestController {
                     response.startsWith(":ERR:") -> {
                         val msg = response.removePrefix(":ERR:")
                         Log.w(LOG_TAG, "stream err: ${msg.take(120)}")
-                        updateState(current.copy(phase = "error"))
+                        mutateState { it.copy(phase = "error") }
                         break
                     }
                 }
