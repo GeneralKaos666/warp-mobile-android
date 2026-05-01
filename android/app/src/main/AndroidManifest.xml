@@ -35,13 +35,18 @@
             </intent-filter>
         </activity>
 
-        <!-- M6-S02: BYOK SettingsActivity. Launched via:
-             am start -n dev.warp.mobile/.SettingsActivity
-             (M6-S03 will add a settings icon entry-point in the
-             AccessoryRow so users don't need adb to reach it). -->
+        <!-- M6-S02: BYOK SettingsActivity. Launched via in-app navigation
+             only (M6-S03 will add a settings icon entry-point in the
+             AccessoryRow). M6 round-2 security review MEDIUM #4 + code-
+             review LOW: exported=false because no other app has a
+             legitimate reason to launch this Activity (no Intent extras
+             accepted; only social-engineering vector if exported). For
+             dev / debug `am start` access, use the explicit
+             `-W -n` form which works regardless of exported status as
+             long as the app is debuggable. -->
         <activity
             android:name=".SettingsActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Warp AI · BYOK Settings" />
 
         <service

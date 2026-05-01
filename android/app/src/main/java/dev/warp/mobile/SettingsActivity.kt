@@ -1,6 +1,5 @@
 package dev.warp.mobile
 
-import android.app.Activity
 import android.os.Bundle
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
@@ -15,8 +14,9 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,13 +39,22 @@ import kotlinx.coroutines.withContext
  * from the launcher. (M6-S03 will add a settings icon overlay in the
  * MainActivity AccessoryRow.)
  */
-class SettingsActivity : Activity() {
+class SettingsActivity : AppCompatActivity() {
     private val LOG_TAG = "WarpSettings"
     private lateinit var keyInput: EditText
     private lateinit var statusText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // M6 round-2 security review HIGH #1: FLAG_SECURE prevents OS
+        // screenshots, screen recordings, and cast/mirror surfaces from
+        // capturing the API key field. Set BEFORE setContentView so it
+        // applies to every frame the window renders.
+        // Refs: https://developer.android.com/reference/android/view/WindowManager.LayoutParams#FLAG_SECURE
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
         // Don't show keyboard input by default — user can tap to focus.
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN)
 
@@ -68,8 +77,11 @@ class SettingsActivity : Activity() {
 
         // Load existing key (background thread because Keystore key
         // generation can take ~100-300ms on first call).
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        // M6 round-2 code-review HIGH #2: lifecycleScope (not GlobalScope)
+        // so the coroutine cancels when SettingsActivity is destroyed.
+        // Without this, a background load that completed AFTER user pressed
+        // back would write to a destroyed Activity's Views.
+        lifecycleScope.launch(Dispatchers.IO) {
             val existing = try {
                 AiKeyStore.load(this@SettingsActivity)
             } catch (e: Throwable) {
@@ -123,8 +135,7 @@ class SettingsActivity : Activity() {
             setStatus("Empty key — nothing saved")
             return
         }
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 AiKeyStore.save(this@SettingsActivity, key)
                 Log.i(LOG_TAG, "Saved key (${AiKeyStore.redact(key)})")
@@ -142,8 +153,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun onClear() {
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 AiKeyStore.clear(this@SettingsActivity)
                 withContext(Dispatchers.Main) {
@@ -164,8 +174,7 @@ class SettingsActivity : Activity() {
             return
         }
         setStatus("Testing /v1/messages with model claude-haiku-4-5...")
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        GlobalScope.launch(Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             val result = AnthropicClient.testConnection(key)
             withContext(Dispatchers.Main) {
                 val msg = when (result) {

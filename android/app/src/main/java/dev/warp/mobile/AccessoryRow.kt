@@ -113,16 +113,32 @@ class AccessoryRow @JvmOverloads constructor(
         for (sym in listOf("|", "/", "~", "-", "$", "*", "&", "!", "?", ".")) {
             addBtn(sym) { sendBytes(sym.toByteArray()) }
         }
-        // M5-S01: Copy button — flattens all visible terminal blocks
+        // M5-S01: "Copy All" button — flattens all visible terminal blocks
         // (via NativeBridge.terminalBlocksDump) to plain text and writes
         // to Android ClipboardManager. Interactive cell-range selection
-        // is the v1-release scope; round-1 ships "copy all visible".
-        addBtn("Copy") { copyVisibleToClipboard() }
+        // is v1-release scope; the round-1 label is "Copy All" (not just
+        // "Copy") so users aren't misled into expecting selection-aware
+        // behavior — that comes when v1 wires the Selection state machine
+        // (warp_mobile_android_link::selection) to touch dispatch + this
+        // button (per M5-S08 §4 carry-forward).
+        addBtn("Copy All") { copyVisibleToClipboard() }
         // M5-S04: Paste button — pulls from Android ClipboardManager and
         // streams to PTY in 4 KB chunks with 1ms gaps so the PTY's read
         // buffer doesn't overflow on long pastes (10K+ chars). ESC during
         // streaming cancels the in-flight paste.
         addBtn("Paste") { startClipboardPaste() }
+        // M6-S02: in-app entry point to BYOK SettingsActivity. Required
+        // so SettingsActivity can stay android:exported="false" (security
+        // review MEDIUM #4) — without an in-app launch path, users (and
+        // adb) couldn't reach it. Explicit Intent + setClass works
+        // regardless of exported flag because it's a same-process launch.
+        addBtn("⚙") {
+            val intent = Intent().apply {
+                setClass(context, SettingsActivity::class.java)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
         // Mic placeholder for M5-S04. Voice input via RecognizerIntent is a
         // future enhancement (need explicit RECORD_AUDIO permission flow);
         // round-1 ships paste streaming as the headline M5-S04 feature.
@@ -253,8 +269,19 @@ class AccessoryRow @JvmOverloads constructor(
     /**
      * Read the system clipboard's primary clip and stream to the PTY.
      * No-op if clipboard is empty or doesn't contain text.
+     *
+     * Re-entry safe (M6 round-2 code-review MEDIUM #1): if a previous
+     * paste is still streaming when the user taps Paste again, the old
+     * stream is cancelled FIRST. Without this, two streams interleaved
+     * on the same Handler queue would produce garbled PTY input.
      */
     private fun startClipboardPaste() {
+        // Cancel any in-flight stream before reading new clipboard
+        // content. Cheap idempotent op — sets the flag + drops scheduled
+        // postDelayed callbacks so the next chunk dispatch becomes a
+        // no-op before we issue any new ones.
+        cancelPaste()
+
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             ?: run {
                 Log.w(LOG_TAG, "paste: ClipboardManager unavailable")
@@ -311,9 +338,9 @@ class AccessoryRow @JvmOverloads constructor(
 
     /**
      * Cancel any in-flight paste stream. Wired to ESC button so a user
-     * can abort if they realize they pasted the wrong thing.
+     * can abort if they realize they pasted the wrong thing. Also
+     * called by `startClipboardPaste` to prevent stream re-entry races.
      */
-    @Suppress("unused") // available for future ESC-cancels-paste keymap
     fun cancelPaste() {
         pasteCanceled = true
         pasteHandler.removeCallbacksAndMessages(null)
@@ -357,8 +384,21 @@ class AccessoryRow @JvmOverloads constructor(
             Toast.makeText(context, "Nothing to copy", Toast.LENGTH_SHORT).show()
             return
         }
-        cm.setPrimaryClip(ClipData.newPlainText("warp-terminal", text))
-        Log.i(LOG_TAG, "copy: ${text.length} chars copied to clipboard")
+        val clipData = ClipData.newPlainText("warp-terminal", text)
+        // M6 round-2 security review MEDIUM #2: terminal output may
+        // contain secrets (env vars echoed by `env`, `cat .env`, etc).
+        // Mark the clip as sensitive on Android 13+ so the system-level
+        // clipboard preview toast doesn't show the first line, and
+        // visible-clipboard surfaces (Gboard clipboard panel, system
+        // overlay) hide the content until tapped.
+        // Refs: https://developer.android.com/about/versions/13/features/copy-paste
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            clipData.description.extras = android.os.PersistableBundle().apply {
+                putBoolean("android.content.extra.IS_SENSITIVE", true)
+            }
+        }
+        cm.setPrimaryClip(clipData)
+        Log.i(LOG_TAG, "copy: ${text.length} chars copied to clipboard (sensitive flag: SDK>=33)")
         Toast.makeText(context, "Copied ${text.length} chars", Toast.LENGTH_SHORT).show()
     }
 

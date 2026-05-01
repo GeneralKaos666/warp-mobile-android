@@ -35,9 +35,23 @@ object AnthropicClient {
     private const val CONNECT_TIMEOUT_MS = 8_000
     /**
      * Read timeout. 1-token Haiku completion is typically <500ms p50;
-     * 12s tolerates p99 + network-edge cases.
+     * 20s tolerates p99 + cold-start TLS handshake on poor mobile
+     * networks (3G, captive WiFi). M6 round-2 code-review MEDIUM #6:
+     * 12s was too tight when DNS + TLS + first-byte chained on slow
+     * mobile data; bumped to 20s to absorb the long tail.
      */
-    private const val READ_TIMEOUT_MS = 12_000
+    private const val READ_TIMEOUT_MS = 20_000
+
+    /**
+     * Defense-in-depth regex for scrubbing API keys from any text we
+     * surface to logs / UI. Anthropic doesn't currently echo keys in
+     * error bodies, but defensive sanitization handles future API
+     * changes + MITM proxies + accidental dev-tool paste-thru.
+     * M6 round-2 security review MEDIUM #3.
+     */
+    private val API_KEY_REGEX = Regex("sk-ant-[A-Za-z0-9_-]{4,}")
+    private fun scrub(text: String): String =
+        text.replace(API_KEY_REGEX, "sk-ant-***REDACTED***")
 
     /** Result of a Test Connection probe. */
     sealed class TestResult {
@@ -118,14 +132,17 @@ object AnthropicClient {
             if (code !in 200..299) {
                 // Try to parse the Anthropic error envelope for a clearer
                 // message: { "type": "error", "error": { "type": "...",
-                // "message": "..." } }
+                // "message": "..." } }. Apply scrub() on the way out so
+                // any echoed key material (defensive — Anthropic doesn't
+                // do this today but future / MITM-proxied responses
+                // could) gets redacted before reaching logcat / UI.
                 val msg = try {
-                    JSONObject(responseText).optJSONObject("error")?.optString("message", responseText)
-                        ?: responseText
+                    val parsedMsg = JSONObject(responseText).optJSONObject("error")?.optString("message")
+                    if (!parsedMsg.isNullOrEmpty()) parsedMsg else responseText
                 } catch (_: Throwable) {
                     responseText.take(200)
                 }
-                return TestResult.HttpError(code, msg)
+                return TestResult.HttpError(code, scrub(msg))
             }
 
             // Validate response shape: top-level `content` array with at
