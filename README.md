@@ -54,14 +54,16 @@ warp_termux/
 ├── android/                  ← Gradle project (M1 deliverable: FGS + Service)
 ├── tools/scripts/            ← Device test drivers (test-pty-*.sh, etc.)
 ├── spikes/                   ← M0 spike crates (vulkan-surface-recreate, symlink-jnilibs)
-├── warp-src/                 ← gitignored — see "For AI assistants" section below
+├── warp-src/                 ← gitignored — Warp upstream fork (separate git repo)
+├── termux-packages/          ← gitignored — Termux fork on warp-mobile/main (M4 runtime)
 └── .omc/
     ├── plans/                ← canonical RALPLAN with 4 amendments
     ├── handoffs/             ← lead-context-snapshot.md is the resume entry point
     ├── m0-artifacts/         ← M0 evidence + go/no-go
     ├── m1-artifacts/         ← M1 evidence (S05 evidence, S06-S09 result.json, go/no-go)
     ├── m2-kickoff.md         ← M2 forward-looking dispatch instructions
-    └── prd.json              ← M1 stories (10/10 PASS); M2 prd auto-generated on dispatch
+    ├── m4-artifacts/         ← M4 evidence (S02 fork retarget, future bootstrap zip + sealing)
+    └── prd.json              ← M1 stories (10/10 PASS); subsequent milestones auto-generated
 ```
 
 ## Build prerequisites
@@ -84,6 +86,12 @@ cd warp-mobile-android
 # 2. Clone warp-src submodule manually (gitignored — separate fork)
 gh repo clone ImL1s/warp warp-src
 cd warp-src && git checkout warp-mobile/m0-facade && cd ..
+
+# 2b. Clone termux-packages fork (M4 runtime, gitignored — separate fork)
+gh repo clone ImL1s/termux-packages termux-packages
+cd termux-packages && git checkout warp-mobile/main && cd ..
+# Optional: re-run idempotent retargeting (no-op if already on dev.warp.mobile)
+# bash termux-packages/scripts/setup-warp-prefix.sh
 
 # 3. Render local cargo config from template
 tools/scripts/setup-cargo-config.sh

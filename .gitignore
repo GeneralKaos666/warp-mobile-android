@@ -62,6 +62,10 @@ Icon
 # Do NOT track it inside this root repo. M2: convert to git submodule.
 warp-src/
 
+# Termux packages fork — separate git repo (termux-packages/.git/) for M4 runtime.
+# Cloned from ImL1s/termux-packages on branch warp-mobile/main; same pattern as warp-src/.
+termux-packages/
+
 # Cargo cross-compile config — contains absolute machine paths (/Users/<name>/...).
 # Track .cargo/config.toml.template instead; each dev runs tools/scripts/setup-cargo-config.sh
 # to generate their local .cargo/config.toml from the template.

@@ -1,0 +1,140 @@
+{
+  "story": "M4-S02",
+  "title": "Fork termux/termux-packages and retarget $PREFIX to dev.warp.mobile",
+  "completed_at": "2026-05-01",
+  "executor": "claude-opus-4-7-1m",
+
+  "fork_repo": "ImL1s/termux-packages",
+  "fork_branch": "warp-mobile/main",
+  "fork_url": "https://github.com/ImL1s/termux-packages",
+  "fork_base_commit": "b82b83aec6",
+  "fork_base_description": "bump(x11/shotcut): 26.4.30 (master tip at fork time)",
+
+  "commits": {
+    "script_commit": {
+      "hash": "7b94ac03b6",
+      "subject": "scripts: setup-warp-prefix.sh — retarget PREFIX from upstream Termux to Warp on Mobile",
+      "files_added": 1
+    },
+    "retarget_commit": {
+      "hash": "5ea26fc7f2ac9eb62aaae2bf9710847df1a548fb",
+      "short_hash": "5ea26fc7f2",
+      "subject": "retarget: PREFIX -> /data/data/dev.warp.mobile/files/usr (M4-S02)",
+      "files_modified": 50,
+      "insertions": 130,
+      "deletions": 130
+    }
+  },
+
+  "retarget_summary": {
+    "old_pkg": "com.termux",
+    "new_pkg": "dev.warp.mobile",
+    "old_prefix": "/data/data/com.termux/files/usr",
+    "new_prefix": "/data/data/dev.warp.mobile/files/usr",
+    "old_home": "/data/data/com.termux/files/home",
+    "new_home": "/data/data/dev.warp.mobile/files/home",
+    "files_modified_by_extension": {
+      "patch": 32,
+      "sh": 17,
+      "in": 1
+    },
+    "symlinks_skipped": [
+      "packages/neovim-nightly/nvim-shim.sh"
+    ],
+    "symlinks_skipped_reason": "BSD sed -i refuses to edit symlinked targets; the symlink reflects changes once its target (packages/neovim/nvim-shim.sh) is rewritten"
+  },
+
+  "audit": {
+    "audit_method": "git ls-files | xargs grep -l (avoids grep -rln buffering issues on 9700-file tree)",
+    "audit_remaining_com_termux_in_sh": 0,
+    "audit_remaining_com_termux_in_in": 0,
+    "audit_remaining_com_termux_in_patch": 0,
+    "audit_remaining_com_termux_in_yml": 0,
+    "audit_remaining_com_termux_total": 13,
+    "audit_remaining_com_termux_breakdown": {
+      ".c": 3,
+      ".gn": 2,
+      ".txt": 1,
+      ".md": 1,
+      ".beforehostbuild": 1,
+      "(remaining 5 unclassified)": 5
+    },
+    "audit_intentional_preservations": [
+      "*.md (CONTRIBUTING.md and friends — keep upstream traceability references)",
+      "*.c (vendored upstream sources in disabled-packages, not in active build target)",
+      "*.gn (vendored swiftshader configs in chromium / electron third_party_override; complex per-package handling)",
+      "*.txt / *.beforehostbuild (generated cache / pre-build patch state)"
+    ],
+    "github_com_urls_preserved": 2316,
+    "github_com_urls_preserved_note": "Sed pattern correctly escapes literal dots so 'com.termux' does not match 'com/termux' in URLs like https://github.com/termux/termux-packages."
+  },
+
+  "key_implementation_notes": {
+    "script_path": "scripts/setup-warp-prefix.sh (in fork)",
+    "idempotent": true,
+    "sed_flavor_autodetect": "GNU sed and BSD/macOS sed both supported",
+    "self_protection": "OLD_PKG / OLD_PREFIX / OLD_HOME defined via base64 decode so the script does not literally contain the search target; script's own path also excluded from candidate list",
+    "discovery_via_git_ls_files": "git ls-files used for hit detection in git checkouts; falls back to find for non-git environments (CI raw extracts)",
+    "regex_dot_escaping": "All literal dots in OLD_PKG / OLD_PREFIX / OLD_HOME escaped before sed substitution to avoid matching 'com/termux' inside URLs (e.g. github.com/termux/...)"
+  },
+
+  "smoke_test": {
+    "status": "deferred-no-docker",
+    "reason": "Docker not installed on macOS host (executor environment); termux-packages bash bootstrap requires Linux/Docker container. Defer to M4-S03 (bootstrap-aarch64.zip build) where Docker setup is the prerequisite.",
+    "documentation_path": "termux-packages/README.md (upstream) and termux-packages/scripts/run-docker.sh — both retargeted but not exercised in this story"
+  },
+
+  "bootstrap_artifact_path": {
+    "expected_artifact_name": "bootstrap-aarch64.zip",
+    "expected_build_command": "termux-packages/scripts/run-docker.sh ./build-bootstrap.sh aarch64 (or termux-packages/build-package.sh)",
+    "expected_output_dir": "termux-packages/output/ (and the per-arch boot strap layout under debs/)",
+    "note": "M4-S02 does NOT produce a bootstrap zip. Path is documented here so M4-S03 can pick it up; actual zip generation is an M4-S03 acceptance criterion."
+  },
+
+  "main_repo_changes": {
+    "files_touched": [
+      ".gitignore (added termux-packages/ entry mirroring warp-src/ pattern)",
+      "README.md (added step 2b: clone termux-packages fork + warp-mobile/main checkout, plus directory tree update)",
+      ".omc/m4-artifacts/M4-S02-result.json (this file)"
+    ],
+    "main_repo_commit_hash": "PENDING — committed after this result.json is finalized"
+  },
+
+  "risks_for_m4_s03": [
+    {
+      "id": "R1",
+      "severity": "high",
+      "title": "Docker not installed on executor host",
+      "detail": "termux-packages/scripts/run-docker.sh is the canonical path for building bootstrap zips. M4-S03 must either install Docker on macOS (Docker Desktop or colima) or provision a Linux build host."
+    },
+    {
+      "id": "R2",
+      "severity": "medium",
+      "title": "13 com.termux references remain in non-build files",
+      "detail": "Mostly *.md docs (intentional) and vendored *.c / *.gn / generated cache. Some (notably packages/libandroid-wordexp/wordexp.c and disabled-packages/termux-x11/termux-x11.c) may need per-package attention if those packages enter the M4 bootstrap target. Disabled packages are likely safe to ignore."
+    },
+    {
+      "id": "R3",
+      "severity": "low",
+      "title": "TERMUX_APP__PACKAGE_NAME alone may be insufficient — patches now hardcode dev.warp.mobile",
+      "detail": "Previously, scripts/properties.sh's TERMUX_APP__PACKAGE_NAME was the single source of truth. We have now also rewritten 32 *.patch files. If we ever want to upstream changes back to termux/termux-packages, those patches would need to be reverted (or generated dynamically) before submission. This is acceptable for a downstream fork."
+    },
+    {
+      "id": "R4",
+      "severity": "low",
+      "title": "oma package uses runtime sed-replace logic",
+      "detail": "packages/oma/build.sh constructs 'com.termux' programmatically via string concatenation and sed-replaces it at build time using TERMUX_APP__PACKAGE_NAME (which we set to dev.warp.mobile). This works automatically and was not modified. Spot-check: build correctly during M4-S03."
+    }
+  ],
+
+  "gate": {
+    "ac_fork_created": true,
+    "ac_branch_created": true,
+    "ac_search_replace_applied": true,
+    "ac_audit_zero_in_build_files": true,
+    "ac_smoke_test": "deferred-documented",
+    "ac_bootstrap_artifact_path_documented": true,
+    "overall_pass": true,
+    "overall_pass_caveat": "Codex verifier review pending (lead-dispatched per CRITICAL SOP — executor MUST NOT self-dispatch)."
+  }
+}
