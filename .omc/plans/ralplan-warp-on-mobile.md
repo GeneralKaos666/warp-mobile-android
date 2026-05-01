@@ -586,8 +586,8 @@
 
 | # | Task | File / Path | Verification |
 |---|---|---|---|
-| 1 | Fork `termux-packages`, retarget `$PREFIX` to `/data/data/io.warp.mobile/files/usr` (search-replace + audit) | `termux-packages/` (fork repo) | `bash scripts/setup-android-sdk.sh && ./build-package.sh bash` produces correct paths |
-| 2 | Build core bootstrap zip: `bash`, `zsh`, `coreutils`, `findutils`, `apt`, `pkg`, `git` | `termux-packages/scripts/build-bootstraps.sh` | Hashed bootstrap-aarch64.zip artifact in CI |
+| 1 | Fork `termux-packages`, retarget `$PREFIX` to `/data/data/dev.warp.mobile/files/usr` (search-replace + audit) | `termux-packages/` (fork repo at `ImL1s/termux-packages` branch `warp-mobile/main`) | M4-S02 setup-warp-prefix.sh runs cleanly + 0 literal `com.termux` in shell scripts |
+| 2 | **(Plan Amendment 6 pivot)** Build core bootstrap zip via Option-A path-rewrite over upstream Termux apt prebuilts. Run `tools/scripts/build-bootstrap.sh` → downloads .debs from `packages-cf.termux.dev`, retargets paths to `dev.warp.mobile` across 3 surfaces (text sed for shell scripts/configs; `patchelf --set-rpath` for ELF DT_RUNPATH; absolute symlink targets in `SYMLINKS.txt` sidecar). Original Amendment 6 rationale: termux-packages docker source-compile (`build-bootstraps.sh`) hit a fundamental Android SDK install bug on free GHA ubuntu-latest after 3 attempts. | `tools/scripts/build-bootstrap.sh` (NEW) + `.github/workflows/build-bootstrap.yml` | Free CI run produces hashed `bootstrap-aarch64.zip` (43 MB, within 30-50 MB envelope) in <2 min on ubuntu-latest |
 | 3 | Atomic-extract installer in JNI shim: `usr.tmp/` → `usr/` rename, version-pin file | `android/app/src/main/cpp/bootstrap_install.c` | Kill-mid-extract test (acceptance #1) |
 | 4 | `pkg install` UX: subprocess to forked `apt`; progress to UI via async channel | `crates/warp_terminal_mobile_facade/src/pkg.rs` | `pkg install python` happy path |
 | 5 | Reproducible-build manifest for F-Droid: bootstrap zip listed as auxiliary artifact with SHA256 | `metadata/io.warp.mobile.yml` | F-Droid validate run |

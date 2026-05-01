@@ -203,7 +203,7 @@ The script downloads upstream Termux prebuilt `.deb` packages from `packages-cf.
 - **ELF dynamic-linker paths**: `patchelf --set-rpath` rewrites the `DT_RUNPATH` entry on every shared object and executable so libs resolve at `/data/data/dev.warp.mobile/files/usr/lib` without needing `LD_LIBRARY_PATH` at every spawn. 307 ELF binaries patched.
 - **Absolute symlink targets**: 20 symlinks pointing into `/data/data/com.termux/...` are rewritten to point at `/data/data/dev.warp.mobile/...` and stored in `SYMLINKS.txt` sidecar (the format the Termux app extractor expects).
 
-Residual `com.termux` strings in ~116 files are config defaults (zsh's `module_path`, default `HOME`, system rcfile lookup paths). These are overridable via `HOME`, `ZDOTDIR`, `FPATH`, `MODULE_PATH` env vars set at PTY spawn — the M4-S06 deliverable.
+Residual `com.termux` strings in ~116 files are compile-time config defaults (zsh `module_path`, git `libexec/git-core`, OpenSSL CA path, terminfo path, locale path, etc.). These are not dynamic-linker concerns — they're runtime defaults overridable via either shell-array assignment in `$ZDOTDIR/.zshenv` (for zsh-specific paths like `module_path` which ignores the env var) or env vars at PTY spawn (`GIT_EXEC_PATH`, `SSL_CERT_FILE`, `TERMINFO`, `LOCPATH`, `HOME`, `ZDOTDIR`). M4-S06 wires the user-shell side; M4-S07 covers the package-manager side.
 
 See [`.omc/m4-artifacts/M4-S03-strategy.md`](.omc/m4-artifacts/M4-S03-strategy.md) for the full strategy decision and rationale.
 

@@ -30,10 +30,14 @@
 #     apt repo, so two builds on different days yield different sha256.
 #     M4-S08 deliverable: pin the apt snapshot for reproducible rebuilds.
 #   - Complete binary retargeting: 116 residual com.termux strings remain
-#     in compile-time defaults (zsh module_path, default HOME, git
-#     libexec-path). Those are runtime-overridable via shell-array
-#     assignment in $ZDOTDIR/.zshenv (zsh) and GIT_EXEC_PATH env var (git);
-#     M4-S06 deliverable.
+#     in compile-time defaults across zsh module_path, git libexec-path,
+#     OpenSSL CA cert path, terminfo path, locale path, and dpkg/apt
+#     internal fallbacks. These are runtime-overridable: zsh-specific
+#     paths require shell-array assignment in $ZDOTDIR/.zshenv (zsh 5.9
+#     ignores MODULE_PATH env var and reinitializes from compile-time
+#     default); the rest take standard env vars (GIT_EXEC_PATH,
+#     SSL_CERT_FILE, TERMINFO, LOCPATH, HOME). M4-S06 + M4-S07
+#     deliverable.
 #
 # Usage:
 #   ./tools/scripts/build-bootstrap.sh [arch] [package_list] [output_dir]
@@ -400,9 +404,12 @@ done < <(find "$TARGET_PREFIX" -type f -print0)
 echo "    -> Inspected $COUNT_ELF_INSPECTED ELF files; patched RUNPATH on $COUNT_ELF_PATCHED"
 
 # 5d. Audit: count remaining files with literal com.termux. These are
-# residual config-default strings inside ELF .rodata (zsh module_path,
-# default home, etc) — overridable at runtime via env vars (M4-S06
-# deliverable: HOME, ZDOTDIR, FPATH, MODULE_PATH set at PTY spawn).
+# residual config-default strings inside ELF .rodata: zsh module_path,
+# git libexec-path, OpenSSL CA cert path, terminfo, locale, dpkg/apt
+# internal fallbacks. Overridable at runtime: zsh-specific paths via
+# shell-array assignment in $ZDOTDIR/.zshenv (M4-S06); the rest via env
+# vars at PTY spawn (M4-S06 user-shell side: HOME, ZDOTDIR, GIT_EXEC_PATH;
+# M4-S07 package-manager side: SSL_CERT_FILE, TERMINFO, LOCPATH).
 set +o pipefail
 COUNT_REMAINING=$(find "$TARGET_PREFIX" -type f -exec grep -lF "$UPSTREAM_APP_ID" {} + 2>/dev/null | wc -l | tr -d ' ')
 set -o pipefail
@@ -462,7 +469,7 @@ cat > "$OUT_DIR/bootstrap-metadata.json" <<EOF
   "elf_files_inspected": $COUNT_ELF_INSPECTED,
   "elf_runpath_patched": $COUNT_ELF_PATCHED,
   "files_with_upstream_app_id_remaining": $COUNT_REMAINING,
-  "remaining_handling": "Residual com.termux strings are config defaults (zsh module_path, default HOME). M4-S06 sets HOME, ZDOTDIR, FPATH, MODULE_PATH env vars at PTY spawn to override."
+  "remaining_handling": "Residual com.termux strings are compile-time config defaults (zsh module_path, git libexec-path, OpenSSL CA path, terminfo, locale, dpkg/apt fallbacks). M4-S06 ships \$ZDOTDIR/.zshenv with shell-array module_path=(...) (zsh 5.9 ignores MODULE_PATH env var) plus env vars HOME/ZDOTDIR/GIT_EXEC_PATH at PTY spawn; M4-S07 covers SSL_CERT_FILE/TERMINFO/LOCPATH for the apt/dpkg toolchain."
 }
 EOF
 

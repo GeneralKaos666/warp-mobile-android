@@ -54,16 +54,20 @@ The previous in-flight workflow (build-bootstraps.sh + docker) is preserved in g
 
 ## What this defers (M4-S05 / M4-S06 carry-forwards)
 
-**Residual `com.termux` strings in 116 ELF binaries** — config defaults baked in at compile time:
+**Residual `com.termux` strings in 116 ELF binaries** — config defaults baked in at compile time. Codex round-6 audit found the categories cover more than just zsh:
 
-- zsh's `module_path` default → `/data/data/com.termux/files/usr/lib/zsh/5.9` → overridable via `MODULE_PATH` env var
-- zsh's `FPATH` default → overridable via `FPATH` env var
-- Default `HOME` → overridable via `HOME` env var
-- System rcfile lookup paths (`/etc/zshenv` etc.) → if absent, zsh skips silently; if needed, M4-S06 ships an explicit `~/.zshenv` that sources the right path
+- **zsh's `module_path` default** → `/data/data/com.termux/files/usr/lib/zsh/5.9` → override via shell-array assignment in `$ZDOTDIR/.zshenv`: `module_path=($PREFIX/lib/zsh/5.9)`. Note: zsh 5.9 ignores the inherited `MODULE_PATH` env var and reinitializes from compile-time default; FPATH IS honored as env var (imported into `fpath`) but the canonical fix is to set `fpath=(...)` explicitly in zshenv.
+- **Default `HOME`** → overridable via `HOME` env var at spawn (this one DOES work as env)
+- **System rcfile lookup paths** (`/data/data/com.termux/files/usr/etc/zshenv` etc.) → zsh skips silently if absent; if needed, M4-S06 ships an explicit `~/.zshenv` at the dev.warp.mobile path
+- **git's `libexec/git-core` default** → override via `GIT_EXEC_PATH` env var at spawn or `git config --global` writing to `~/.gitconfig`
+- **OpenSSL CA cert path** (`/data/data/com.termux/files/usr/etc/tls/cert.pem`) → override via `SSL_CERT_FILE`/`SSL_CERT_DIR` env vars; alternatively via `apt install ca-certificates && update-ca-certificates` post-install
+- **terminfo path** (`/data/data/com.termux/files/usr/share/terminfo`) → override via `TERMINFO`/`TERMINFO_DIRS` env vars
+- **locale path** (`/data/data/com.termux/files/usr/share/locale`) → override via `LOCPATH` env var
+- **dpkg/apt internal dirs** → apt's own config files at `$PREFIX/etc/apt/apt.conf.d/` already point at the right paths post-text-rewrite; the binary defaults are fallbacks only
 
-These are NOT dynamic-linker concerns (RUNPATH is fixed via patchelf above) — they are runtime config defaults that any termux-derived runtime traditionally overrides via env. M4-S06's `WarpTerminalService.spawnPty` env-var setup is the natural home for these (its existing AC includes `PATH`, `HOME`, `ZDOTDIR`; round-4 amended to add `FPATH`, `MODULE_PATH`).
+These are NOT dynamic-linker concerns (RUNPATH is fixed via patchelf above) — they are runtime config defaults that any termux-derived runtime traditionally overrides via env or shell-array assignment. **M4-S06** is the natural home for the user-shell side (zsh-specific shell-array `.zshenv` plus standard env vars at spawn); **M4-S07** covers the package-manager side (apt/dpkg config + CA + terminfo).
 
-**Binary-string patching as a future option**: if `MODULE_PATH`+`FPATH` env override doesn't fully cover all 116 cases on real-device verification (M4-S05/M4-S10 acceptance), we revisit and either:
+**Binary-string patching as a future option**: if env + shell-array override doesn't fully cover all 116 cases on real-device verification (M4-S05/M4-S10 acceptance), we revisit and either:
 - Add a binary-patch step using a same-length placeholder (e.g., compile-time `/data/data/com.termux./files/...` → strip the trailing dot at runtime — hacky but cheap)
 - Use `patchelf --add-rpath` plus a binary `sed -i` for non-RUNPATH paths in `.rodata` (length-aware, replaces only at fixed offsets)
 - Switch to a proot-wrapped spawn (~5-10% perf overhead) so the entire `/data/data/com.termux/` namespace is virtualized
