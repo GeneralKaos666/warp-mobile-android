@@ -1,7 +1,7 @@
 # M3 Go/No-Go 整合報告
 
 **日期**：2026-05-01 (M3 milestone close-out)
-**主分支**：`main` @ `71ed7f0` (M3-S11 PASS; S12 this doc)
+**主分支**：`main` @ `8c51704` (S12 doc lands here; code baseline from M3-S11 @ `71ed7f0`)
 **warp-src 對應**：`warp-mobile/m0-facade` @ `94bf0ff` (M3-S09 round-2 close; no warp-src commits in S10/S11)
 **Plan reference**：`.omc/plans/ralplan-warp-on-mobile.md` §6 M3 (lines 404-412; Amendment 5 lines 12-36)
 **前置 milestones**：
@@ -15,7 +15,7 @@
 
 | Story | 標題 | 狀態 | warp-src commit | main commit | Codex rounds | Evidence |
 |---|---|---|---|---|---|---|
-| M3-S01 | M3 kickoff doc + Plan section update + M2-S13 deferral note | **PASS** | `59d8c4b` | `ccd6cbc` | 5 | `.omc/m3-artifacts/M3-kickoff-confirmed.md:1-12` entry criteria table; §5 12-story ledger; §4 ralplan ACs |
+| M3-S01 | M3 kickoff doc + Plan section update + M2-S13 deferral note | **PASS** | — (kickoff is doc-only) | `ccd6cbc` (final PASS commit; round-5 doc fix at `59d8c4b`) | 5 | `.omc/m3-artifacts/M3-kickoff-confirmed.md:1-12` entry criteria table; §5 12-story ledger; §4 ralplan ACs |
 | M3-S02 | warp_terminal_mobile_facade real impl (Session API + AppContext + FeatureFlag + SSH-noop) | **PASS** | `2960b41` | `8464ba6` | 1 | `warp-src/crates/warp_terminal_mobile_facade/src/{lib,terminal,blocks,ai,app_context,feature_flag,ssh_noop}.rs` + `cargo ndk -t arm64-v8a check -p warp_terminal_mobile_facade` 0 errors |
 | M3-S03 | Extract app::terminal::model::* into facade modules (Plan Amendment 5; replaces cfg-gate) | **PASS** | `c76f876` | `b0b92e3` | 1 (v2 post-Amendment) | `warp-src/crates/warp_terminal_mobile_facade/src/app_terminal/` extraction; Pre-mortem C trip at 41 cfg lines / 145 errors on original approach led to Amendment 5 |
 | M3-S04 | Facade → warpui Android push_frame wiring (PTY bytes → terminal model → renderer) | **PASS** | `71f5c73` | `3fc28f1` | 1 | `warp-src/crates/warp_terminal_mobile_facade/src/render.rs` NEW; `cargo ndk -t arm64-v8a build -p warp-mobile-android-host` PASS |
@@ -156,13 +156,13 @@ Device: Galaxy S24 Ultra `R5CX10VFFBA` / Adreno 750 / API 36
 
 | Metric | Observed | Gate | Margin | Source |
 |---|---|---|---|---|
-| SGR apply count (RED/GREEN/BLUE/reset) | 4 | ≥4 | — | `M3-S08-result.json:sgr_color_test.sgr_apply_count` |
-| Glyph quads per frame (ls output) | 995 | ≥600 | +66% | `M3-S08-result.json:ls_real_pty.glyph_quads_observed` |
-| Atlas glyphs (char diversity) | 39 | ≥25 | +56% | `M3-S08-result.json:ls_real_pty.atlas_glyphs_observed` |
-| PTY bytes ingested | 1323 B | ≥800 B | +65% | `M3-S08-result.json:ls_real_pty.bytes_ingested_total` |
-| ls lines visible (proxy) | 19 | ~20 (80-col wrap) | on-target | `M3-S08-result.json:ls_real_pty.ls_lines_visible_proxy` |
+| SGR apply count (RED/GREEN/BLUE/reset) | 4 | ≥4 | — | `M3-S08-result.json:subtests.sgr_color_test.sgr_apply_count` |
+| Glyph quads per frame (ls output) | 995 | ≥600 | +66% | `M3-S08-result.json:subtests.ls_real_pty.glyph_quads_observed` |
+| Atlas glyphs (char diversity) | 39 | ≥25 | +56% | `M3-S08-result.json:subtests.ls_real_pty.atlas_glyphs_observed` |
+| PTY bytes ingested | 1323 B | ≥800 B | +65% | `M3-S08-result.json:subtests.ls_real_pty.bytes_ingested_total` |
+| ls lines visible (proxy) | 19 | ~20 (80-col wrap) | on-target | `M3-S08-result.json:subtests.ls_real_pty.ls_lines_visible_proxy` |
 | dynamic_grid init ×4 | 38-60 ms | one-shot | — | `M3-S08-result.json:evidence.last_dynamic_init_line dt_ms=38` |
-| present_ok frames | 1460 | — | — | `M3-S08-result.json:dynamic_grid_pipeline.present_ok_lines` |
+| present_ok frames | 1460 | — | — | `M3-S08-result.json:subtests.dynamic_grid_pipeline.present_ok_lines` |
 
 Screenshots: `.omc/m3-artifacts/M3-S08-color-test.png` (44833 B) + `.omc/m3-artifacts/M3-S08-ls-output.png` (186934 B)
 
@@ -204,8 +204,8 @@ Device: Galaxy S24 Ultra `R5CX10VFFBA` / Adreno 750 / API 36
 | Release APK (`app-release-unsigned.apk`) | 7.4 MB (7,775,816 B) | ≤80 MB | 90.7% under gate | `M3-S10-result.json:release_apk.margin_percent` |
 | Combined APK + bootstrap (bootstrap already in APK) | 7.4 MB | ≤120 MB | 93.8% under gate | `M3-S10-result.json:combined_with_bootstrap.margin_percent` |
 | Validation layer in release APK | ABSENT | ABSENT | — | `M3-S10-result.json:validation_layer_in_release.pass=true` |
-| Release Rust .so (`lib/arm64-v8a/libwarp_mobile_android_host.so`) | 3.9 MB | — | (vs 67 MB debug) | `M3-S10-result.json:top_10[rank=2]` |
-| classes.dex | 5.5 MB | — | Kotlin std + AndroidX baseline | `M3-S10-result.json:top_10[rank=1]` |
+| Release Rust .so (`lib/arm64-v8a/libwarp_mobile_android_host.so`) | 3.9 MB | — | (vs 67 MB debug) | `M3-S10-result.json:top_10_contributors[rank=2]` |
+| classes.dex | 5.5 MB | — | Kotlin std + AndroidX baseline | `M3-S10-result.json:top_10_contributors[rank=1]` |
 
 ### 4.5 M3 Acceptance #5 — cherry-pick dry-run (M3-S11)
 
@@ -324,7 +324,7 @@ The complete PTY → terminal model → renderer pipeline is empirically demonst
 
 ### 7.2 prd.json story-level acceptance criteria (selected file:line refs)
 
-#### M3-S01 (warp-src `59d8c4b` / main `ccd6cbc`)
+#### M3-S01 (main `ccd6cbc` final PASS; round-5 doc fix at `59d8c4b`; no warp-src commit — doc-only)
 
 - AC1 M3-kickoff-confirmed.md exists with entry criteria + 12-story ledger + ralplan §6 M3 ACs → `.omc/m3-artifacts/M3-kickoff-confirmed.md:1-12` (entry criteria table), `112-128` (12-story ledger), `98-109` (5 ACs table)
 - AC2 References ralplan §6 M3 lines 404-412 + Amendment 5 → `M3-kickoff-confirmed.md:4` plan reference; Amendment 5 note at `ralplan-warp-on-mobile.md:12-36`
@@ -361,7 +361,7 @@ The complete PTY → terminal model → renderer pipeline is empirically demonst
 
 #### M3-S06 (main `42cba95`)
 
-- AC1 `assets/warp/zsh_body.sh` present in APK → `.omc/m3-artifacts/M3-S10-result.json:top_10[rank=4].path="assets/warp/zsh_body.sh"` `size_bytes=66492` (65K)
+- AC1 `assets/warp/zsh_body.sh` present in APK → `.omc/m3-artifacts/M3-S10-result.json:top_10_contributors[rank=4].path="assets/warp/zsh_body.sh"` `size_bytes=66492` (65K)
 - AC2 Readable from PTY context (Gate 4b) → codex round-2 verified atomic extraction + PTY-context exercise
 - AC3 zsh DCS hook execution deferred to M5 (no zsh on stock Android) → prd.json M3-S06 verifiedBy notes "zsh deferral"
 - AC4 Codex review PASS → round-2 PASS @ `544e8bf`
@@ -377,9 +377,9 @@ The complete PTY → terminal model → renderer pipeline is empirically demonst
 #### M3-S08 (warp-src `6dedd95` / main `d371d99`)
 
 - AC1 `dynamic_grid` per-cell renderer (`renderInitDynamicGrid`, `renderPushFrameDynamic`) → `crates/android-host/src/dynamic_grid.rs` mirror + `warp-src/crates/warpui/src/platform/android/dynamic_grid.rs` canonical
-- AC2 Synthetic SGR shows distinct RED/GREEN/BLUE → `.omc/m3-artifacts/M3-S08-result.json:sgr_color_test.sgr_apply_count=4` + screenshot `M3-S08-color-test.png`
-- AC3 Real `ls -la /system` produces ≥600 glyph quads + ≥25 atlas glyphs + ≥800 bytes ingested → `M3-S08-result.json:ls_real_pty.glyph_quads_observed=995; atlas_glyphs_observed=39; bytes_ingested_total=1323`
-- AC4 `present_ok_lines=1460` steady pipeline → `M3-S08-result.json:dynamic_grid_pipeline.present_ok_lines`
+- AC2 Synthetic SGR shows distinct RED/GREEN/BLUE → `.omc/m3-artifacts/M3-S08-result.json:subtests.sgr_color_test.sgr_apply_count=4` + screenshot `M3-S08-color-test.png`
+- AC3 Real `ls -la /system` produces ≥600 glyph quads + ≥25 atlas glyphs + ≥800 bytes ingested → `M3-S08-result.json:subtests.ls_real_pty.glyph_quads_observed=995; atlas_glyphs_observed=39; bytes_ingested_total=1323`
+- AC4 `present_ok_lines=1460` steady pipeline → `M3-S08-result.json:subtests.dynamic_grid_pipeline.present_ok_lines`
 - AC5 AC#5+#6 deferred to M5 (toybox-no-color + Linux-pixel-similarity) → `M3-S08-result.json:deferred_to_m5`
 - AC6 Codex review PASS → round-1 PASS @ `6dedd95`
 
@@ -417,16 +417,18 @@ The complete PTY → terminal model → renderer pipeline is empirically demonst
 #### M3-S12 (this doc — Codex review pending)
 
 - AC1 `.omc/m3-artifacts/M3-go-no-go.md` exists per M2-go-no-go.md template → THIS FILE
-- AC2 §1 Story Ledger with all 12 stories + commit + evidence → §1 (lines 12-24)
-- AC3 §2 Architecture state at M3 close + facade module structure + Block model file:line refs → §2 (lines 27-96)
-- AC4 §3 Per-layer GO/CONDITIONAL/NO-GO → §3 (lines 99-122)
-- AC5 §4 Performance baselines (S08 + S09 + S07 + S10 + S11) → §4 (lines 125-202)
-- AC6 §5 M4 carry-overs (5 functional + 6 cross-workspace dups + cleanup) → §5 (lines 205-262)
-- AC7 §6 Final verdict CONDITIONAL GO with rationale → §6 (lines 265-301)
-- AC8 §7 Per-criterion citation table all 5 ralplan §6 M3 ACs + prd.json story-level ACs → §7 (lines 304-420)
-- AC9 §8 SOP lessons learned (M2-S11 pattern reaffirmed + 6 M3-specific lessons) → §8 (lines 423-500)
-- AC10 Codex 5-round iterative review SOP documented → §9 (lines 503-515)
+- AC2 §1 Story Ledger with all 12 stories + commit + evidence → §1
+- AC3 §2 Architecture state at M3 close + facade module structure + Block model file:line refs → §2
+- AC4 §3 Per-layer GO/CONDITIONAL/NO-GO → §3
+- AC5 §4 Performance baselines (S08 + S09 + S07 + S10 + S11) → §4
+- AC6 §5 M4 carry-overs (5 functional + 6 cross-workspace dups + cleanup) → §5
+- AC7 §6 Final verdict CONDITIONAL GO with rationale → §6
+- AC8 §7 Per-criterion citation table all 5 ralplan §6 M3 ACs + prd.json story-level ACs → §7
+- AC9 §8 SOP lessons learned (M2-S11 pattern reaffirmed + 6 M3-specific lessons) → §8
+- AC10 Codex 5-round iterative review SOP documented → §9
 - AC11 Codex review PASS → **PENDING LEAD DISPATCH**
+
+(Self-citation line ranges removed in round-2 per codex round-1 finding #5 — they drift each edit pass; section headers `## 1.` through `## 9.` are the stable anchor.)
 
 ---
 
