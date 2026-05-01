@@ -233,8 +233,11 @@ A_SWIPE_COUNT=0
 A_DOWN_SWIPE_COUNT=0
 A_UP_SWIPE_COUNT=0
 
+# Round-3 sign convention (post-WarpInputView.kt:227 fix):
+#   distanceY > 0 = finger up   = drag UP   = scroll INTO older history (offset++)
+#   distanceY < 0 = finger down = drag DOWN = scroll TOWARD newer/live tail (offset--)
 # Establish a non-zero baseline offset before the test so the first
-# up-swipe (finger up = distanceY > 0 = decrease offset) actually has
+# down-swipe (finger down = distanceY < 0 = decrease offset) actually has
 # room to decrement (otherwise it clamps to 0 and produces no Rust call).
 # This baseline is a one-off setup broadcast — captured separately and
 # excluded from sub-test A's gesture call count.
@@ -249,11 +252,11 @@ sleep 0.5
 
 while [[ $(("$(date +%s)" * 1000)) -lt $A_END_MS ]]; do
     if [[ $((A_SWIPE_COUNT % 2)) -eq 0 ]]; then
-        # Finger down (y=200 → y=1500): scroll INTO older history.
+        # Finger down (y=200 → y=1500, distanceY < 0): scroll TOWARD newer/live tail.
         "${ADB[@]}" shell input swipe 540 200 540 1500 100
         A_DOWN_SWIPE_COUNT=$((A_DOWN_SWIPE_COUNT + 1))
     else
-        # Finger up (y=1500 → y=200): scroll TOWARD newer / live tail.
+        # Finger up (y=1500 → y=200, distanceY > 0): scroll INTO older history.
         "${ADB[@]}" shell input swipe 540 1500 540 200 100
         A_UP_SWIPE_COUNT=$((A_UP_SWIPE_COUNT + 1))
     fi
@@ -278,18 +281,24 @@ A_RUST_CALLS="${A_RUST_CALLS:-0}"
 # fix: sign was inverted in WarpInputView.kt; all 234 round-2 calls had
 # requested=0 clamped=0 because pixelAccumulator always went negative.
 A_RUST_LINES=$(grep -E "terminal_set_scroll_offset requested=" "$LOGCAT_GESTURE" || true)
-A_MAX_REQ=$(echo "$A_RUST_LINES" \
+# Codex round-3 finding #1: each parse pipeline must be no-match-safe under
+# `set -euo pipefail`. The trailing `|| true` after each `tail`/`wc` ensures
+# an empty A_RUST_LINES (zero JNI calls) yields "0" instead of aborting the
+# script — important so a regression writes result.json with pass=false
+# instead of leaving a stale prior PASS artifact untouched.
+A_MAX_REQ=$( ( echo "$A_RUST_LINES" \
     | grep -oE 'requested=[0-9]+' \
     | grep -oE '[0-9]+' \
-    | sort -n | tail -1)
-A_MAX_CLAMP=$(echo "$A_RUST_LINES" \
+    | sort -n | tail -1 ) || true)
+A_MAX_CLAMP=$( ( echo "$A_RUST_LINES" \
     | grep -oE 'clamped=[0-9]+' \
     | grep -oE '[0-9]+' \
-    | sort -n | tail -1)
-A_DISTINCT=$(echo "$A_RUST_LINES" \
+    | sort -n | tail -1 ) || true)
+A_DISTINCT=$( ( echo "$A_RUST_LINES" \
     | grep -oE 'clamped=[0-9]+' \
     | grep -oE '[0-9]+' \
-    | sort -u | wc -l | tr -d ' ')
+    | sort -u | wc -l ) || true)
+A_DISTINCT="${A_DISTINCT// /}"
 A_MAX_REQ="${A_MAX_REQ:-0}"
 A_MAX_CLAMP="${A_MAX_CLAMP:-0}"
 A_DISTINCT="${A_DISTINCT:-0}"
