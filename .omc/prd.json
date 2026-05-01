@@ -252,8 +252,8 @@
     {
       "id": "M4-S03",
       "title": "Bootstrap zip build (bash + zsh + coreutils + findutils + apt + pkg + git)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main c58b9b4 (Docker-deferred CI workflow; --add zsh,git after default-package filtering + comment-skip)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Run termux-packages/scripts/build-bootstraps.sh with package list: bash, zsh, coreutils-gnu, findutils, apt, pkg, git",
