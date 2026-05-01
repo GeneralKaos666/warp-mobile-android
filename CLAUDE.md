@@ -8,11 +8,13 @@ Open-source-first port of [Warp Terminal](https://github.com/warpdotdev/Warp) to
 
 See [`README.md`](README.md) for product description and architecture overview.
 
-## Current milestone state (2026-04-30)
+## Current milestone state (2026-05-01)
 
 - **M0** (foundation spike): CLOSED CONDITIONAL GO @ commit `24a2c1c`
 - **M1** (Android PTY/Service prototype): CLOSED CONDITIONAL GO @ commit `f7feb3f`, **10/10 stories PASS**
-- **M2** (warpui::platform::android backend, 8-12 weeks): READY TO START
+- **M2** (warpui::platform::android backend): CLOSED CONDITIONAL GO @ commit `0506c35`, **12/14 stories PASS** (M2-S13 user-deferred per 「先跳過便宜手機」)
+- **M3** (Layer 2b integration: facade + DCS + Block + dynamic_grid): **CLOSED CONDITIONAL GO** @ commit `8ec75c8`, **12/12 stories PASS** (27 codex rounds; Plan Amendment 5 cfg-gate→extraction pivot)
+- **M4** (Termux runtime: zsh + GNU coreutils + APT): READY TO START
 
 To verify currency: `git log --oneline -5` and check `.omc/prd.json` `passes` fields.
 
@@ -21,17 +23,15 @@ To verify currency: `git log --oneline -5` and check `.omc/prd.json` `passes` fi
 **Read in this order**:
 
 1. **This file** (`CLAUDE.md`) — you are here
-2. [`.omc/handoffs/lead-context-snapshot.md`](.omc/handoffs/lead-context-snapshot.md) — **authoritative session resume document**
-   - §1-7: identity, user preferences, conventions
-   - §8: M0 status (CLOSED)
-   - §8b: M1 status (CLOSED 10/10 stories PASS — table with file:line evidence)
-   - §8c: M2 ready-to-start state + dispatch instructions
-3. [`.omc/m2-kickoff.md`](.omc/m2-kickoff.md) — if M2 not yet dispatched, this is the forward-looking kickoff doc
-4. [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md) — canonical plan with 4 amendments at top
-5. [`.omc/prd.json`](.omc/prd.json) — current milestone story states
-6. [`progress.txt`](progress.txt) — iteration log with lessons learned
+2. [`.omc/m3-artifacts/M3-go-no-go.md`](.omc/m3-artifacts/M3-go-no-go.md) — **authoritative M3 close-out document** (519 lines; CONDITIONAL GO verdict; all 12 stories ledger; per-layer GO/CONDITIONAL/NO-GO; M4 carry-overs)
+3. [`.omc/m3-artifacts/M3-kickoff-confirmed.md`](.omc/m3-artifacts/M3-kickoff-confirmed.md) — M3 kickoff doc (5-round codex PASSed)
+4. [`.omc/m2-artifacts/M2-go-no-go.md`](.omc/m2-artifacts/M2-go-no-go.md) — M2 close-out (508 lines; 12/14 PASS)
+5. [`.omc/handoffs/lead-context-snapshot.md`](.omc/handoffs/lead-context-snapshot.md) — earlier session resume doc (M0+M1 era; superseded for M2+ by go-no-go docs)
+6. [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md) — canonical plan with **5 amendments** at top (Amendment 5 = M3 cfg-gate→extraction pivot, 2026-04-30)
+7. [`.omc/prd.json`](.omc/prd.json) — current milestone story states (M3-S01..S12 all `passes:true`)
+8. [`progress.txt`](progress.txt) — iteration log with lessons learned
 
-**Do NOT** attempt to derive state from full conversation history. The handoff doc is designed to be read cold.
+**Do NOT** attempt to derive state from full conversation history. The M3 close-out doc + kickoff doc are designed to be read cold.
 
 ## User governance preferences (from CLAUDE.md global instructions)
 
@@ -79,18 +79,23 @@ If you don't have the OMC plugin, you can still:
 ## Quick verification commands
 
 ```bash
-# Verify all 10 M1 stories PASS
-jq -r '.stories | map(select(.passes == true)) | length' .omc/prd.json   # → 10
-jq -r '.stories | length' .omc/prd.json                                   # → 10
+# Verify all 12 M3 stories PASS
+jq -r '.stories | map(select(.passes == true)) | length' .omc/prd.json   # → 12
+jq -r '.stories | length' .omc/prd.json                                   # → 12
 
-# Confirm latest M1 close-out commits
+# Confirm latest M3 close-out commits
 git log --oneline -10
 
 # Build sanity check
-cargo test -p warp-mobile-android-host                                    # → 3 passed
+cargo test -p warp-mobile-android-host                                    # → 45 passed (M3-S11 added 3 emoji smoke tests)
+cargo test -p warp_terminal_mobile_facade --manifest-path warp-src/Cargo.toml  # → 73 passed
+
+# Release APK size verification (M3-S10 baseline 7.4MB)
+cd android && ./gradlew :app:assembleRelease
+du -h app/build/outputs/apk/release/app-release-unsigned.apk              # → 7.4M
 
 # Connected devices (your serials will differ)
-adb devices                                                                # → at least one API 31+ Adreno 6xx+ device for M2 work
+adb devices                                                                # → Galaxy S24 Ultra R5CX10VFFBA primary
 ```
 
 ## What you should NOT do
@@ -102,12 +107,12 @@ adb devices                                                                # →
 - Don't commit `.cargo/config.toml` (machine-absolute paths). The template at `.cargo/config.toml.template` is the source of truth; run `tools/scripts/setup-cargo-config.sh` to render.
 - Don't commit `warp-src/` (it's a separate git repo, gitignored).
 
-## How to start M2
+## How to start M4
 
-When ready to begin M2:
+When ready to begin M4 (Termux runtime: zsh + GNU coreutils + APT):
 
 ```
-/oh-my-claudecode:ralph M2 milestone — warpui::platform::android backend per ralplan §6 M2 (D1.5-hybrid). Build Android Vulkan rendering on top of M1 PTY/Service infrastructure. 4 hand-written platform areas + headless-derived base. Verifier gate: codex per existing SOP.
+/oh-my-claudecode:ralph M4 milestone — Termux runtime integration per ralplan §6 M4. Bundle termux-packages (zsh + GNU coreutils + APT package manager) as APK assets; first-launch extraction; PTY spawn uses Termux shell instead of /system/bin/sh. Closes M3 carry-overs (M3-S06 hook execution, M3-S08 toybox color, M3-S08 Linux pixel similarity, M3-S11 Option D shared-rlib API split). Verifier gate: codex per existing SOP.
 ```
 
 Or with autopilot (auto-detects ralplan plan, skips Phase 0+1):
@@ -116,8 +121,23 @@ Or with autopilot (auto-detects ralplan plan, skips Phase 0+1):
 /oh-my-claudecode:autopilot
 ```
 
-The PRD scaffold for M2 stories will be auto-generated by the ralph/autopilot skill and refined per the just-in-time milestone planning workflow described in [`.omc/m2-kickoff.md`](.omc/m2-kickoff.md).
+**M4 entry criteria** (per M3-go-no-go.md §5 + §6):
+- M3 CLOSED CONDITIONAL GO @ commit `8ec75c8` (12/12 stories PASS)
+- Release APK 7.4MB (M3-S10 baseline; ~73MB headroom for Termux bundle under 80MB gate, or ~113MB under 120MB combined)
+- Cherry-pick budget intact (Pre-mortem C #4 NOT TRIPPED at M3-S11; ~3-5 min/commit estimated)
+- 6 cross-workspace dups (~5800 LOC) documented as Option C divergence; Option D shared-rlib API split scheduled for M4 refactor
+
+**M4 deliverables (per ralplan §6 M4)**:
+1. Termux bootstrap zip bundling (zsh + coreutils-gnu + bash + grep + find + sed + awk + ...)
+2. APK asset packaging similar to M3-S06 zsh_body.sh pattern
+3. First-launch extraction to `/data/data/dev.warp.mobile/files/termux/`
+4. PTY spawn uses `$PREFIX/bin/zsh` instead of `/system/bin/sh`
+5. F-Droid metadata for v1 release prep
+6. Bootstrap zip reproducibility (deterministic build)
+7. Option D shared-rlib API split (resolves the 6 cross-workspace dups from M3-S11)
+8. Re-run M3-S05 colored ls -la /system AC against real GNU coreutils ls --color=auto (closes M3-S08 AC#5 deferral)
+9. Live emoji raster smoke (closes M3-S11 carry-forward)
 
 ---
 
-*Last updated: 2026-04-30 by team-lead@warp-mobile-m1 (Claude Opus 4.7, 1M context) — M0+M1 close-out + M2 ready*
+*Last updated: 2026-05-01 by team-lead@warp-mobile-m3 (Claude Opus 4.7, 1M context) — M2+M3 close-out + M4 ready*

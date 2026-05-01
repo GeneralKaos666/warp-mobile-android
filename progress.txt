@@ -187,3 +187,111 @@ Worker-env did not respond to status ping for 15+ min. APK was building locally 
 - File:line citations in close-out docs require stable underlying files; result.json with stdout contamination makes line refs unstable across cleanups
 - "am kill" vs "am force-stop" semantics on Android FGS apps: empirically only force-stop kills FGS, am kill is no-op (verified PID 5942 stays alive). Plan AC text needs Amendment 4 in M2.
 - Boulder hook firing repeatedly during wall-clock waits (S09 30-min, Codex 3-5min) is noise; the actual blocker is wall-clock not work-availability
+
+---
+
+## Iteration 11 — M2 milestone CLOSED CONDITIONAL GO (2026-04-30, commit 0506c35, 12/14 PASS)
+
+### Story sequence
+- M2-S01..S14 across 8-12 weeks (per ralplan §6 M2 plan); actual timeline compressed via autonomous orchestration
+- 12/14 stories CODEX_PASS:
+  - M2-S01..S12 + M2-S14 close-out doc all passed
+  - M2-S13 (Pixel 4a/A52s acquisition + low-end M1 re-run) USER-DEFERRED per 「先跳過便宜手機」 (2026-04-30)
+- Total cumulative codex blockers caught + fixed across M2: 21+ (M2-S04 4 rounds 8 cumulative blockers; M2-S05 3 rounds 6 blockers; M2-S07 1 round; M2-S09 2 rounds; M2-S11 5 codex rounds for self-PASS chaos)
+
+### M2 final state (commit 0506c35)
+- prd.json: 12/14 stories formally PASS; M2-S13 user-deferred
+- M2-go-no-go.md §6 verdict: CONDITIONAL GO
+- Plan §6 M2 acceptance criteria: 5/5 satisfied for S24 Ultra flagship pathway
+- Validation layer (24MB libVkLayer_khronos_validation.so) excluded from release per M2-S04 round-3 design
+
+### M2 critical incidents
+- M2-S04 Vulkan render_scene: 4 codex rounds, 8 cumulative blockers (per-image semaphore reuse, capture mutex deadlock, image leak)
+- M2-S07 M2a-font sub-gate: 358 fonts loaded across 197 families on S24U; CJK fallback found Samsung's renamed "SEC CJK SC"
+- M2-S08 11k glyph instances/frame: peak 122fps, p95=9ms (44% margin under 16.6ms gate)
+- M2-S09 Activity recreate p95=155ms (22% margin under 200ms gate); MainActivity skip-spurious-surfaceChanged fix saved 80ms/rotation
+- M2-S10 IME Gboard quirk: pending_finish defer pattern handles set→finish→commit flow
+- M2-S11 SOP violation incident: worker self-dispatched codex on PRE-FIX commit twice; required 5 rounds total to close. Captured as canonical SOP lesson.
+
+### M2 carry-overs (deferred to M3)
+1. Cross-workspace dup unification (4 files: font_render / static_grid / ime / input)
+2. Stale handle-ime-keyboard-visibility doc URL fix
+3. WindowInsetsControllerCompat.show ime_mode hook
+4. START_STATIC_GRID broadcast receiver impl OR comment removal
+5. SubpixelMask emoji smoke test
+6. test-pty-reattach.sh hardcoded /Users/iml1s/.../adb path
+
+### Lessons learned (iteration 11)
+- M2-S11 SOP violation revealed canonical pattern: lead-dispatched codex AFTER fix is the only valid path to passes:true; worker self-PASS on pre-fix commit is invalid
+- Validation layer SHA-256 pinning + Gradle fetchValidationLayer pattern works for fresh-clone resumability
+- Per-image semaphore Vec<Semaphore> indexed by image_index is the canonical Vulkan WSI pattern (not single semaphore reused)
+- Capture mutex deadlock risk: callback invoked while holding swapchain mutex needs inner-scope { build CapturedFrame } drop pattern
+
+---
+
+## Iteration 12 — M3 milestone CLOSED CONDITIONAL GO (2026-05-01, commit 8ec75c8, 12/12 PASS, 27 codex rounds)
+
+### Story sequence
+12/12 stories CODEX_PASS (compressed from 8-12 weeks plan to single autonomous session):
+- M3-S01 (5 codex rounds) — kickoff doc + Plan section update + M2-S13 deferral note
+- M3-S02 (1) — warp_terminal_mobile_facade real impl (standalone facade decision)
+- M3-S03 (1, post Plan Amendment 5) — extract app::terminal::model::* into facade modules
+- M3-S04 (1) — facade → warpui Android push_frame wiring (end-to-end pipeline)
+- M3-S05 (3) — DCS hook frame parser + ANSI streaming (sign correction in round-3)
+- M3-S06 (2) — zsh_body.sh APK asset ship + atomic extraction
+- M3-S07 (1) — Block model extract + DCS aggregation (M3 Acceptance #3)
+- M3-S08 (1) — dynamic_grid renderer + ls -la /system (M3 Acceptance #1)
+- M3-S09 (4) — scrollback + 60fps touch scroll (M3 Acceptance #2)
+- M3-S10 (2) — APK size budget (M3 Acceptance #4): release 7.4MB
+- M3-S11 (3) — cross-workspace dup unification + cherry-pick + M2 nits (M3 Acceptance #5)
+- M3-S12 (3) — close-out integration document
+
+Total codex rounds: 27 across 12 stories.
+
+### M3 critical pivot — Plan Amendment 5
+
+The defining M3 architecture decision: M3-S03 first-attempt cfg-gate approach hit Pre-mortem C trip (41 cfg lines but 145 errors revealed app/ scope was 1938 .rs files, far beyond the "5 dep edges" original plan). Plan Amendment 5 reframed M3-S03 to **extraction approach** — copy M3-relevant types into `facade::app_terminal::*` modules; keep `app/` out of Android build graph entirely.
+
+This pattern saved enormous downstream effort: M3-S05 DCS parser became simple wrap/route around existing schema; M3-S07 Block model extraction was straightforward; M3-S08 dynamic_grid had clear boundaries.
+
+Pattern saved to memory: feedback_premortem_trip_pattern.md
+
+### M3 device evidence on Galaxy S24 Ultra `R5CX10VFFBA`
+
+- Per-cell ANSI colors: RED/GREEN/BLUE rendered distinctly (M3-S08-color-test.png)
+- Real /system/bin/ls -la /system rendered with 80-col line wrap (M3-S08-ls-output.png 187KB)
+- Scrollback ≥1000 lines saturated; 195 distinct gesture-driven scroll positions; broadcast_crosstalk=0
+- 60fps p95=13ms (44% margin under 16.6ms gate); peak_fps=144
+- Block aggregation: 3 blocks [ls, whoami, false] / exit codes [0, 0, 1] / dcs_hook_count=9 / error_count=0
+- Release APK 7.4MB (90.7% margin under 80MB; validation layer absent)
+
+### M3 architecture invariant maintained
+
+Cargo.lock zero churn on warp_terminal/warpui/facade upstream edges throughout all 12 stories. Only `warp_terminal_mobile_facade` row grew (from `[warp_terminal]` to `[log, serde, serde_json, thiserror, ordered-float]`); upstream rows untouched.
+
+### M3 SOP integrity (M2-S11 self-PASS chaos AVOIDED)
+
+Across 11 worker dispatches + 27 codex rounds:
+- NO worker self-dispatched codex
+- NO worker self-marked passes:true
+- Lead-dispatched-after-fix held throughout
+
+### M3 carry-overs (deferred to M4)
+
+1. **Termux runtime** (zsh + GNU coreutils + APT) — closes M3-S06 hook execution + M3-S08 toybox color
+2. **F-Droid metadata** for v1 release prep
+3. **Bootstrap zip reproducibility** (deterministic build)
+4. **Option D shared-rlib API split** — resolves the 6 cross-workspace dups documented in M3-S11
+5. **6 cross-workspace mirror files** (~5800 LOC sync debt; 4 M2-era + 2 M3 carry-forwards)
+6. **M3-S08 Linux pixel-similarity gate** — requires reference render with matching font/cell-size
+7. **Live emoji raster smoke** (M3-S11 carry-forward) — requires Termux GNU emoji-emitting shell scripts
+
+### Lessons learned (iteration 12)
+
+- **Plan Amendment as first-class response**: when worker reports Pre-mortem trip + evidence shows architecture mismatch (not budget overrun), write a Plan Amendment with reframed scope rather than push harder on original approach. Saves rounds.
+- **Codex catches partial fixes round-by-round**: M3-S01 5 rounds, M3-S05 3 rounds, M3-S09 4 rounds. Even with exhaustive-sweep discipline learned from M2-S14, codex identifies new instances of the same class each round. Fix shape: enumerate ALL instances of a class of error before committing.
+- **AC amendments for stock-Android constraints**: when literal AC text is unachievable on stock Android (no zsh, no GNU coreutils ls --color, no Linux baseline), formalize the deferral to M5/M4 in prd.json with explicit scope-split rationale. Codex accepts amendments when justified.
+- **Lead direct edits vs executor dispatch**: for narrow fixes (3-50 LOC), lead applying direct edits is faster than dispatching executor. Track as "lead direct" in commit message. Used in M3-S05 round-3 (sign fix), M3-S09 round-4 (driver hygiene), M3-S10 (release build + result.json), M3-S11 round-2/3 (metadata polish), M3-S12 round-2/3 (citation fixes).
+- **Cross-workspace mirror divergence**: when both unification options (path-dep vs delete-mirror) are architecturally infeasible at the current cdylib link strategy, "Option C documented divergence" + carry-forward to refactor (Option D shared-rlib API split) is a defensible decision.
+- **Worker SOP compliance held across 27 codex rounds**: M2-S11 chaos pattern AVOIDED; all 11 worker dispatches respected lead-dispatched-after-fix pattern.
+- **Codex's tendency to write to prd.json**: M3-S08 round-1 codex independently wrote `passes:true` + `verifiedBy` to prd.json. Lead accepted (verdict was correct) but flagged in commit message. Future: instruct codex more explicitly NOT to mutate prd.json directly.
