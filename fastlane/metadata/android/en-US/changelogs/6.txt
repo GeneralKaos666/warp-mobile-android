@@ -1,0 +1,28 @@
+v0.6.0-m6 — M6 milestone close (AI integration: BYOK + ghost-text + agent + telemetry).
+
+M6 stories (7/7 PASS; CONDITIONAL GO):
+* BYOK SettingsActivity with EncryptedSharedPreferences AES256-GCM
+  Keystore-backed master key + FLAG_SECURE; Test Connection button
+* Ghost-text streaming via Claude Haiku — 💡 button manual trigger
+  + IME-driven debounced auto-trigger with Tab-accept (M6-CO1)
+* Agent task UI via Claude Sonnet rendered in BottomSheet Dialog —
+  🤖 button hardcoded prompt + 📋 → BlockActionsSheet → Explain
+  forwarding real Block context (command + exit_code, XML-tagged)
+* Offline graceful degrade: ConnectivityManager listener greys out
+  AI buttons within ~1s of network loss, recovers in ~200ms
+* Telemetry: per-session AtomicLong counters + p95 latency rolling
+  window + opt-in CSV log at $PREFIX/var/log/warp-ai-usage.csv
+
+Carry-over closures (same-day post-M6-close-out):
+* Real Block context for agent prompt (M5-S03 BottomSheet UI scaffold)
+* Listener-based offline button grey-out (visual degrade)
+* IME-debounced ghost auto-trigger + Tab-accept (M6-CO1, including
+  round-2 self-review fixes for state-mutation race + accept fallback)
+
+Other:
+* M4-S14 live emoji raster smoke (closes M3-S11 classifier-only carry)
+* Self-review-driven race-condition fixes: AtomicLong handle ownership
+  in 3 streaming surfaces (AccessoryRow / AgentBlockSheet / GhostSuggest)
+
+Versioning: bumped to 0.6.0-m6 from 0.1.0-m4 (catches up the milestone
+tag — solo-dev scheme is `<major>.<milestone>.<patch>-m<N>`).

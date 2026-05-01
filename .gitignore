@@ -35,6 +35,11 @@ android/app/src/debug/jniLibs/arm64-v8a/*.so
 *.jks
 *.keystore
 *.p12
+# v1-release prep: signing-config properties file (contains plaintext
+# keystore password). Lives at android/keystore.properties when a
+# developer wants to produce signed release APKs for GitHub Releases.
+# F-Droid path doesn't use this — F-Droid signs from source itself.
+keystore.properties
 
 # ===== macOS =====
 .DS_Store

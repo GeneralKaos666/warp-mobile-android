@@ -54,8 +54,8 @@ RepoType: git
 Repo: https://github.com/ImL1s/warp-mobile-android.git
 
 Builds:
-  - versionName: 0.1.0-m4
-    versionCode: 1
+  - versionName: 0.6.0-m6
+    versionCode: 6
     commit: HEAD
     subdir: android
     sudo:
@@ -95,5 +95,5 @@ Builds:
 
 AutoUpdateMode: None  # Manual versioning during M4
 UpdateCheckMode: None
-CurrentVersion: 0.1.0-m4
-CurrentVersionCode: 1
+CurrentVersion: 0.6.0-m6
+CurrentVersionCode: 6

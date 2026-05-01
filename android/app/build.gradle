@@ -527,6 +527,35 @@ task verifyValidationLayer {
     }
 }
 
+// ─── Release signing config ────────────────────────────────────────────────
+//
+// V1-release prep: solo-dev signing path for GitHub Releases distribution
+// (F-Droid signs from source using its own keys; this only matters for
+// direct .apk downloads off GitHub).
+//
+// Keystore is gitignored — generate yours with:
+//   keytool -genkey -v \
+//     -keystore android/keystore.jks \
+//     -alias warp-mobile-release \
+//     -keyalg RSA -keysize 4096 -validity 25000
+//
+// Then create android/keystore.properties (also gitignored):
+//   storeFile=../keystore.jks
+//   storePassword=<password>
+//   keyAlias=warp-mobile-release
+//   keyPassword=<password>
+//
+// CI / release builds without keystore.properties produce an UNSIGNED
+// APK at app/build/outputs/apk/release/app-release-unsigned.apk —
+// matches the prior behavior (F-Droid path) so adding this config is
+// strictly additive and doesn't break any existing builds.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasKeystore = keystorePropertiesFile.canRead()
+if (hasKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace 'dev.warp.mobile'
     compileSdk 36
@@ -536,8 +565,38 @@ android {
         applicationId "dev.warp.mobile"
         minSdk 31
         targetSdk 36
-        versionCode 1
-        versionName "0.1.0-m1"
+        // M6 close-out: bumped to 0.6.0-m6 to reflect milestones M0-M6 closed
+        // (M6 = AI integration: BYOK + ghost-text + agent task + telemetry).
+        // Solo-dev versioning scheme: `<major>.<milestone>.<patch>-m<N>` where
+        // major=0 (pre-v1), milestone=highest closed milestone number, patch=0
+        // for the milestone close commit, m<N> tag matches `milestone`.
+        versionCode 6
+        versionName "0.6.0-m6"
+    }
+
+    signingConfigs {
+        if (hasKeystore) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Only attach the signing config when the keystore is available.
+            // Without this guard, a fresh checkout (no keystore.properties)
+            // would fail :app:assembleRelease with a NPE on signingConfig.
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
+            // M3-S10: minify off for the v1 baseline. R8 is opt-in for v2+
+            // when we can verify it doesn't break the warpui FFI path.
+            minifyEnabled false
+        }
     }
 
     // Each variant picks up its own copy-task output dir; this is what makes
