@@ -17,6 +17,13 @@
       "size_target": "30-50MB compressed (ralplan §6 M4 #1)",
       "sha256": "PENDING (CI build required)",
       "metadata_companion": "bootstrap-metadata.json"
+    },
+    "package_mapping_round_2_fix": {
+      "_codex_round1_finding": "build-bootstraps.sh accepts --add for non-default packages, NOT positional args. Round-1 workflow was passing `$(cat package_list.txt)` as positional which would fail.",
+      "default_essentials": "apt, bash, coreutils, findutils, plus termux-tools (provides `pkg`) — per termux-packages/scripts/build-bootstraps.sh:425-454",
+      "additional_packages_via_add": "zsh, git",
+      "name_normalization": "coreutils-gnu (ralplan canonical) → coreutils (termux-packages canonical); -gnu suffix stripped at CI",
+      "ci_invocation_corrected": "./scripts/run-docker.sh ./scripts/build-bootstraps.sh --architectures aarch64 --add zsh,git"
     }
   },
   "blockers": [

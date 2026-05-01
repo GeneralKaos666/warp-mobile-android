@@ -48,9 +48,41 @@ jobs:
           ARCH: ${{ inputs.arch || 'aarch64' }}
         run: |
           cd termux-packages
-          ./scripts/run-docker.sh ./scripts/build-bootstraps.sh \
-            --architectures "$ARCH" \
-            $(cat ../tools/scripts/m4-bootstrap-packages.txt | tr '\n' ' ')
+          # Codex M4-S03 round-1 fix: build-bootstraps.sh accepts --add for
+          # non-default packages, NOT positional args. Default essential set
+          # (per termux-packages/scripts/build-bootstraps.sh:425-454) already
+          # includes: apt, bash, coreutils, findutils, termux-tools (provides
+          # `pkg`), plus dash/grep/sed/tar/util-linux/etc. Our M4 7-package
+          # list is therefore satisfied by:
+          #   - default essentials: apt, bash, coreutils, findutils, pkg
+          #     (last via termux-tools)
+          #   - --add: zsh, git (not in default)
+          # Map m4-bootstrap-packages.txt → ADDITIONAL by filtering out the
+          # 5 already-default packages.
+          DEFAULT_PKGS="apt bash coreutils findutils pkg"
+          ADD_PKGS=""
+          while IFS= read -r pkg; do
+              [ -z "$pkg" ] && continue
+              # Strip -gnu suffix (M4 spec used coreutils-gnu but build script
+              # canonical name is coreutils).
+              pkg="${pkg%-gnu}"
+              # Skip if already in default essentials.
+              skip=0
+              for d in $DEFAULT_PKGS; do
+                  [ "$d" = "$pkg" ] && skip=1 && break
+              done
+              [ "$skip" -eq 1 ] && continue
+              ADD_PKGS="${ADD_PKGS:+$ADD_PKGS,}$pkg"
+          done < ../tools/scripts/m4-bootstrap-packages.txt
+          echo "Additional packages (passed via --add): $ADD_PKGS"
+          if [ -n "$ADD_PKGS" ]; then
+              ./scripts/run-docker.sh ./scripts/build-bootstraps.sh \
+                  --architectures "$ARCH" \
+                  --add "$ADD_PKGS"
+          else
+              ./scripts/run-docker.sh ./scripts/build-bootstraps.sh \
+                  --architectures "$ARCH"
+          fi
 
       - name: Verify zip artifact
         run: |
