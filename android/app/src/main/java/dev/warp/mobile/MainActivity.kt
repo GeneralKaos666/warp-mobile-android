@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.Choreographer
+import android.view.Gravity
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -90,6 +91,9 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     // receive `onCreateInputConnection`, so we overlay a 1x1 transparent
     // focusable View on top.
     private var warpInputView: WarpInputView? = null
+    // M5-S02: keyboard accessory row (Esc/Tab/Ctrl/Alt/arrows + symbols).
+    // Visibility + bottom-margin maintained by the WindowInsets listener.
+    private var accessoryRow: AccessoryRow? = null
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -291,6 +295,27 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
+
+        // M5-S02: AccessoryRow overlay. Lives at the BOTTOM of the FrameLayout
+        // (gravity bottom). When IME is hidden, GONE. When IME shown, the
+        // WindowInsets listener below reveals it + sets bottom margin =
+        // ime.bottom so the row sits just above the IME panel. Touch
+        // priority: AccessoryRow needs to receive button clicks BEFORE
+        // warpInputView's MATCH_PARENT touch capture, so we add it AFTER
+        // warpInputView (later children of FrameLayout sit higher in
+        // Z-order and get touch dispatch first).
+        accessoryRow = AccessoryRow(this).apply {
+            visibility = View.GONE
+        }
+        frame.addView(
+            accessoryRow,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM
+            )
+        )
+
         setContentView(frame)
         warpInputView!!.requestFocus()
         // M2-S10: publish the input view to companion object so the
@@ -338,6 +363,29 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     "effectiveBottom=$effectiveBottom"
             )
             NativeBridge.setRenderInsets(sysBars.top, sysBars.left, sysBars.right, effectiveBottom)
+
+            // M5-S02: accessory row visibility + position. When IME is up
+            // (ime.bottom > 0), show the row just above the IME panel by
+            // setting the bottom margin to ime.bottom. When IME is down,
+            // hide the row entirely (no value in showing modifier keys
+            // when there's no soft keyboard to modify).
+            accessoryRow?.let { row ->
+                if (ime.bottom > 0) {
+                    val lp = row.layoutParams as FrameLayout.LayoutParams
+                    if (lp.bottomMargin != ime.bottom) {
+                        lp.bottomMargin = ime.bottom
+                        row.layoutParams = lp
+                    }
+                    if (row.visibility != View.VISIBLE) {
+                        row.visibility = View.VISIBLE
+                    }
+                } else {
+                    if (row.visibility != View.GONE) {
+                        row.visibility = View.GONE
+                    }
+                }
+            }
+
             insets
         }
 

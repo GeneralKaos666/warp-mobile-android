@@ -373,6 +373,14 @@ class WarpTerminalService : Service() {
             |Dir::Bin::methods "$prefix/lib/apt/methods";
             |Dir::Bin::solvers "$prefix/lib/apt/solvers";
             |Dir::Bin::planners "$prefix/lib/apt/planners";
+            |# M5-S07 attempted #clear Dir::Bin::solvers::/planners:: but apt's
+            |# compile-time LIST defaults are written deeper than apt.conf can
+            |# override. The SCALAR forms above are what apt actually uses at
+            |# runtime (verified end-to-end); the LIST forms with com.termux
+            |# entries are cosmetic dump-output noise only. M5-S07 deferred to
+            |# v1-release: clean fix would be a recompile of apt with our
+            |# prefix as compile-time default, which lives in the Option C
+            |# from-source build path (M4-S03 strategy doc).
             |Dir::Log "$prefix/var/log/apt";
             |DPkg::Path "$prefix/bin:$prefix/sbin:/system/bin";
             |DPkg::Options:: "--admindir=$prefix/var/lib/dpkg";
