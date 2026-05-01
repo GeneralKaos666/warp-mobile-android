@@ -1,6 +1,7 @@
 package dev.warp.mobile
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -15,6 +16,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.Toast
+import org.json.JSONArray
 
 /**
  * M5-S02: KeyboardAccessoryView above the IME panel.
@@ -109,6 +112,11 @@ class AccessoryRow @JvmOverloads constructor(
         for (sym in listOf("|", "/", "~", "-", "$", "*", "&", "!", "?", ".")) {
             addBtn(sym) { sendBytes(sym.toByteArray()) }
         }
+        // M5-S01: Copy button — flattens all visible terminal blocks
+        // (via NativeBridge.terminalBlocksDump) to plain text and writes
+        // to Android ClipboardManager. Interactive cell-range selection
+        // is the v1-release scope; round-1 ships "copy all visible".
+        addBtn("Copy") { copyVisibleToClipboard() }
         // M5-S04: Paste button — pulls from Android ClipboardManager and
         // streams to PTY in 4 KB chunks with 1ms gaps so the PTY's read
         // buffer doesn't overflow on long pastes (10K+ chars). ESC during
@@ -310,5 +318,77 @@ class AccessoryRow @JvmOverloads constructor(
         // 1 ms gap is enough for the child's read loop to drain on
         // flagship; mid-tier devices may need 2-3 ms (tunable later).
         private const val CHUNK_DELAY_MS = 1L
+    }
+
+    // ── M5-S01: copy visible terminal blocks to clipboard ───────────────
+    //
+    // Round-1 scope: copy ALL visible block content. Interactive cell-range
+    // selection is v1-release polish (warp_mobile_android_link/src/
+    // selection.rs has the state machine + 11 unit tests; touch-event
+    // wiring + Vulkan overlay rect drawing are deferred).
+    //
+    // The flatten path: NativeBridge.terminalBlocksDump returns a JSON
+    // array of {command, output, exit_code, ...} blocks. We concat the
+    // output fields with newline separators and write to ClipboardManager.
+
+    private fun copyVisibleToClipboard() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            ?: run {
+                Log.w(LOG_TAG, "copy: ClipboardManager unavailable")
+                return
+            }
+        val blocksJson = try {
+            NativeBridge.terminalBlocksDump()
+        } catch (e: Throwable) {
+            Log.e(LOG_TAG, "copy: terminalBlocksDump JNI failed: ${e.message}")
+            null
+        }
+        val text = flattenBlocksToText(blocksJson)
+        if (text.isEmpty()) {
+            Log.i(LOG_TAG, "copy: no visible block content")
+            Toast.makeText(context, "Nothing to copy", Toast.LENGTH_SHORT).show()
+            return
+        }
+        cm.setPrimaryClip(ClipData.newPlainText("warp-terminal", text))
+        Log.i(LOG_TAG, "copy: ${text.length} chars copied to clipboard")
+        Toast.makeText(context, "Copied ${text.length} chars", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Flatten the M3-S07 terminalBlocksDump JSON (array of block objects)
+     * to plain text. Each block contributes "command\noutput\n" with the
+     * exit_code suffix appended for non-zero exits. Returns empty string
+     * for null / malformed JSON.
+     *
+     * Schema (per warp_terminal_mobile_facade::blocks::dump_blocks_json):
+     *   [{"command":"ls -la","output":"...","exit_code":0,"start_time":...},
+     *    ...]
+     */
+    private fun flattenBlocksToText(json: String?): String {
+        if (json.isNullOrEmpty()) return ""
+        return try {
+            val arr = JSONArray(json)
+            buildString {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val cmd = o.optString("command", "")
+                    val out = o.optString("output", "")
+                    val exit = o.optInt("exit_code", 0)
+                    if (cmd.isNotEmpty()) {
+                        append("$ ").append(cmd).append('\n')
+                    }
+                    if (out.isNotEmpty()) {
+                        append(out)
+                        if (!out.endsWith('\n')) append('\n')
+                    }
+                    if (exit != 0) {
+                        append("[exit ").append(exit).append("]\n")
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(LOG_TAG, "copy: JSON parse failed: ${e.message}")
+            ""
+        }
     }
 }
