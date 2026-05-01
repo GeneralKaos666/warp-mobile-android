@@ -4,6 +4,11 @@ pub mod pty;
 #[cfg(target_os = "android")]
 mod font_render;
 
+// V1-prep: pure font-family selection helpers — host-runnable for
+// unit-test coverage of OEM-naming-variation logic. The font_render
+// module proper stays android-gated (cosmic-text + ndk_sys deps).
+pub mod font_picker;
+
 // M2-S10 IME state machine. Pure Rust + atomics; no Vulkan / NDK deps so we
 // build it on host targets too (allows `cargo test -p warp-mobile-android-host`
 // to exercise the state-machine tests without cross-compilation).

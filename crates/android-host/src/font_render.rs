@@ -260,31 +260,15 @@ fn build_font_system() -> (
                 {
                     cjk_family = Some(family_name.clone());
                 }
-                // V1-prep: prefer Samsung Color Emoji on Samsung devices —
-                // its CBDT/CBLC bitmaps decode under swash 0.1.x where
-                // Noto Color Emoji's COLR v1 doesn't. Detection by name
-                // matches "Samsung Color Emoji", "SEC Color Emoji",
-                // "SamsungColorEmoji" etc.
-                if emoji_family.is_none()
-                    && lower.contains("samsung")
-                    && lower.contains("emoji")
-                {
-                    emoji_family = Some(family_name.clone());
-                }
             }
         }
     }
-    // Fallback: prefer any *bitmap-based* color emoji family if Samsung's
-    // wasn't found. Currently just "Noto Color Emoji" — caller logs which
-    // path was taken so M4-S14-style verification can confirm.
+    // V1-prep: emoji family detection extracted to crate::font_picker
+    // for testability + OEM-naming-variation coverage. See unit tests
+    // in src/font_picker.rs.
     if emoji_family.is_none() {
-        for name in &all_family_names {
-            let lower = name.to_ascii_lowercase();
-            if lower.contains("noto") && lower.contains("emoji") {
-                emoji_family = Some(name.clone());
-                break;
-            }
-        }
+        let names: Vec<&str> = all_family_names.iter().map(|s| s.as_str()).collect();
+        emoji_family = crate::font_picker::pick_emoji_family(&names);
     }
     // If we still didn't find a CJK family, scan for any family whose face
     // covers a Han codepoint. Prefer Simplified Chinese ("SC") since the
