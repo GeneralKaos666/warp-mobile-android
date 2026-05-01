@@ -165,6 +165,20 @@ class AccessoryRow @JvmOverloads constructor(
         // buffer doesn't overflow on long pastes (10K+ chars). ESC during
         // streaming cancels the in-flight paste.
         addBtn("Paste") { startClipboardPaste() }
+        // M5-S03 round-2: BottomSheet UI scaffold. Opens BlockActionsSheet
+        // showing the most-recent terminal block + Copy / Re-run / Explain.
+        // The Explain button forwards real Block context (command + output)
+        // to AgentBlockSheet, closing the M6-S04 round-2 carry-over.
+        // Round-3 will wire long-press on the SurfaceView with cell-coord
+        // hit-test to per-block selection (depends on M5-S03 GestureRecognizer
+        // touch dispatch — currently state-machine only).
+        addBtn("📋") {
+            BlockActionsSheet(
+                context,
+                packageName = context.packageName,
+                cmdId = cmdId,
+            ).show()
+        }
         // M6-S02: in-app entry point to BYOK SettingsActivity. Required
         // so SettingsActivity can stay android:exported="false" (security
         // review MEDIUM #4) — without an in-app launch path, users (and
