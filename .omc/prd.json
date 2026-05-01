@@ -297,8 +297,8 @@
     {
       "id": "M4-S06",
       "title": "PTY spawn uses $PREFIX/bin/zsh instead of /system/bin/sh (closes M3-S06 hook execution deferral)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main f9bfffb. Round-1 found 4 findings (BLOCKING zsh_body.sh sourcing for AC#3; HIGH writeWarpZshenv race; HIGH PREFIX/tmp race; MEDIUM PATH wording). Round-2 fixed all 4 + introduced recursion bug (.zshenv-zsh_body.sh infinite loop). Round-3 added WARP_ZSH_BODY_SOURCING sentinel (visible to same-process re-entry, unset post-source). Device verified S24U: hooks emit exactly 1 CommandFinished + 1 Precmd + 1 Bootstrapped frame per zsh -c (M3-S05 DCS parser consumable); git --exec-path returns dev.warp.mobile path. M3-S06 hook execution deferral CLOSED end-to-end.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "WarpTerminalService.spawnPty default program changed from /system/bin/sh to /data/data/dev.warp.mobile/files/usr/bin/zsh",
