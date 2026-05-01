@@ -383,8 +383,8 @@
     {
       "id": "M4-S12",
       "title": "M3 carry-over: Option D shared-rlib API split (resolves 6 cross-workspace dups)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main cdc9699 + warp-src 0497f49 (Option D partial: static_grid+dynamic_grid+ime absorbed; font+input+terminal_model stay Option C)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "Per M3-S11 round-1 codex finding: introduce warp_terminal_mobile_facade_android_link rlib in warp-src/crates/ that exposes platform/android types as a public API",
