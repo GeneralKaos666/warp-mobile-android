@@ -17,7 +17,13 @@ fi
 PKG="dev.warp.symlinktest"
 ACTIVITY="${PKG}/.MainActivity"
 LOG_TAG="SymlinkExec"
-ADB_PATH="/Users/iml1s/Library/Android/sdk/platform-tools/adb"
+# Audit pre-public 2026-05-01: hardcoded /Users/iml1s adb path replaced with
+# $ADB env var (or `which adb` fallback) to match the M3-S11-fixed pattern.
+ADB_PATH="${ADB:-$(which adb 2>/dev/null || echo adb)}"
+if ! command -v "${ADB_PATH}" >/dev/null 2>&1; then
+    echo "[symlink-test] ERROR: adb not found. Set \$ADB or add platform-tools to PATH." >&2
+    exit 1
+fi
 
 adb_cmd() {
     "${ADB_PATH}" -s "${DEVICE_SERIAL}" "$@"

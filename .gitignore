@@ -123,3 +123,10 @@ secrets/
 
 # Claude Code per-project state
 .claude/
+
+# spikes/* compiled artifacts (rebuild locally per spike README)
+spikes/vulkan-surface-recreate/android/app/src/main/jniLibs/
+spikes/symlink-jnilibs/app/src/main/jniLibs/
+
+# Defensive: never accidentally commit node_modules
+node_modules/

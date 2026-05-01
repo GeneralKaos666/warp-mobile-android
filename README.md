@@ -1,137 +1,264 @@
-# Warp on Mobile (Android port)
+# Warp on Mobile (Android)
 
-Open-source-first port of [Warp Terminal](https://github.com/warpdotdev/Warp) to Android, with a bundled Termux runtime. Targets F-Droid + GitHub Releases as primary distribution; Play Store is a v3+ optional path.
+An open-source Android port of [Warp Terminal](https://github.com/warpdotdev/Warp) with Block-style command grouping, DCS-hook-driven Block detection, per-cell Vulkan rendering, and a bundled Termux runtime (M4+).
 
-> **Status (2026-04-30)**: **M0 + M1 both CLOSED CONDITIONAL GO**. Plan APPROVED via deliberate-mode RALPLAN consensus + 4 Amendments. M2 (warpui::platform::android backend, 8-12 weeks) ready to start. See [`.omc/handoffs/lead-context-snapshot.md`](.omc/handoffs/lead-context-snapshot.md) and [`.omc/m2-kickoff.md`](.omc/m2-kickoff.md).
+**Status**: M3 CLOSED — DCS+Block pipeline + per-cell Vulkan rendering on Android 12+ (API 31+) &nbsp;|&nbsp; License: AGPL-3.0-only
 
-## What this is
+---
 
-A solo-dev 12-18 month constrained-beta port of Warp's terminal-with-blocks UX to Android. The phone runs a real Linux user space (forked from `termux-packages` with a project-specific prefix), Warp's block-based UI lives in a custom Vulkan/NDK Layer 1, and AI features use cloud Anthropic API (Haiku for inline ghost-text, Sonnet for agent).
+## What is this?
 
-## What this is NOT
+[Warp Terminal](https://github.com/warpdotdev/Warp) introduced a fundamentally different terminal UX: commands and their output are grouped into discrete, navigable Blocks; output is colored and structured rather than a raw scrollback stream; and an AI layer (Haiku for inline ghost-text, Sonnet for agent) is built into the shell workflow. This project is a community-driven port of that experience to Android.
 
-- **Not a Termux fork.** We bundle Termux's package collection (`termux-packages`); we do NOT fork the Termux Android app (`termux-app`). The terminal GUI is Warp.
-- **Not a thin SSH client.** Termius / Blink Shell already do that well. We run a real local shell on-device.
-- **Not a wholesale Compose rewrite.** Warp's `warpui` framework stays; we add an Android backend, not a parallel JVM-side UI.
-- **Not Play-Store-first.** F-Droid is the primary distribution target.
+The port is not a thin wrapper or a Compose-based re-implementation. Warp's own `warpui` framework (a Vulkan/GPU-accelerated UI crate derived from GPUI) runs natively on-device via the Android NDK. An Android-specific backend (`warpui::platform::android`) drives a real `ANativeWindow` surface using `ash` (Vulkan), `cosmic-text` for text shaping, and Android system fonts including CJK. A foreground service manages PTY sessions; Block detection comes from the same DCS-hook parser (`ESC P $ d ... 0x9c`) that Warp's desktop shell integration uses.
 
-## Architecture (5-layer, per Plan Amendments 1-4)
+Starting with M4, the port bundles a forked `termux-packages` collection so the device ships a proper Linux `$PREFIX` (zsh, GNU coreutils, APT). The terminal GUI is Warp; the runtime is Termux's package ecosystem rehosted under this project's package name. This is not a Termux fork — we do not fork `termux-app`.
+
+This is a solo-developer project on a 12-18 month constrained-beta timeline. It is honest-beta software: flagship Android devices work; low-end devices and full Termux integration are still in progress. F-Droid and GitHub Releases are the primary distribution targets; Play Store is a v3+ optional path.
+
+---
+
+## Current status
+
+| Milestone | Description | State | Stories |
+|-----------|-------------|-------|---------|
+| **M0** | Foundation spike — Vulkan recreate, symlink-jniLibs, warpui trait diff | CLOSED ✅ | — |
+| **M1** | Android PTY/FGS prototype — no UI; service + PTY plumbing only | CLOSED ✅ | 10/10 PASS |
+| **M2** | `warpui::platform::android` backend — Vulkan renderer, FontDB, IME, gestures | CLOSED ✅ | 12/14 PASS |
+| **M3** | Facade + DCS parser + Block model + dynamic_grid renderer | CLOSED ✅ | 12/12 PASS |
+| **M4** | Termux runtime — zsh + GNU coreutils + APT + F-Droid distribution prep | IN PROGRESS 🚧 | 3/15 |
+| **M5** | Mobile UX polish — colored ls, pixel-similarity gate, low-end devices | Pending |  |
+| **M6** | AI integration — Haiku inline ghost-text, Sonnet agent | Pending |  |
+
+**Primary test device**: Galaxy S24 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / API 36).
+**Minimum supported**: Android 12 (API 31), Adreno 6xx+ GPU (raised from API 26 in Plan Amendment 3 after Mali-G71 devices failed the 200ms swapchain gate).
+Low-end Adreno 618-642L devices (Pixel 4a, Galaxy A52s) are on the roadmap but not yet verified against M3 acceptance criteria.
+
+---
+
+## What works today (M3 close)
+
+All of the following are empirically verified on Galaxy S24 Ultra.
+
+**Vulkan rendering**
+
+- 60fps per-cell dynamic_grid renderer during active touch-drag scroll (`p95 = 13ms`, 44% margin under the 16.6ms gate; `peak_fps = 144`)
+- Per-cell colored glyph rendering via `warpui::platform::android` + `cosmic-text`; CJK characters render without tofu via Android system font fallback
+- Swapchain recreate across `onPause`/`onResume`/rotation tested at 100 cycles; p95 < 200ms on Adreno 6xx+
+
+**Terminal pipeline (end-to-end)**
+
+- Real PTY → terminal model → per-cell renderer (`ls -la /system` works: 995 glyph quads, 39 atlas glyphs, 1323 bytes ingested, 19 visible rows)
+- SGR ANSI color (RED/GREEN/BLUE/reset) correctly routed through the renderer; toybox `ls` on stock Android does not emit ANSI colors — GNU coreutils `ls --color=auto` via Termux (M5) closes that gap
+- Scrollback ring buffer: ≥1000 lines retained; 2000 lines injected → 1000 retained correctly
+
+**Block model**
+
+- DCS hook parser extracted from upstream Warp (`ESC P $ d ... 0x9c` frame sequence); `dcs_hook_count = 9`, `dcs_error_count = 0` in device smoke test
+- `Block` objects produced with `start_time`, `command`, `exit_code`; 3-command test (`ls`, `whoami`, `false`) yields `exit_codes = [0, 0, 1]`
+- `terminalBlocksDump` JNI export produces JSON-serialized Block list accessible from Kotlin
+
+**Gestures and input**
+
+- Touch-drag scroll: 195 distinct clamped offset positions observed over 5s gesture; fling momentum via Android `GestureDetector`
+- Gboard (English + Pinyin) IME: one character per keystroke on editable region; composing-text (Chinese) updates in-place without flicker
+- `WindowInsets` correctly reserves bottom region for IME; full-screen mode hides nav bar
+
+**APK size**
+
+- Release APK: **7.4 MB** (7,775,816 bytes); 90.7% margin under the 80 MB gate
+- Combined APK + bootstrap: 7.4 MB today; ~73 MB headroom for the Termux bundle planned in M4
+- Vulkan validation layer absent from release build
+
+**Upstream compatibility**
+
+- Cherry-pick dry-run against 10 upstream `warpdotdev/Warp` commits: 3 conflicting files (1 in `app/`, 1 in `warpui/`, 1 in `warpui_core/`); estimated full resolution 25-50 min
+
+---
+
+## Architecture
+
+The project follows a 5-layer model:
 
 ```
-L0  Android Host Service     — Activity / Service lifecycle, FGS, JNI shim, IME, clipboard
-                               (M1 CLOSED: Service skeleton + PTY plumbing chain Task#28→#33→#35)
-L1  WarpUI Android backend   — warpui::platform::android (A4 derived from headless), Vulkan via ash + ANativeWindow
-                               (M0 spike CLOSED <200ms p95; M2 main work)
-L2a Terminal Session Engine  — crates/warp_terminal + clean deps (M3 scope)
-L2b Warp Product Logic       — app/src/terminal/... subset + facade crate under D1.5-hybrid (M3 scope)
-L3  Termux Runtime+Packages  — fork termux-packages with new $PREFIX, bootstrap zip in APK
-                               (M0 symlink-jniLibs path verified; M4 main work)
+L0  Android Host Service        Activity / Service lifecycle, FGS notification, JNI shim,
+                                IME, clipboard. Rust crate: crates/android-host/.
+                                (M1 closed: PTY plumbing, 45 unit tests passing)
+
+L1  WarpUI Android backend      warpui::platform::android — Vulkan (ash + ANativeWindow),
+                                FontDB (cosmic-text + system fonts), TextLayoutSystem,
+                                IME input, gestures, rotation lifecycle.
+                                Derived from Warp's headless backend; 4 hand-written areas.
+                                (M2 closed: static_grid + dynamic_grid; M3 adds per-cell DCS)
+
+L2a Terminal crates             crates/warp_terminal and clean dependencies — reused
+                                largely as-is from upstream Warp (warp-src/). No Android
+                                modifications needed.
+
+L2b Warp facade                 warp_terminal_mobile_facade — wraps the app::terminal::*
+                                subset needed on Android (Block, BlockList, ANSI/DCS parser,
+                                Session API, AppContext, FeatureFlag, SSH-noop stub).
+                                Compiled via cargo ndk; app/ crate NOT in Android build graph
+                                (Plan Amendment 5: extraction, not cfg-gating).
+                                (M3 closed: 7 modules + extracted app_terminal::* subtree)
+
+L3  Termux Runtime              Fork of termux-packages retargeted to dev.warp.mobile prefix.
+                                Bootstrap zip bundled in APK; first-launch extraction to
+                                /data/data/dev.warp.mobile/files/termux/.
+                                (M4 in progress: zsh + GNU coreutils + APT)
 ```
 
-Cloud AI runs as a separate concern, not a layer. Local llama.cpp is v2+ opt-in.
+Cloud AI (Anthropic API — Haiku + Sonnet) runs as a separate concern, not a layer. User-supplied API key (BYOK). Planned for M6; AGPL §13 not triggered by client-only API consumption.
 
-## Status by milestone
+**Plan Amendment 5 (M3)**: the original plan gated `app::terminal::*` desktop-only code paths with `#[cfg]` so the full `app/` crate could build for Android. Empirical measurement found 41 cfg-gate lines yielded 145 compile errors across 19 `app/` subsystems — architecture mismatch, not a budget overrun. Amendment 5 pivoted to extraction: the relevant `Block`, `BlockList`, DCS parser, and ANSI dispatch types are extracted into `warp_terminal_mobile_facade::app_terminal::*`. The `app/` crate does not appear in the Android build graph at all.
 
-- ✅ **M0** Foundation spike — CLOSED CONDITIONAL GO @ commit `24a2c1c`. L1 Vulkan recreate 7-52ms (all <<200ms gate); L4 PROVISIONAL GO. Evidence in `.omc/m0-artifacts/M0-go-no-go.md`.
-- ✅ **M1** Android PTY/Service prototype — CLOSED CONDITIONAL GO @ commit `f7feb3f`. **10/10 stories PASS** on Galaxy S24 Ultra (delta_ms=26 reattach, observed="24 80" resize, orphans=0 clean kill, 30-min idle PID-constant + 4ms pwd). Plan §6 M1 ACs 5/5 satisfied for flagship. Evidence in `.omc/m1-artifacts/M1-go-no-go.md`.
-- 🟡 **M2** WarpUI Android backend — READY TO START (8-12 weeks). See [`.omc/m2-kickoff.md`](.omc/m2-kickoff.md).
-- 📅 **M3** Warp facade integration (8-12 weeks)
-- 📅 **M4** Termux bootstrap + package story (10-16 weeks)
-- 📅 **M5** Mobile UX polish (12-16 weeks)
-- 📅 **M6** AI integration (Haiku inline + Sonnet agent)
+For the full plan including all 5 amendments and M0-M6 acceptance criteria, see [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md).
 
-## Repository layout
+Upstream project: [warpdotdev/Warp](https://github.com/warpdotdev/Warp) (also AGPL-3.0).
 
-```
-warp_termux/
-├── README.md                 ← you are here
-├── CLAUDE.md                 ← AI agent entry point — read first if you're an AI session
-├── LICENSE-AGPL              ← inherited from warpdotdev/Warp
-├── NOTICE.md                 ← upstream attributions, license obligations
-├── progress.txt              ← iteration log with lessons learned (M0+M1)
-├── Cargo.toml                ← Rust workspace root
-├── crates/android-host/      ← Rust JNI host (M1 deliverable: PTY + ping)
-├── android/                  ← Gradle project (M1 deliverable: FGS + Service)
-├── tools/scripts/            ← Device test drivers (test-pty-*.sh, etc.)
-├── spikes/                   ← M0 spike crates (vulkan-surface-recreate, symlink-jnilibs)
-├── warp-src/                 ← gitignored — Warp upstream fork (separate git repo)
-├── termux-packages/          ← gitignored — Termux fork on warp-mobile/main (M4 runtime)
-└── .omc/
-    ├── plans/                ← canonical RALPLAN with 4 amendments
-    ├── handoffs/             ← lead-context-snapshot.md is the resume entry point
-    ├── m0-artifacts/         ← M0 evidence + go/no-go
-    ├── m1-artifacts/         ← M1 evidence (S05 evidence, S06-S09 result.json, go/no-go)
-    ├── m2-kickoff.md         ← M2 forward-looking dispatch instructions
-    ├── m4-artifacts/         ← M4 evidence (S02 fork retarget, future bootstrap zip + sealing)
-    └── prd.json              ← M1 stories (10/10 PASS); subsequent milestones auto-generated
-```
+---
 
-## Build prerequisites
+## Building locally
 
-```
-- Rust toolchain (1.88+, with target aarch64-linux-android)
-- cargo-ndk (4.1+)
-- Android NDK r25c+ (or the bundled r29 path documented in .envrc)
-- JDK 17 (for Gradle/Android tooling)
-- direnv (recommended) for auto-loading .envrc
-```
+### Prerequisites
 
-### Fresh-clone setup (gh clone)
+- **Rust** 1.88+ with target `aarch64-linux-android` (`rustup target add aarch64-linux-android`)
+- **cargo-ndk** 4.1+ (`cargo install cargo-ndk`)
+- **Android NDK** r25c or newer (r29 also works; set `ANDROID_NDK_HOME`)
+- **Android SDK** with build-tools 34+ and platform `android-36`
+- **JDK 17** (for Gradle)
+- **bash** 4.2+ (macOS ships bash 3; install via Homebrew: `brew install bash`)
+- **direnv** (recommended) — auto-loads `.envrc` with NDK/SDK paths
+
+### Fresh-clone setup
 
 ```bash
-# 1. Clone main repo
-gh repo clone ImL1s/warp-mobile-android
+# 1. Clone this repo
+git clone https://github.com/ImL1s/warp-mobile-android.git
 cd warp-mobile-android
 
-# 2. Clone warp-src submodule manually (gitignored — separate fork)
-gh repo clone ImL1s/warp warp-src
+# 2. Clone the Warp upstream fork (gitignored — separate git repo)
+git clone https://github.com/ImL1s/warp warp-src
 cd warp-src && git checkout warp-mobile/m0-facade && cd ..
 
-# 2b. Clone termux-packages fork (M4 runtime, gitignored — separate fork)
-gh repo clone ImL1s/termux-packages termux-packages
+# 3. (M4+) Clone termux-packages fork (gitignored — separate git repo)
+git clone https://github.com/ImL1s/termux-packages termux-packages
 cd termux-packages && git checkout warp-mobile/main && cd ..
-# Optional: re-run idempotent retargeting (no-op if already on dev.warp.mobile)
-# bash termux-packages/scripts/setup-warp-prefix.sh
 
-# 3. Render local cargo config from template
-tools/scripts/setup-cargo-config.sh
+# 4. Render the local Cargo config from the checked-in template
+#    (the template avoids committing machine-absolute NDK paths)
+bash tools/scripts/setup-cargo-config.sh
 
-# 4. Build native lib for Android
+# 5. Build the native Rust library for Android arm64
 cargo ndk -t arm64-v8a build -p warp-mobile-android-host
 
-# 5. Build APK
+# 6. Build the debug APK
 cd android && ./gradlew :app:assembleDebug && cd ..
 
-# 6. Install + launch on connected device (requires adb)
+# 7. Install on a connected device (API 31+, Adreno 6xx+)
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n dev.warp.mobile/.MainActivity
-
-# 7. Trigger PTY spawn (no UI yet — adb-driven only)
-adb shell "am start-foreground-service -n 'dev.warp.mobile/.WarpTerminalService' \
-  -a dev.warp.mobile.PTY_SPAWN --es cmd 'sh'"
-
-# 8. Read logcat to see PTY output
-adb logcat -d | grep WarpTerminal:PtyOutput
 ```
 
-## License
+### Build sanity checks
 
-AGPL-3.0-only. See [`LICENSE-AGPL`](LICENSE-AGPL) and [`NOTICE.md`](NOTICE.md).
+```bash
+# Host-side unit tests (45 passing at M3 close)
+cargo test -p warp-mobile-android-host
+
+# Facade tests in warp-src workspace (73 passing at M3 close)
+cargo test -p warp_terminal_mobile_facade --manifest-path warp-src/Cargo.toml
+
+# Release APK size check (should be ~7.4 MB at M3 baseline)
+cd android && ./gradlew :app:assembleRelease
+du -h app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+### Device test drivers
+
+All device drivers take `<serial>` as the first argument — never hardcoded. Find your serial with `adb devices`.
+
+```bash
+# PTY reattach across rotation (M1 acceptance #2)
+bash tools/scripts/test-pty-reattach.sh <serial>
+
+# DCS hook parser + ANSI color smoke (M3-S05)
+bash tools/scripts/test-ansi-color.sh <serial>
+
+# Per-cell renderer + live ls -la /system (M3-S08)
+bash tools/scripts/test-dynamic-grid.sh <serial>
+
+# Block model via DCS hook (M3-S07)
+bash tools/scripts/test-block-model.sh <serial>
+
+# Scrollback 1000 lines + 60fps touch-drag scroll (M3-S09)
+bash tools/scripts/test-scroll.sh <serial>
+```
+
+---
+
+## Project structure
+
+```
+warp-mobile-android/
+├── Cargo.toml                  Rust workspace root
+├── LICENSE-AGPL                AGPL-3.0-only (inherited from warpdotdev/Warp)
+├── NOTICE.md                   Third-party attributions and license obligations
+├── CLAUDE.md                   AI agent entry point (if you're an AI session, read this)
+├── progress.txt                Iteration log with lessons learned
+│
+├── crates/
+│   └── android-host/           Rust JNI host (~48 exported functions): PTY, renderer,
+│                               IME, gestures, Block aggregation, dynamic_grid
+│
+├── android/                    Gradle project
+│   └── app/src/main/java/
+│       └── dev/warp/mobile/    Kotlin: MainActivity, WarpTerminalService,
+│                               PtyManager, NativeBridge, WarpInputView, ...
+│
+├── tools/
+│   └── scripts/                Device test drivers (test-*.sh <serial>)
+│
+├── spikes/                     M0 spike crates (vulkan-surface-recreate, symlink-jnilibs)
+│
+├── warp-src/                   GITIGNORED — Warp upstream fork (separate git repo)
+│                               Clone: git clone ImL1s/warp → checkout warp-mobile/m0-facade
+│
+├── termux-packages/            GITIGNORED — Termux fork (separate git repo, M4+)
+│                               Clone: git clone ImL1s/termux-packages → checkout warp-mobile/main
+│
+└── .omc/
+    ├── plans/                  Canonical RALPLAN with 5 amendments
+    ├── m0-artifacts/           M0 evidence + go/no-go
+    ├── m1-artifacts/           M1 evidence + go/no-go (10/10 PASS)
+    ├── m2-artifacts/           M2 evidence + go/no-go (12/14 PASS)
+    └── m3-artifacts/           M3 evidence + go/no-go (12/12 PASS)
+```
+
+Note: `.cargo/config.toml` is gitignored because it contains machine-absolute NDK paths. The template at `.cargo/config.toml.template` is the source of truth; run `tools/scripts/setup-cargo-config.sh` to render it.
+
+---
 
 ## Contributing
 
-This is currently a solo-dev personal project. Contribution guidelines and PR process will be defined post-M2 alpha (when external interest becomes meaningful). For now, the canonical communication channel is `.omc/handoffs/` (stage decisions) and `.omc/m{0,1}-artifacts/` (evidence).
+This project is AGPL-3.0-only. Any derivative work you distribute — including modified APKs — must also be AGPL-3.0. See [`LICENSE-AGPL`](LICENSE-AGPL) and [`NOTICE.md`](NOTICE.md) for the full obligation summary.
 
-## For AI assistants resuming this project
+The project is currently solo-developer driven. Pull requests are welcome, but please open an Issue first to coordinate — changes that conflict with the active milestone scope are likely to be deferred. The milestone breakdown and acceptance criteria are in [`.omc/plans/ralplan-warp-on-mobile.md`](.omc/plans/ralplan-warp-on-mobile.md) §6.
 
-**If you are an AI instance picking this project up after a context compact, in a new session, or from a fresh `gh clone`**: read [`CLAUDE.md`](CLAUDE.md) first. It is the canonical AI agent entry point and routes to the appropriate handoff document.
+Distribution: F-Droid + GitHub Releases are the primary targets. F-Droid metadata (`fastlane/metadata/android/` + reproducible build declaration) is a M4 deliverable. Play Store is a v3+ optional path.
 
-The short version:
-1. Read `CLAUDE.md` — explains project conventions + points to handoff
-2. Read `.omc/handoffs/lead-context-snapshot.md` — full lead state (identity, user prefs, M0+M1 status, M2 ready)
-3. Read `.omc/m2-kickoff.md` — if M2 not yet started, this is the dispatch path
-4. Read `.omc/plans/ralplan-warp-on-mobile.md` — canonical plan with 4 amendments at top
-5. Read `.omc/prd.json` — current milestone story states
-6. Read `progress.txt` — iteration log
+---
 
-Designed so you don't need conversation history scrollback to resume.
+## License and acknowledgments
+
+**License**: AGPL-3.0-only. See [`LICENSE-AGPL`](LICENSE-AGPL).
+
+This project is built on:
+
+- [warpdotdev/Warp](https://github.com/warpdotdev/Warp) — parent project; `warpui`, `warp_terminal`, `warpui_core`, and the DCS hook parser are reused and extended. Also AGPL-3.0.
+- [termux/termux-packages](https://github.com/termux/termux-packages) — package ecosystem (GPL-3.0-or-later). Forked and retargeted to `dev.warp.mobile` prefix for M4+ bundled runtime. Binary distributions include corresponding source per AGPL §6 + GPL obligations.
+- [pop-os/cosmic-text](https://github.com/pop-os/cosmic-text) — text shaping and layout used in the `FontDB` and `TextLayoutSystem` implementations inside `warpui::platform::android`.
+
+Architecture reference (no code copied): [termux/termux-app](https://github.com/termux/termux-app) (GPL-3.0-only) for Android terminal app patterns and [itsbalamurali/gpui-mobile](https://github.com/itsbalamurali/gpui-mobile) for `ANativeWindow` / platform trait patterns.
+
+See [`NOTICE.md`](NOTICE.md) for the full attribution table including pinned upstream commit hashes and per-project license obligation notes.
