@@ -20,6 +20,9 @@
          later ghost-text + agent task streaming. No background-network
          use; app must be foreground to make calls. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- M6-S05: ConnectivityManager.registerNetworkCallback for offline
+         graceful-degrade. Reads-only; no PII. Standard permission. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:label="@string/app_name"

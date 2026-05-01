@@ -55,7 +55,12 @@ object AnthropicClient {
 
     /** Result of a Test Connection probe. */
     sealed class TestResult {
-        data class Ok(val responseText: String, val latencyMs: Long) : TestResult()
+        data class Ok(
+            val responseText: String,
+            val latencyMs: Long,
+            val inputTokens: Int = 0,
+            val outputTokens: Int = 0,
+        ) : TestResult()
         /** HTTP 4xx/5xx with parsed error message from the API body. */
         data class HttpError(val code: Int, val message: String) : TestResult()
         /** Network / TLS / DNS error. */
@@ -157,7 +162,13 @@ object AnthropicClient {
                 return TestResult.HttpError(code, "200 OK but missing 'content' field")
             }
             val firstText = content.optJSONObject(0)?.optString("text", "") ?: ""
-            return TestResult.Ok(firstText, elapsed)
+            // M6-S06: extract usage tokens for telemetry. Anthropic
+            // includes `usage: { input_tokens, output_tokens }` in
+            // every successful response.
+            val usage = parsed.optJSONObject("usage")
+            val inputTokens = usage?.optInt("input_tokens", 0) ?: 0
+            val outputTokens = usage?.optInt("output_tokens", 0) ?: 0
+            return TestResult.Ok(firstText, elapsed, inputTokens, outputTokens)
         } catch (e: Throwable) {
             Log.e(LOG_TAG, "testConnection threw: ${e.javaClass.simpleName}: ${e.message}")
             return TestResult.NetworkError("${e.javaClass.simpleName}: ${e.message ?: "(unknown)"}")

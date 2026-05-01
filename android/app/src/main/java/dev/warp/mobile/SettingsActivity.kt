@@ -43,6 +43,8 @@ class SettingsActivity : AppCompatActivity() {
     private val LOG_TAG = "WarpSettings"
     private lateinit var keyInput: EditText
     private lateinit var statusText: TextView
+    /** M6-S06: cumulative-tokens display TextView (refreshed after Test). */
+    private lateinit var usageText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,20 +115,46 @@ class SettingsActivity : AppCompatActivity() {
         }
         root.addView(statusText, lpMatchWrap())
 
+        // M6-S06 cumulative-tokens display.
+        usageText = TextView(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(0xFFCCCCCC.toInt())
+            setPadding(0, dp(20), 0, dp(8))
+            // monospace so the number columns line up
+            typeface = android.graphics.Typeface.MONOSPACE
+        }
+        root.addView(usageText, lpMatchWrap())
+        refreshUsageDisplay()
+
+        val resetBtn = button("Reset session counters") {
+            AiUsageTracker.resetSession()
+            refreshUsageDisplay()
+            Toast.makeText(this, "Session counters reset", Toast.LENGTH_SHORT).show()
+        }
+        root.addView(resetBtn, lpMatchWrap())
+
         // Cost-warning footer per Death-pit #3 in M6-kickoff-confirmed.md
         val costWarning = TextView(this).apply {
             text = "Costs (Anthropic public pricing 2026-Q2):\n" +
                 "  Ghost-text via Haiku: ~\$0.005 per completion\n" +
                 "  Agent task via Sonnet: ~\$0.05 per task\n" +
-                "Heavy use can cost \$1-5/day. Token usage tracked\n" +
-                "in M6-S06 (cumulative this session shown here)."
+                "Heavy use can cost \$1-5/day."
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF888888.toInt())
-            setPadding(0, dp(24), 0, 0)
+            setPadding(0, dp(20), 0, 0)
         }
         root.addView(costWarning, lpMatchWrap())
 
         setContentView(root)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Refresh in case usage changed via other paths (PTY-side AI
+        // calls in AccessoryRow update the same singleton).
+        if (::usageText.isInitialized) {
+            refreshUsageDisplay()
+        }
     }
 
     private fun onSave() {
@@ -173,13 +201,31 @@ class SettingsActivity : AppCompatActivity() {
             setStatus("Enter a key before testing")
             return
         }
+        // M6-S05: short-circuit when offline.
+        if (!AiConnectivity.get(this).isOnline()) {
+            setStatus("✗ No network — turn off airplane mode and retry")
+            return
+        }
         setStatus("Testing /v1/messages with model claude-haiku-4-5...")
         lifecycleScope.launch(Dispatchers.IO) {
             val result = AnthropicClient.testConnection(key)
             withContext(Dispatchers.Main) {
                 val msg = when (result) {
-                    is AnthropicClient.TestResult.Ok ->
-                        "✓ OK (${result.latencyMs} ms): \"${result.responseText.take(60)}\""
+                    is AnthropicClient.TestResult.Ok -> {
+                        // M6-S06: record telemetry for the Test
+                        // Connection call. `kind=ghost` because
+                        // Test Connection uses the same Haiku
+                        // model + 1-token budget.
+                        AiUsageTracker.record(
+                            this@SettingsActivity,
+                            kind = "ghost",
+                            model = "claude-haiku-4-5",
+                            inputTokens = result.inputTokens,
+                            outputTokens = result.outputTokens,
+                            latencyMs = result.latencyMs
+                        )
+                        "✓ OK (${result.latencyMs} ms, in=${result.inputTokens} out=${result.outputTokens} tokens): \"${result.responseText.take(50)}\""
+                    }
                     is AnthropicClient.TestResult.HttpError ->
                         "✗ HTTP ${result.code}: ${result.message.take(120)}"
                     is AnthropicClient.TestResult.NetworkError ->
@@ -188,8 +234,26 @@ class SettingsActivity : AppCompatActivity() {
                         "✗ Missing or empty key"
                 }
                 setStatus(msg)
+                refreshUsageDisplay()
                 Log.i(LOG_TAG, "test result: $msg")
             }
+        }
+    }
+
+    /**
+     * M6-S06: update the cumulative-tokens TextView at the bottom of
+     * Settings. Called after every successful Test Connection + on
+     * activity resume. Reads from AiUsageTracker.snapshot().
+     */
+    private fun refreshUsageDisplay() {
+        val s = AiUsageTracker.snapshot()
+        usageText.text = buildString {
+            append("Session usage (since launch):\n")
+            append("  Ghost calls:  ${s.ghostCalls}  (p95 latency ${s.ghostP95Ms}ms; cap 500ms)\n")
+            append("  Agent calls:  ${s.agentCalls}  (p95 latency ${s.agentP95Ms}ms; cap 8000ms)\n")
+            append("  Input tokens: ${s.inputTokens}\n")
+            append("  Output tokens: ${s.outputTokens}\n")
+            append("  Reset session counters with the button below.")
         }
     }
 

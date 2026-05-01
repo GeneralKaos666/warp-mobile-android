@@ -18,6 +18,11 @@ import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.Toast
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 
@@ -99,7 +104,16 @@ class AccessoryRow @JvmOverloads constructor(
         // Order chosen by frequency in shell day-to-day:
         // modifiers first, then escape/tab, then arrows, then common
         // shell punctuation. Mic is rightmost — M5-S04 voice input.
-        addBtn("Esc")  { sendBytes(byteArrayOf(0x1B)) }
+        addBtn("Esc")  {
+            // M6-S03 round-4: ESC also cancels any in-flight AI stream.
+            // No-op if no stream is running (cancelActiveStream early-
+            // returns on activeStreamHandle==0). User-visible behavior:
+            // tapping ESC during a streaming AI response stops the
+            // stream + sends ESC byte to PTY (consistent dual purpose
+            // matches Termux's ESC behavior).
+            cancelActiveStream()
+            sendBytes(byteArrayOf(0x1B))
+        }
         addBtn("Tab")  { sendBytes(byteArrayOf(0x09)) }
         ctrlButton = addBtn("Ctrl") { ctrlPending = !ctrlPending }
         altButton  = addBtn("Alt")  { altPending  = !altPending }
@@ -149,6 +163,11 @@ class AccessoryRow @JvmOverloads constructor(
         // "echo SUGGESTION:..." line so users can see it in their
         // terminal scrollback.
         addBtn("💡") { triggerAiSuggest() }
+        // M6-S04: agent task button. Opens AgentBlockSheet (Dialog
+        // with streaming Sonnet response). Round-1 hardcoded prompt;
+        // round-2 will accept a Block ID parameter from a Long-press
+        // BottomSheet menu (per M5-S03 deferred UI integration).
+        addBtn("🤖") { triggerAgentTask() }
         // Mic placeholder for M5-S04. Voice input via RecognizerIntent is a
         // future enhancement (need explicit RECORD_AUDIO permission flow);
         // round-1 ships paste streaming as the headline M5-S04 feature.
@@ -437,16 +456,37 @@ class AccessoryRow @JvmOverloads constructor(
      * so the user sees progressive output instead of one big toast at
      * the end.
      *
-     * Cancellation: round-3 doesn't yet wire ESC to cancel because
-     * the user-typing IME interception is round-4 work. The handle
-     * is exposed via a private field so a future ESC handler in
-     * AccessoryRow.sendBytes() can call cancelActiveStream().
+     * Cancellation: ESC button claims the handle via getAndSet(0L)
+     * — whichever path (button vs poll-loop finally) wins ownership
+     * does the Cancel + Free, the loser is a no-op. Prevents a TOCTOU
+     * use-after-free where button reads handle, poll-loop frees the
+     * Arc, then button calls Cancel on the freed handle (round-3
+     * code-review CRITICAL).
      */
-    @Volatile private var activeStreamHandle: Long = 0L
+    private val activeStreamHandle = AtomicLong(0L)
+
+    /**
+     * AI coroutine scope. SupervisorJob so one failing stream doesn't
+     * cancel the next 💡 tap. Canceled in onDetachedFromWindow so a
+     * rotation/teardown doesn't leak the in-flight stream + Context.
+     * Replaces the prior GlobalScope.launch (round-3 code-review LOW).
+     */
+    private val aiScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun triggerAiSuggest() {
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        // M6-S05 offline check: short-circuit before spinning up a
+        // coroutine + reading Keystore + posting HTTPS that would just
+        // fail with a network error. Banner-style toast guides user to
+        // toggle airplane mode off.
+        if (!AiConnectivity.get(context).isOnline()) {
+            Toast.makeText(
+                context,
+                "AI features paused — no network. Toggle airplane mode off and try again.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        aiScope.launch {
             val apiKey = try {
                 AiKeyStore.load(context)
             } catch (e: Throwable) {
@@ -486,7 +526,7 @@ class AccessoryRow @JvmOverloads constructor(
                 }
                 return@launch
             }
-            activeStreamHandle = handle
+            activeStreamHandle.set(handle)
             Log.i(LOG_TAG, "ai: stream started handle=$handle")
 
             // Open-line indicator in PTY.
@@ -524,6 +564,21 @@ class AccessoryRow @JvmOverloads constructor(
                                 LOG_TAG,
                                 "ai: stream done elapsedMs=$elapsed total_chars=${assembled.length}"
                             )
+                            // M6-S06: per-request token telemetry. The
+                            // streaming pipe doesn't expose Anthropic's
+                            // `usage` event today (round-3 only forwards
+                            // content_block_delta), so estimate from
+                            // assembled char count: ~4 chars per token
+                            // (matches AgentBlockSheet's estimator).
+                            // Architect-review gap close.
+                            AiUsageTracker.record(
+                                context,
+                                kind = "ghost",
+                                model = "claude-haiku-4-5",
+                                inputTokens = prompt.length / 4,
+                                outputTokens = assembled.length / 4,
+                                latencyMs = elapsed,
+                            )
                             sendPtyComment("\n# WARP-AI done (${elapsed}ms)\n")
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 Toast.makeText(
@@ -550,36 +605,75 @@ class AccessoryRow @JvmOverloads constructor(
                     }
                 }
             } finally {
-                // ALWAYS free the handle to drop the Arc on the Rust
-                // side. activeStreamHandle gets cleared so the next
-                // tap doesn't try to cancel a freed handle.
-                if (activeStreamHandle == handle) {
-                    activeStreamHandle = 0L
-                }
-                try {
-                    NativeBridge.aiGhostStreamFree(handle)
-                } catch (e: Throwable) {
-                    Log.e(LOG_TAG, "ai: free threw: ${e.message}")
+                // Atomic-claim free path: only the path that wins the
+                // CAS owns the Free call. If the ESC button (or a new
+                // 💡 tap that calls cancelActiveStream) already claimed
+                // the handle, it has already done both Cancel+Free and
+                // we skip — preventing a double-free on the Rust Arc.
+                if (activeStreamHandle.compareAndSet(handle, 0L)) {
+                    try {
+                        NativeBridge.aiGhostStreamFree(handle)
+                    } catch (e: Throwable) {
+                        Log.e(LOG_TAG, "ai: free threw: ${e.message}")
+                    }
                 }
             }
         }
     }
 
     /**
-     * Cancel any in-flight AI stream. Future hook: ESC key in
-     * AccessoryRow.sendBytes() will call this to abort suggestion.
+     * Cancel any in-flight AI stream. Wired to the ESC button (round-4)
+     * + called from triggerAiSuggest itself before starting a new stream
+     * so two simultaneous 💡 taps don't run two streams in parallel.
+     *
+     * Atomic-claim semantics: getAndSet(0L) returns the handle and
+     * clears the slot in one step. Whoever wins the claim owns BOTH
+     * cancel + free; whoever loses (the poll-loop finally) is a no-op.
+     * Prevents the round-3 review CRITICAL — a TOCTOU where the cancel
+     * read a handle the poll-loop subsequently freed.
      */
-    @Suppress("unused")
     fun cancelActiveStream() {
-        val h = activeStreamHandle
+        val h = activeStreamHandle.getAndSet(0L)
         if (h != 0L) {
             try {
                 NativeBridge.aiGhostStreamCancel(h)
-                Log.i(LOG_TAG, "ai: cancel requested for handle=$h")
+                Log.i(LOG_TAG, "ai: cancel + free claimed for handle=$h")
             } catch (e: Throwable) {
                 Log.e(LOG_TAG, "ai: cancel threw: ${e.message}")
             }
+            try {
+                NativeBridge.aiGhostStreamFree(h)
+            } catch (e: Throwable) {
+                Log.e(LOG_TAG, "ai: free threw: ${e.message}")
+            }
         }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        // Cancel any in-flight stream + cancel the scope so the launched
+        // coroutine doesn't keep ticking after the View detaches.
+        cancelActiveStream()
+        aiScope.cancel()
+    }
+
+    /**
+     * M6-S04: open the Agent BottomSheet with a hardcoded round-1 prompt.
+     * Round-2 will accept a Block ID + read its command + output via
+     * `terminalBlocksDump` so the agent gets real shell context.
+     */
+    private fun triggerAgentTask() {
+        if (!AiConnectivity.get(context).isOnline()) {
+            Toast.makeText(
+                context,
+                "AI features paused — no network. Toggle airplane mode off and try again.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val prompt = "Explain what `du -sh *` does in a Unix shell, " +
+            "and how I'd interpret its output. Keep it to 3 short paragraphs."
+        AgentBlockSheet(context, prompt).show()
     }
 
     /** Helper: send a literal string (e.g. AI streamed comment) to the PTY. */
