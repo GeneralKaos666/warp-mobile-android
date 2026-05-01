@@ -190,8 +190,8 @@
     {
       "id": "M3-S11",
       "title": "Cross-workspace dup unification + cherry-pick dry-run (M3 Acceptance #5 + M2 carry-overs)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-3 PASS @ main b602874 (Option C documented divergence; cherry-pick 3conflicts/10commits Pre-mortem C #4 NOT TRIPPED; 5/5 M2 nits absorbed)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "M2 carry-over cleanup: unify the 4 cross-workspace duplicates (font_render.rs main↔warp-src/font.rs; static_grid.rs both copies; ime.rs both copies; input.rs both copies) — option A=main consumes warp-src via Cargo.toml path dep; option B=warp-src is the only copy + main repo deletes its mirror; document decision rationale",
