@@ -33,7 +33,7 @@
 
 6. **What this means for the M4 milestone**:
    - **M4-S02** (fork + $PREFIX retargeting): UNCHANGED. The fork at `ImL1s/termux-packages` still serves as the policy source-of-truth for which packages we retarget.
-   - **M4-S03** (this story): build pipeline is `tools/scripts/build-bootstrap.sh` not `termux-packages/scripts/build-bootstraps.sh`. Round-5 PASS at main `879449b` / CI run `25208634206`.
+   - **M4-S03** (this story): build pipeline is `tools/scripts/build-bootstrap.sh` not `termux-packages/scripts/build-bootstraps.sh`. Round-5 produced GREEN artifact evidence at main `879449b` / CI run `25208634206` (sha256 `252327...e779297e`); rounds 5+6 were `CODEX_REVISE` on the surrounding source-of-truth (PRD/ralplan/docs); Amendment 6 added at b2a769c; round-7 PASS pending review verdict. Final round-N PASS commit recorded in `.omc/prd.json` `M4-S03.verifiedBy` once codex returns CODEX_PASS.
    - **M4-S05** (atomic extraction): unchanged in scope; AC amended to verify post-extraction dynamic linking succeeds without LD_LIBRARY_PATH override.
    - **M4-S06** (PTY spawn $PREFIX/bin/zsh): scope expanded to include zsh-specific shell-array config + git GIT_EXEC_PATH. AC amended to require device verification.
    - **M4-S08** (reproducibility): unchanged in scope; pins upstream apt snapshot for byte-stable rebuilds.
