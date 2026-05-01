@@ -159,8 +159,8 @@
     {
       "id": "M3-S09",
       "title": "Scrollback ≥1000 lines + 60fps touch-drag scroll (M3 Acceptance #2 flagship)",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-4 PASS @ main 0b70e18 (4 rounds: top-boundary sync + driver split + sign correction + driver hygiene)",
       "ownerHint": "executor (opus)",
       "acceptanceCriteria": [
         "warp_terminal model maintains ring buffer ≥1000 lines of scrollback; old lines evicted when buffer full",
