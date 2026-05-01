@@ -267,12 +267,15 @@ for deb in sorted(debs_dir.glob('*.deb')):
             if name == 'data.tar' + ext:
                 tar_bytes = dec(data)
                 with tarfile.open(fileobj=io.BytesIO(tar_bytes)) as tf:
-                    # Python 3.12+ introduced filter='data' to mitigate the
-                    # CVE-2007-4559 path traversal class. We trust the upstream
-                    # termux apt repo content but use the filter anyway.
+                    # Python 3.12+ enforces a tar extraction filter for security
+                    # (PEP 706, CVE-2007-4559). We trust the upstream termux
+                    # apt repo and need to allow absolute symlinks (.debs ship
+                    # symlinks like `bzcmp -> /data/data/com.termux/files/usr/
+                    # bin/bzdiff`); the strict `data` filter rejects these.
+                    # `tar` filter is permissive enough.
                     extract_kwargs = {}
                     if hasattr(tarfile, 'data_filter'):
-                        extract_kwargs['filter'] = 'data'
+                        extract_kwargs['filter'] = 'tar'
                     tf.extractall(path=str(rootfs), **extract_kwargs)
                 found = True
                 break
@@ -353,15 +356,25 @@ echo "[6/6] Creating bootstrap-$ARCH.zip..."
 (cd "$TARGET_PREFIX"
     # Truncate any stale SYMLINKS.txt.
     : > SYMLINKS.txt
+    REWRITTEN_SYMLINKS=0
     while IFS= read -r -d '' link; do
         # Strip leading ./ from the link path.
         rel="${link#./}"
         target=$(readlink "$link")
+        # Rewrite absolute symlink targets that still point at the upstream
+        # com.termux prefix — the directory rename in step 5a only fixes
+        # PARENT paths, not symlink targets stored as-is in the inode.
+        case "$target" in
+            "/data/data/$UPSTREAM_APP_ID"/*)
+                target="/data/data/$WARP_APP_ID${target#/data/data/$UPSTREAM_APP_ID}"
+                REWRITTEN_SYMLINKS=$((REWRITTEN_SYMLINKS+1))
+                ;;
+        esac
         echo "${target}←${rel}" >> SYMLINKS.txt
         rm -f "$link"
     done < <(find . -type l -print0)
     SYMCOUNT=$(wc -l < SYMLINKS.txt | tr -d ' ')
-    echo "    -> $SYMCOUNT symlinks recorded in SYMLINKS.txt"
+    echo "    -> $SYMCOUNT symlinks recorded in SYMLINKS.txt ($REWRITTEN_SYMLINKS retargeted)"
 
     # zip -X strips extended attributes for byte-stable output. -9 = max compression.
     zip -r9 -X -q "$OUT_DIR/bootstrap-$ARCH.zip" .
