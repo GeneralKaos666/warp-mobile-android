@@ -45,25 +45,44 @@
   },
 
   "audit": {
-    "audit_method": "git ls-files | xargs grep -l (avoids grep -rln buffering issues on 9700-file tree)",
+    "audit_method": "git ls-files | xargs grep -l (codex round-1 finding #2: this gives unique-file count; does NOT follow symlinks; avoids grep -rln buffering issues on 9700-file tree)",
     "audit_remaining_com_termux_in_sh": 0,
     "audit_remaining_com_termux_in_in": 0,
     "audit_remaining_com_termux_in_patch": 0,
     "audit_remaining_com_termux_in_yml": 0,
     "audit_remaining_com_termux_total": 13,
-    "audit_remaining_com_termux_breakdown": {
-      ".c": 3,
+    "audit_remaining_com_termux_breakdown_corrected": {
+      "_codex_round1_correction": "Round-1 worker breakdown summed to 9 (not 13) due to '5 unclassified' fudge. Re-audited with explicit extension grouping post-round-2 fix.",
+      ".c": 6,
       ".gn": 2,
-      ".txt": 1,
-      ".md": 1,
       ".beforehostbuild": 1,
-      "(remaining 5 unclassified)": 5
+      ".md": 1,
+      ".txt": 1,
+      "i686 (cache file no extension)": 1,
+      "x86_64 (cache file no extension)": 1,
+      "_total_check": 13
     },
+    "audit_remaining_com_termux_files_full": [
+      "CONTRIBUTING.md",
+      "disabled-packages/termux-x11/termux-x11.c",
+      "packages/libandroid-wordexp/wordexp.c",
+      "packages/libhdf5/aarch64/H5lib_settings.c",
+      "packages/libhdf5/arm/CMakeCache.txt",
+      "packages/libhdf5/arm/H5lib_settings.c",
+      "packages/libhdf5/i686/CMakeCache.txt.hdf5.i686",
+      "packages/libhdf5/i686/H5lib_settings.c",
+      "packages/libhdf5/x86_64/CMakeCache.txt.hdf5.x86_64",
+      "packages/libhdf5/x86_64/H5lib_settings.c",
+      "x11-packages/chromium/third_party_override/swiftshader/src/Vulkan/BUILD.gn",
+      "x11-packages/electron-for-code-oss/third_party_override/swiftshader/src/Vulkan/BUILD.gn",
+      "x11-packages/qt6-qttools/cmake-find-zstd-before-clang.patch.beforehostbuild"
+    ],
     "audit_intentional_preservations": [
-      "*.md (CONTRIBUTING.md and friends — keep upstream traceability references)",
-      "*.c (vendored upstream sources in disabled-packages, not in active build target)",
+      "*.md (CONTRIBUTING.md — keep upstream traceability references)",
+      "*.c (vendored upstream sources in disabled-packages/termux-x11 + packages/libandroid-wordexp + packages/libhdf5 cached H5lib_settings.c per arch; not in active M4 bootstrap target)",
       "*.gn (vendored swiftshader configs in chromium / electron third_party_override; complex per-package handling)",
-      "*.txt / *.beforehostbuild (generated cache / pre-build patch state)"
+      "*.txt / *.beforehostbuild (generated cache / pre-build patch state)",
+      "libhdf5 i686/x86_64 CMakeCache (cross-compile artifacts; never in arm64 bootstrap)"
     ],
     "github_com_urls_preserved": 2316,
     "github_com_urls_preserved_note": "Sed pattern correctly escapes literal dots so 'com.termux' does not match 'com/termux' in URLs like https://github.com/termux/termux-packages."
@@ -72,8 +91,10 @@
   "key_implementation_notes": {
     "script_path": "scripts/setup-warp-prefix.sh (in fork)",
     "idempotent": true,
+    "idempotency_round_2_fix_commit": "30039a892d (codex round-1 finding #1: 4× grep -v patterns changed from /SCRIPT_PATH$ regex to grep -vFx exact-match; literal com.termux comment obfuscated via quote-break)",
+    "idempotency_verified_at_round_2": "Run 1: 0 files retargeted (already done); Run 2 (idempotency check): 0 files retargeted; git status --short shows only my own edits to setup-warp-prefix.sh, NOT the script rewriting other files",
     "sed_flavor_autodetect": "GNU sed and BSD/macOS sed both supported",
-    "self_protection": "OLD_PKG / OLD_PREFIX / OLD_HOME defined via base64 decode so the script does not literally contain the search target; script's own path also excluded from candidate list",
+    "self_protection_corrected": "Codex round-1 finding #1+#2: prior claim ('script does not literally contain the search target') was FALSE — line 134 had a literal explanatory comment with com.termux. Round-2 fix: comment now uses character-segment-quoted form (co\\\"m\\\".\\\"t\\\"er\\\"m\\\"ux) so grep doesn't match it as a contiguous token. Combined with grep -vFx self-exclusion in 4 places, idempotency now holds.",
     "discovery_via_git_ls_files": "git ls-files used for hit detection in git checkouts; falls back to find for non-git environments (CI raw extracts)",
     "regex_dot_escaping": "All literal dots in OLD_PKG / OLD_PREFIX / OLD_HOME escaped before sed substitution to avoid matching 'com/termux' inside URLs (e.g. github.com/termux/...)"
   },
