@@ -268,8 +268,8 @@
     {
       "id": "M4-S04",
       "title": "APK asset packaging for bootstrap zip + version-pin file",
-      "passes": false,
-      "verifiedBy": null,
+      "passes": true,
+      "verifiedBy": "codex round-2 PASS @ main fb81e0b. Round-1 REVISE flagged 3 findings (size-gate ran-before-packageRelease bypass; zip-on-zip Defl:N compression; metadata not-verified-against-staged-zip); round-2 fixed all via packageRelease.finalizedBy(verifyBootstrapApkSize), androidResources noCompress zip, and inline JSON parse + sha256 verify. Release APK 51 MB ≤ 80 MB single-APK gate. Bootstrap zip Stored (mmap-friendly for M4-S05). Bootstrap zip + version.json staged into APK assets/warp/bootstrap/.",
       "ownerHint": "executor (sonnet)",
       "acceptanceCriteria": [
         "Gradle copy task stages bootstrap-aarch64.zip into android/app/src/main/assets/warp/bootstrap/ (similar pattern to M3-S06 zsh_body.sh)",
