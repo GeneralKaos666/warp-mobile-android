@@ -93,6 +93,9 @@ class AccessoryRow @JvmOverloads constructor(
             // Listener fires on a Binder thread when the network
             // changes — marshal to the View's UI thread before
             // touching button state (Android UI invariant).
+            // Safe even if View is mid-detach: post() is a no-op on
+            // detached Views, and in-memory property writes on
+            // detached child Views are harmless. Round-3 review LOW.
             post {
                 listOfNotNull(ghostButton, agentButton).forEach { btn ->
                     btn.isEnabled = online

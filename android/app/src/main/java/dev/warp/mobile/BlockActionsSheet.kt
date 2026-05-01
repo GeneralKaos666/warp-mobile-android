@@ -10,7 +10,6 @@ import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
@@ -151,6 +150,12 @@ class BlockActionsSheet(
     }
 
     private fun loadLastBlock() {
+        // Synchronous JSON read on Main thread is safe today: M3 Block
+        // model carries only command + exit_code + timestamps (~100-200
+        // bytes per block); 1000 blocks = ~200 KB JSON parsing in <30ms.
+        // When output-byte capture lands (v1 enhancement, see commit
+        // 06c86d7 message), this MUST move to Dispatchers.IO with a
+        // withContext(Main) on the UI update — round-3 review MEDIUM #2.
         val json = try {
             NativeBridge.terminalBlocksDump()
         } catch (e: Throwable) {
