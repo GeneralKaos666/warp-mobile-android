@@ -8,3 +8,19 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+
+# V1-prep: strip debug + symbol info from release .so. AGP doesn't
+# auto-strip the cargo-ndk-emitted .so when it's staged via per-variant
+# jniLibs.srcDirs (the path we use to avoid Gradle 8 strict-mode "two
+# tasks write to the same dir" errors). Without this, the packaged
+# libwarp_mobile_android_host.so is 8.2 MB; with `strip = "symbols"`
+# it drops to ~5.8 MB — saves ~2.4 MB off the release APK.
+#
+# `strip = "symbols"` is equivalent to `llvm-strip` default behavior:
+# removes the debug section + non-dynamic symbol table, keeps the
+# dynamic symbol table required for JNI. `"debuginfo"` is weaker
+# (~0.3 MB savings) and `"none"` is the cargo default (no strip).
+#
+# Refs: https://doc.rust-lang.org/cargo/reference/profiles.html#strip
+[profile.release]
+strip = "symbols"
