@@ -415,6 +415,31 @@ class WarpTerminalService : Service() {
             |    source /data/data/dev.warp.mobile/files/warp/zsh_body.sh
             |    unset WARP_ZSH_BODY_SOURCING
             |fi
+            |
+            |# 6. V1-prep iteration 28 (2026-05-03): override the Warp Desktop
+            |#    prompt with a mobile-friendly version. zsh_body.sh's
+            |#    `warp_update_prompt_vars` (called on every prompt redraw)
+            |#    decorates PROMPT with cursor-marker machinery that emits
+            |#    CSI 44 C (move cursor right 44 cols) for RPROMPT positioning
+            |#    + complex ZLE redraw escapes — overflows our 45-column
+            |#    mobile grid and corrupts cursor state, so typed chars
+            |#    overwrite the prompt at column 0 instead of appending.
+            |#
+            |#    We override `warp_update_prompt_vars` AFTER sourcing
+            |#    zsh_body.sh so the decorator becomes a no-op, then set a
+            |#    simple PROMPT with %{...%} zero-width markers around the
+            |#    OSC 133;A/B hooks. RPROMPT empty, PS2 simple, no PROMPT_SP.
+            |#
+            |#    Block model preexec/precmd hooks (warp_preexec /
+            |#    warp_precmd) remain registered, so command/output/
+            |#    exit_code capture continues working.
+            |if typeset -f warp_update_prompt_vars >/dev/null 2>&1; then
+            |    warp_update_prompt_vars() { :; }
+            |fi
+            |unset RPROMPT
+            |PROMPT=${"$"}'%{\e]133;A\a%}%# %{\e]133;B\a%}'
+            |PS2='> '
+            |setopt no_prompt_sp 2>/dev/null || true
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.
