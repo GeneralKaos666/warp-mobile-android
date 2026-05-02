@@ -444,12 +444,28 @@ class WarpTerminalService : Service() {
         // the inherited PATH per AC text.
         val parentPath = System.getenv("PATH") ?: "/system/bin"
 
+        // V1-prep iteration 20 (2026-05-02): for v1.0, $PREFIX/bin is
+        // exec-blocked by SELinux (`untrusted_app` domain has
+        // `neverallow ... app_data_file:file execute` since API 29). Putting
+        // it FIRST in PATH meant mksh found e.g. $PREFIX/bin/ls before
+        // /system/bin/ls, attempted execve, got EACCES, and gave up — the
+        // user couldn't even run `ls`. For v1.0 we put parentPath
+        // (/system/bin + /apex/.../bin) FIRST so toybox-provided ls / cat /
+        // mkdir / curl / grep / sed / awk / find / head / tail are
+        // immediately reachable. $PREFIX/bin remains in PATH for the day
+        // v1.1's nativeLibraryDir refactor (.omc/v1.1-plan-selinux-
+        // nativelib.md) makes those binaries actually exec-able. Until
+        // then they live in PATH but every lookup falls through to the
+        // system entries.
+        val prefixBin = "$prefix/bin"
+        val pathV1 = if (parentPath.contains(prefixBin)) parentPath else "$parentPath:$prefixBin"
+
         return buildMap {
-            // PATH: $PREFIX/bin first so binaries from the bootstrap zip
-            // shadow any system tools. The inherited Android PATH is
-            // appended so /system/bin (am, pm, settings, getprop) plus
-            // any apex shims remain reachable.
-            put("PATH", "$prefix/bin:$parentPath")
+            // PATH: /system/bin (toybox + Android tools) FIRST in v1.0 so
+            // basic UNIX commands work despite the SELinux block on
+            // $PREFIX/bin. v1.1 reverses this once nativeLibraryDir
+            // refactor lands.
+            put("PATH", pathV1)
             put("HOME", home)
             put("PREFIX", prefix)
             put("TERMUX_PREFIX", prefix) // termux-tools scripts read this

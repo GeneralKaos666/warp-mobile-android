@@ -408,11 +408,31 @@ class WarpInputView @JvmOverloads constructor(
      * specialized mode (PIN, password, search, etc.).
      */
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT or EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE
-        outAttrs.imeOptions = EditorInfo.IME_ACTION_NONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
-        // Some Pinyin IMEs query the locale; default to system default which
-        // pulls the user's preferred locale. We don't override `hintLocales`
-        // since the user's installed keyboards drive language detection.
+        // V1-prep iteration 20 (2026-05-02): user reported real Gboard typing
+        // still doesn't reach the shell despite iteration-19's commitText →
+        // PTY wiring. Root cause: TYPE_CLASS_TEXT | TEXT_FLAG_MULTI_LINE
+        // tells Gboard this is a normal text editor, so it puts each tap in
+        // the composing region (setComposingText) and only commits on
+        // space/enter/punctuation. Our PTY-write code only ran on commitText,
+        // so individual letter taps never reached mksh.
+        //
+        // Fix follows the Termux / Hacker's Keyboard / Termius pattern: the
+        // VISIBLE_PASSWORD variation + NO_SUGGESTIONS + NO_PERSONALIZED_LEARNING
+        // combo makes Gboard behave as a "raw key handler" — each tap commits
+        // immediately, no autocorrect, no input is sent to Google's predictive
+        // model (privacy hardening for shell commands).
+        //
+        // Refs:
+        //   https://developer.android.com/reference/android/text/InputType#TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        //   https://github.com/termux/termux-app/blob/master/terminal-view/src/main/java/com/termux/view/TerminalView.java
+        outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT or
+            EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
+            EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
+            EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE
+        outAttrs.imeOptions = EditorInfo.IME_ACTION_NONE or
+            EditorInfo.IME_FLAG_NO_EXTRACT_UI or
+            EditorInfo.IME_FLAG_NO_FULLSCREEN or
+            EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
         Log.i(TAG, "onCreateInputConnection inputType=0x${"%x".format(outAttrs.inputType)} imeOptions=0x${"%x".format(outAttrs.imeOptions)}")
         val ic = WarpInputConnection(this, /* fullEditor = */ false)
         lastInputConnection = ic
