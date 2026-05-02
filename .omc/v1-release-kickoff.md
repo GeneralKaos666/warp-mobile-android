@@ -48,6 +48,17 @@ Secondary: Pixel-class flagships (untested in this session but expected to work 
 
 The set of things that genuinely prevent shipping v1.0 today:
 
+### 3.0 Launcher-path UIUX (iteration 18, RESOLVED 2026-05-02)
+
+**Status**: RESOLVED at commit `ff60ee9` + follow-ups `104af46`, `bea339c`.
+**Blocker?** Was hard — plain launcher Intent rendered Vulkan magenta forever. Iteration 18 resolved all 3 sub-blockers:
+
+- **#1 Launcher path → magenta**: `MainActivity.kt` now defaults `terminal_mode=true` + auto-spawns the configured shell when no driver-style extras are present. Plain launcher tap produces a working terminal.
+- **#2 Grid sized 80×24 (1920×960px)**: rows/cols now derived from `resources.displayMetrics.{widthPixels,heightPixels}` — 45×54 grid on a 1080×2340 portrait flagship.
+- **#3 zsh dies in PTY ~10 ms**: root cause is SELinux (`untrusted_app` domain has `neverallow ... app_data_file:file execute` since API 29; `$PREFIX/bin/zsh` is `app_data_file`-labelled, so `execve` returns EACCES). Mitigated by auto-fallback to `/system/bin/sh` after a 1.5 s fast-death detection in `WarpTerminalService.startReadLoop`. Real fix is the v1.1 nativeLibraryDir refactor (`.omc/v1.1-plan-selinux-nativelib.md`).
+
+Verification screenshots: `.omc/v1-prep-screenshots/08-` through `11-`. The mksh-only-shell + no-`$PREFIX/bin/*`-exec limitation is documented in `.omc/v1-prep-uiux-verification.md` §1 and the CHANGELOG.
+
 ### 3.1 Real-world tester UX review (M5-S05)
 
 **Status**: USER-DEFERRED, real-world activity.

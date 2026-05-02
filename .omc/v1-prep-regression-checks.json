@@ -47,11 +47,75 @@
       ],
       "would_pass_with_gboard": "Yes — the test was passing in CI environments with Gboard installed during M2-S10 close. To pass on this Samsung device, the test would need a Gboard install or its expectation tuned for Honeyboard.",
       "v1_status": "Not blocking. The IME path is verified-functional via daily-driver use + the M3 / M5 / M6 device tests that exercise it indirectly."
+    },
+    {
+      "name": "test-block-model.sh",
+      "story": "M3-S07",
+      "verdict": "PASS",
+      "iteration": 18,
+      "verified_at": "2026-05-02T13:16Z",
+      "criteria": "block_count == 3 AND commands == [ls,whoami,false] AND exit_codes == [0,0,1] AND dcs_error_count == 0",
+      "result_excerpt": {
+        "block_count": 3,
+        "commands": ["ls", "whoami", "false"],
+        "exit_codes": [0, 0, 1],
+        "dcs_hook_count": 9,
+        "dcs_error_count": 0,
+        "overall_pass": true
+      },
+      "implications": "Re-verified against iteration-18 commits (ff60ee9 launcher path + WarpTerminalService fallback rework + AndroidManifest theme switch). Block aggregator and DCS hook parser unaffected. Driver path still uses --ez terminal_mode true, so the launcher-default behavior change does not interfere."
+    },
+    {
+      "name": "test-touch.sh",
+      "story": "M2-S11",
+      "verdict": "PASS",
+      "iteration": 18,
+      "verified_at": "2026-05-02T13:18Z",
+      "criteria": "Sub-tests A (tap), B (long-press), C (scroll-velocity sign convention) all pass via TouchSimulationReceiver.",
+      "result_excerpt": { "overall_pass": true },
+      "implications": "Touch + gesture pipeline unaffected by launcher-path changes. AccessoryRow + WarpInputView gesture handlers continue to dispatch correctly under both NoActionBar theme and the launcher-default fullscreen mode."
+    },
+    {
+      "name": "test-fgs-clean-kill.sh",
+      "story": "M1-S08",
+      "verdict": "PASS",
+      "iteration": 18,
+      "verified_at": "2026-05-02T13:19Z",
+      "criteria": "After force-stop the FGS, no orphan PTY children remain and the notification disappears.",
+      "result_excerpt": { "pid_after": 0, "orphans": 0, "notif_before": 1, "notif_after": 0, "pass": true },
+      "implications": "PtySession::Drop reaping path still works after WarpTerminalService startReadLoop refactor (program/env passing for the fast-death fallback). The fallbackAttempted set does not leak entries past kill (handleKill explicitly removes the entry)."
+    },
+    {
+      "name": "test-zsh-asset.sh",
+      "story": "M3-S06",
+      "verdict": "PASS (under bash; pre-existing #!/usr/bin/env zsh + set -euo pipefail bug in the script causes Gate-1 false-fail under zsh)",
+      "iteration": 18,
+      "verified_at": "2026-05-02T13:19Z",
+      "criteria": "APK contains assets/warp/zsh_body.sh + extracted to /data/data/.../files/warp/.",
+      "result_excerpt": { "PASS": 6, "FAIL": 0 },
+      "implications": "Asset shipping + first-launch extraction still functional. Note the script's #!/usr/bin/env zsh shebang interacts badly with set -euo pipefail when unzip pipes through grep — running explicitly with `bash tools/scripts/test-zsh-asset.sh <serial>` produces a clean PASS. Pre-existing issue, not caused by iteration 18."
+    },
+    {
+      "name": "test-pty-resize.sh",
+      "story": "M1-S07",
+      "verdict": "ENVIRONMENTAL_DEPENDENCY (pre-existing PATH/SELinux issue — not v1-prep regression)",
+      "iteration": 18,
+      "verified_at": "2026-05-02T13:16Z",
+      "criteria": "After PTY_RESIZE rows=24 cols=80, `stty size` echoes '24 80' to PTY output.",
+      "result_excerpt": { "observed": "/system/bin/sh: /data/user/0/dev.warp.mobile/files/usr/bin/stty: Permission denied", "pass": false },
+      "regression_analysis": "Same SELinux EACCES that gates Blocker #3 — `stty` lives in $PREFIX/bin/, mksh's PATH lookup finds it before /system/bin/, execve fails. The PTY_RESIZE itself succeeds (master fd ioctl); only the post-resize verification command fails to exec. v1.1's nativeLibraryDir refactor will close this. Driver-side workaround for the test would be to invoke `/system/bin/toybox stty size` — left for a future test-script polish pass.",
+      "v1_status": "Not blocking. M1-S07 PTY resize ioctl path verified-functional via the M3 dynamic-grid test path; only the test driver's verification command is affected."
     }
+  ],
+  "iteration_18_notes": [
+    "Re-ran 5 device drivers against iteration-18 commits (ff60ee9 + 104af46 + bea339c). 4 PASS, 1 environmental (test-pty-resize SELinux PATH issue, pre-existing).",
+    "iteration 18 changes that could plausibly affect device tests: WarpTerminalService.startReadLoop signature change (cmdId, program, env) + auto-fallback path + AndroidManifest theme switch + MainActivity launcher-default terminal_mode. None caused regressions in the spot-checked drivers.",
+    "Driver scripts that explicitly pass `--ez terminal_mode true` continue to work because the explicit path remains the M3-S04 driver convention; the launcher-default path is additive."
   ],
   "notes": [
     "Test drivers run only on connected adb devices. CI on ubuntu-latest can't exercise these — they're for manual + pre-release regression verification.",
     "The full driver suite is in tools/scripts/test-*.sh — 24 scripts spanning M1 PTY through M5 UX. This file documents only the v1-prep re-verification spot-check; original verifications are in .omc/m{1..6}-artifacts/.",
-    "Spot-checked drivers: test-block-model.sh (M3-S07 PASS), test-ime.sh (M2-S10 environmental — no regression vs original)."
+    "Spot-checked drivers (iteration 17): test-block-model.sh (M3-S07 PASS), test-ime.sh (M2-S10 environmental — no regression vs original).",
+    "Spot-checked drivers (iteration 18): test-block-model.sh (PASS again), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS), test-zsh-asset.sh (PASS under bash), test-pty-resize.sh (environmental SELinux $PREFIX/bin issue, pre-existing)."
   ]
 }
