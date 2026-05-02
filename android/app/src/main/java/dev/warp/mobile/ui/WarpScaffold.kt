@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -276,10 +277,18 @@ private fun WarpPromptComposer(
     onValueChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
+    // V1-prep iteration 25 (2026-05-02): MainActivity uses
+    // WindowCompat.setDecorFitsSystemWindows(window, false) for edge-to-edge,
+    // so adjustResize does NOT shrink the window when the IME opens; the IME
+    // overlays on top instead. Without imePadding() the prompt composer would
+    // sit at the bottom of the full-height window and be hidden behind the
+    // IME — exactly the "鍵盤輸入沒反應" bug the user hit. imePadding() on
+    // the outer Surface lifts the composer above the IME.
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
             .padding(horizontal = 8.dp, vertical = 6.dp),
         shape = RoundedCornerShape(20.dp)
     ) {

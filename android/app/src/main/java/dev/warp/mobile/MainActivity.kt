@@ -343,6 +343,29 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             val composeView = androidx.compose.ui.platform.ComposeView(this).apply {
                 setContent {
                     dev.warp.mobile.ui.WarpAppTheme {
+                        // V1-prep iteration 25 (2026-05-02): Compose's
+                        // Scaffold(bottomBar = WarpPromptComposer) makes
+                        // the AndroidView content area shrink when the IME
+                        // pushes the bottomBar up; our SurfaceView's
+                        // surfaceChanged callback re-runs with the smaller
+                        // height and the Rust renderer re-attaches to the
+                        // new swapchain. So setRenderInsets() is NOT
+                        // needed in Compose path — Compose layout already
+                        // does the work. (The pre-Compose listener at
+                        // MainActivity:420 still applies in legacy_layout
+                        // path where setContentView(frame) gives the frame
+                        // the full window and IME inset must be subtracted
+                        // explicitly.)
+                        // AccessoryRow position management is also legacy-
+                        // only: Scaffold hosts our bottomBar at the right
+                        // place in Compose path, so AccessoryRow is hidden
+                        // there to avoid the "row floats at top of screen"
+                        // misposition seen in iteration-25 first attempt.
+                        accessoryRow?.let { row ->
+                            if (row.visibility != View.GONE) {
+                                row.visibility = View.GONE
+                            }
+                        }
                         val tabs = remember {
                             listOf(
                                 dev.warp.mobile.ui.WarpTab(
