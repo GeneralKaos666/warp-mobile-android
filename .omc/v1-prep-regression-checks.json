@@ -112,11 +112,17 @@
     "iteration 18 changes that could plausibly affect device tests: WarpTerminalService.startReadLoop signature change (cmdId, program, env) + auto-fallback path + AndroidManifest theme switch + MainActivity launcher-default terminal_mode. None caused regressions in the spot-checked drivers.",
     "Driver scripts that explicitly pass `--ez terminal_mode true` continue to work because the explicit path remains the M3-S04 driver convention; the launcher-default path is additive."
   ],
+  "iteration_19_notes": [
+    "iteration-19 IME→PTY input fix landed at c6a7359 + synthesized-event guard refinement on 6e511ff. New regression gate test-ime-input-pty.sh added — locks in commit-count == write-count == bytes-echoed invariant for the IME path.",
+    "Re-ran 4 device drivers against iteration-19 commit 6e511ff: test-ime-input-pty.sh (new) PASS, test-block-model.sh PASS (M3-S07 unaffected), test-touch.sh PASS (M2-S11 gestures unaffected), test-fgs-clean-kill.sh PASS (M1-S08 lifecycle unaffected). No regressions.",
+    "iteration-19 catch: BaseInputConnection.sendCurrentText() synthesizes a KEYCODE_ENTER ACTION_DOWN after commitText('\\n'), with deviceId == KeyCharacterMap.VIRTUAL_KEYBOARD (-1). Without the synthesized-event guard the Enter wrote twice. The guard skips PTY writes from synthesized events; commitText covers them. Hardware-keyboard Enter (deviceId >= 0) still works."
+  ],
   "notes": [
     "Test drivers run only on connected adb devices. CI on ubuntu-latest can't exercise these — they're for manual + pre-release regression verification.",
     "The full driver suite is in tools/scripts/test-*.sh — 24 scripts spanning M1 PTY through M5 UX. This file documents only the v1-prep re-verification spot-check; original verifications are in .omc/m{1..6}-artifacts/.",
     "Spot-checked drivers (iteration 17): test-block-model.sh (M3-S07 PASS), test-ime.sh (M2-S10 environmental — no regression vs original).",
     "Spot-checked drivers (iteration 18): test-block-model.sh (PASS again), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS), test-zsh-asset.sh (PASS, stable across 3 runs), test-pty-resize.sh (environmental SELinux $PREFIX/bin issue, pre-existing).",
+    "Spot-checked drivers (iteration 19): test-ime-input-pty.sh (NEW, PASS), test-block-model.sh (PASS), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS).",
     "Iteration 18 origin CI: test.yml run 25245264284 on commit 0f5e2d0 = SUCCESS (Rust + Android smoke green)."
   ]
 }

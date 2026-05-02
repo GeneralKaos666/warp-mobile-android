@@ -501,7 +501,20 @@ class WarpInputView @JvmOverloads constructor(
             // Detect KEYCODE_ENTER on ACTION_DOWN and forward an explicit
             // "\n" commit to the controller (idempotent — multiple resets
             // just clear an already-empty buffer).
-            if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+            //
+            // V1-prep iteration 19 round-2: detect synthesized events.
+            // BaseInputConnection.sendCurrentText() (called from
+            // super.commitText) synthesizes KeyEvents via KeyCharacterMap
+            // with deviceId == VIRTUAL_KEYBOARD (-1). These events follow
+            // a commitText that ALREADY wrote the bytes to PTY, so writing
+            // again here causes a double-write (e.g. Enter committed twice).
+            // Skip PTY writes from synthesized events; commitText covers
+            // them. Hardware keyboards (deviceId >= 0) still get full
+            // sendKeyEvent byte mapping.
+            val isSynthesizedFromCommit =
+                event != null &&
+                    event.deviceId == android.view.KeyCharacterMap.VIRTUAL_KEYBOARD
+            if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN && !isSynthesizedFromCommit) {
                 // V1-prep iteration 19: forward the byte sequence for
                 // common control keys to the active PTY. Without this,
                 // Gboard's Enter / Backspace and any hardware keyboard

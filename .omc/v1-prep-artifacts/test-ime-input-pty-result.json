@@ -1,0 +1,17 @@
+{
+  "purpose": "iteration-19 regression gate — IME→PTY input path. Locks in commit c6a7359.",
+  "device": "R5CX10VFFBA",
+  "git_commit": "6e511ffe0a31adea96b80d46bb29279abe9abab2",
+  "phase1_input": "echoabc",
+  "phase2_input": "\n (Enter)",
+  "ic_commit_text_count": 8,
+  "pty_write_1byte_count": 8,
+  "pty_output_echoabc_hits": 1,
+  "blocker3_fallback_fired": 1,
+  "asserts": {
+    "commit_count_equals_write_count_no_double_write": true,
+    "shell_echoed_typed_bytes_back": true,
+    "launcher_default_fallback_to_system_bin_sh": true
+  },
+  "overall_pass": true
+}
