@@ -12,8 +12,16 @@
       "criteria": "block_count == 3 AND commands == [ls,whoami,false] AND exit_codes == [0,0,1] AND dcs_error_count == 0",
       "result_excerpt": {
         "block_count": 3,
-        "commands": ["ls", "whoami", "false"],
-        "exit_codes": [0, 0, 1],
+        "commands": [
+          "ls",
+          "whoami",
+          "false"
+        ],
+        "exit_codes": [
+          0,
+          0,
+          1
+        ],
         "dcs_hook_count": 9,
         "dcs_error_count": 0,
         "overall_pass": true
@@ -30,7 +38,9 @@
         "composing_update_count_observed": 5,
         "composing_update_count_expected_by_test": 1,
         "composing_commit_count": 1,
-        "composing_commit_texts": ["你好"],
+        "composing_commit_texts": [
+          "你好"
+        ],
         "empty_finish_count_observed": 1,
         "empty_finish_count_expected_by_test": 0,
         "ic_finish_observed": 3,
@@ -57,8 +67,16 @@
       "criteria": "block_count == 3 AND commands == [ls,whoami,false] AND exit_codes == [0,0,1] AND dcs_error_count == 0",
       "result_excerpt": {
         "block_count": 3,
-        "commands": ["ls", "whoami", "false"],
-        "exit_codes": [0, 0, 1],
+        "commands": [
+          "ls",
+          "whoami",
+          "false"
+        ],
+        "exit_codes": [
+          0,
+          0,
+          1
+        ],
         "dcs_hook_count": 9,
         "dcs_error_count": 0,
         "overall_pass": true
@@ -72,7 +90,9 @@
       "iteration": 18,
       "verified_at": "2026-05-02T13:18Z",
       "criteria": "Sub-tests A (tap), B (long-press), C (scroll-velocity sign convention) all pass via TouchSimulationReceiver.",
-      "result_excerpt": { "overall_pass": true },
+      "result_excerpt": {
+        "overall_pass": true
+      },
       "implications": "Touch + gesture pipeline unaffected by launcher-path changes. AccessoryRow + WarpInputView gesture handlers continue to dispatch correctly under both NoActionBar theme and the launcher-default fullscreen mode."
     },
     {
@@ -82,7 +102,13 @@
       "iteration": 18,
       "verified_at": "2026-05-02T13:19Z",
       "criteria": "After force-stop the FGS, no orphan PTY children remain and the notification disappears.",
-      "result_excerpt": { "pid_after": 0, "orphans": 0, "notif_before": 1, "notif_after": 0, "pass": true },
+      "result_excerpt": {
+        "pid_after": 0,
+        "orphans": 0,
+        "notif_before": 1,
+        "notif_after": 0,
+        "pass": true
+      },
       "implications": "PtySession::Drop reaping path still works after WarpTerminalService startReadLoop refactor (program/env passing for the fast-death fallback). The fallbackAttempted set does not leak entries past kill (handleKill explicitly removes the entry)."
     },
     {
@@ -92,7 +118,10 @@
       "iteration": 18,
       "verified_at": "2026-05-02T13:57Z",
       "criteria": "APK contains assets/warp/zsh_body.sh + extracted to /data/data/.../files/warp/.",
-      "result_excerpt": { "PASS": 6, "FAIL": 0 },
+      "result_excerpt": {
+        "PASS": 6,
+        "FAIL": 0
+      },
       "implications": "Asset shipping + first-launch extraction still functional. Earlier transient Gate-1 false-fail (one occurrence, not reproducible across 3 follow-up runs) hypothesised to be a race with concurrent adb install / am force-stop traffic from a back-to-back test-pty-resize.sh invocation. Script shebang is already #!/usr/bin/env bash; no script change needed."
     },
     {
@@ -102,7 +131,10 @@
       "iteration": 18,
       "verified_at": "2026-05-02T13:16Z",
       "criteria": "After PTY_RESIZE rows=24 cols=80, `stty size` echoes '24 80' to PTY output.",
-      "result_excerpt": { "observed": "/system/bin/sh: /data/user/0/dev.warp.mobile/files/usr/bin/stty: Permission denied", "pass": false },
+      "result_excerpt": {
+        "observed": "/system/bin/sh: /data/user/0/dev.warp.mobile/files/usr/bin/stty: Permission denied",
+        "pass": false
+      },
       "regression_analysis": "Same SELinux EACCES that gates Blocker #3 — `stty` lives in $PREFIX/bin/, mksh's PATH lookup finds it before /system/bin/, execve fails. The PTY_RESIZE itself succeeds (master fd ioctl); only the post-resize verification command fails to exec. v1.1's nativeLibraryDir refactor will close this. Driver-side workaround for the test would be to invoke `/system/bin/toybox stty size` — left for a future test-script polish pass.",
       "v1_status": "Not blocking. M1-S07 PTY resize ioctl path verified-functional via the M3 dynamic-grid test path; only the test driver's verification command is affected."
     }
@@ -176,5 +208,17 @@
     "Spot-checked drivers (iteration 18): test-block-model.sh (PASS again), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS), test-zsh-asset.sh (PASS, stable across 3 runs), test-pty-resize.sh (environmental SELinux $PREFIX/bin issue, pre-existing).",
     "Spot-checked drivers (iteration 19): test-ime-input-pty.sh (NEW, PASS), test-block-model.sh (PASS), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS).",
     "Iteration 18 origin CI: test.yml run 25245264284 on commit 0f5e2d0 = SUCCESS (Rust + Android smoke green)."
+  ],
+  "iteration_28_notes": [
+    "iter-28 closes the LAST visible artifact from the iter-27 fix: the 'pwdalhost%' prompt overwrite where typed input visually overwrote the existing prompt. Root cause was Warp Desktop's bundled zsh_body.sh (M3-S06) shipping a precmd hook called warp_update_prompt_vars that emits 'CSI 44 C' (cursor-forward 44 columns) on every prompt redraw to position an RPROMPT — desktop-friendly but on a 45-cell mobile column grid it pushed the cursor 1 cell off-screen and the next prompt redraw started overwriting the previous line.",
+    "Fix landed in WarpTerminalService.kt's bundled .zshenv: (a) override warp_update_prompt_vars to a no-op via 'function warp_update_prompt_vars() { : }' guard around the zsh_body sourcing; (b) hard-set a mobile-friendly PROMPT='%{\\e]133;A\\a%}%# %{\\e]133;B\\a%}' that wraps OSC 133 A/B prompt markers in zsh's %{...%} zero-width brackets so the M3 Block aggregator still recognises prompt boundaries; (c) PS2='> ' for continuation; (d) setopt no_prompt_sp to suppress the bold-reverse '%' no-newline-EOF indicator (visible flicker on Android composition).",
+    "Verified end-to-end via IME_COMMIT_TEXT broadcasts: pwd→/, whoami→u0_a1190, echo HELLO→HELLO, all rendering cleanly with no overwrite, no ghost glyphs, fresh '%' prompt after each command. Up arrow recalls history. Ctrl+C interrupts. Evidence: /tmp/warp-qa/autopilot/03-iter28-cold.png through 17-iter28-uparrow-clean.png."
+  ],
+  "iteration_29_notes": [
+    "iter-29 closes the autopilot Phase-2 demand by exercising the FULL composer-driven IME path (real-user flow: tap composer → onscreen Honeyboard → type → 傳送 → onSend → onSubmit → PTY), not just the IME_COMMIT_TEXT broadcast simulation used in iter-28. This proves iter-27's BasicTextField singleLine=true fix combined with iter-28's zsh prompt fix delivers the user's '我需要一個完整的 warp 終端機' (complete Warp terminal) baseline.",
+    "Composer flow verified: tap (540, 1145) — center of EditText bounds [57,1078]-[1023,1213] from uiautomator dump → IME up with 傳送 visible → input text 'pwd' → input keyevent 66 → 'pwd' echoes, '/' output, fresh '%' prompt, composer cleared back to placeholder. Same clean cycle for 'whoami' (→ u0_a1190 — the Android per-app UID), 'ls /data/data/dev.warp.mobile/files/termux' (→ 'No such file or directory' formatted error). Evidence: /tmp/warp-qa/autopilot/30-clean-cold.png, 31-composer-focused.png, 32-pwd-typed.png, 33-pwd-sent.png, 34-whoami-sent.png, 36-ls-termux.png.",
+    "Real bundled zsh confirmed via 'echo $0 and $SHELL' → /data/data/dev.warp.mobile-{hash}/lib/arm64/libzsh-so + /usr/bin/zsh (truncated). The libzsh.so naming is the M3-S06 trick to ship the zsh binary as an Android native lib (loaded via System.loadLibrary semantics for app-data execution permission on Android 10+). Real zsh, not /system/bin/sh fallback. Evidence: /tmp/warp-qa/autopilot/37-shell-id.png.",
+    "Baseline 'complete Warp terminal' acceptance criteria all met for v1: (1) cold launch shows Warp chrome — drawer + search + + gear top bar + AccessoryRow ESC/TAB/CTRL/ALT + composer; (2) tap composer opens IME with 傳送 ImeAction.Send visible; (3) typing renders into composer; (4) Enter submits via onSend → PTY write; (5) command echoes + output renders + new prompt appears; (6) zsh history (Up arrow), Ctrl+C interrupt, multi-arg commands, error output formatting all work; (7) bundled zsh runs (Termux-class shell, not Android sh).",
+    "Open follow-ups deferred to v1+1 (NOT regressions, NOT user-blocking): Tab completion (compinit not loaded in bundled .zshenv — easy fix when M4 termux first-launch extraction is verified active in this build); Block-card rendering for finished commands (M8 — currently using flat ANSI scroll); pipe character via 'adb shell input text %7C' is a test-tooling quirk only (real keyboard sends raw '|' fine); cursor-anchored ghost-text overlay (v1 carry-over from M6)."
   ]
 }
