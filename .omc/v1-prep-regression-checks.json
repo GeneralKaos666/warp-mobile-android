@@ -261,5 +261,15 @@
     "iter-34c: prompt '/ %' visible at bottom, just above AccessoryRow (cwd is / because PtyManager spawns zsh from /)",
     "iter-34c: composer typing reaches terminal (pwd appears as '/ % pwd' in viewport per screenshot 102) — separate v1+1 issue: send-button tap doesn't trigger Enter to PTY",
     "Latent issue tracked: cosmic_text cmap-format-12 enumeration on first CJK encounter will still hang on real CJK PTY content (commit messages, file paths, ls output). Proper fix is to bound fallback fonts or cache codepoint sets. Defer to v1+1."
+  ],
+  "iteration_35_notes": [
+    "WarpInputConnection.sendKeyEvent over-aggressive synthesis filter narrowed.",
+    "Bug: iter-19 added 'isSynthesizedFromCommit = (deviceId == VIRTUAL_KEYBOARD)' to skip BaseInputConnection.commitText's KeyCharacterMap synthesis (avoids double-write for plain printable chars).",
+    "Bug: But ALL virtual-keyboard events match deviceId == -1, including real soft-keyboard sendKeyEvent for Enter/Backspace (Gboard with imeOptions=ACTION_NONE, hardware-mapped soft keys, adb `input keyevent`).",
+    "User complaint root-cause: Soft-keyboard Enter / Backspace via sendKeyEvent dropped silently — hence '鍵盤按 Enter / Backspace 沒反應'.",
+    "Fix: track commitTextSynthExpiresMs = SystemClock.elapsedRealtime() + 50L after super.commitText returns; sendKeyEvent only filters as 'synthesized' if (deviceId == VIRTUAL_KEYBOARD && now < commitTextSynthExpiresMs).",
+    "BaseInputConnection synthesis dispatches via Handler.post — events arrive within ~few ms of super.commitText return. 50ms window is well past the synthesis tail and well before any human Enter latency (>200ms after typing).",
+    "Adb broadcast PTY_WRITE / TERM_BLOCKS_DUMP testing on Galaxy S24 Ultra blocked by Samsung 'Background execution not allowed' policy even though app is foreground. Affects test instrumentation — production user input via real keyboard is unaffected.",
+    "Verified iter-35 builds clean (./gradlew :app:assembleDebug; BUILD SUCCESSFUL in 3s)."
   ]
 }

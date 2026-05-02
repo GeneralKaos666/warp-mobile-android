@@ -469,6 +469,30 @@ class WarpInputView @JvmOverloads constructor(
         // new suffix gets typed.
         private var lastComposingText: String = ""
 
+        // V1-prep iteration 35 (2026-05-03): scope the synthesized-from-
+        // commitText filter to a short time window AFTER super.commitText
+        // returns, instead of blanket-blocking all virtual-keyboard events.
+        //
+        // Background: BaseInputConnection.commitText synthesizes KeyEvents
+        // via KeyCharacterMap.getEvents — those events have deviceId =
+        // VIRTUAL_KEYBOARD (-1) and arrive at sendKeyEvent shortly after
+        // super.commitText returns. We must ignore them to avoid double-
+        // writing the bytes (commitText already forwarded the chars via
+        // forwardComposingDiff). Iter-19 implemented this filter.
+        //
+        // BUT: real soft-keyboard Enter / Backspace via sendKeyEvent
+        // (Gboard's actionDone, hardware-mapped soft keys, adb shell
+        // `input keyevent`) ALSO arrive with deviceId = VIRTUAL_KEYBOARD.
+        // The blanket filter dropped THOSE too, which is the user's
+        // "鍵盤按 Enter 沒反應 / 按 Backspace 沒反應" complaint.
+        //
+        // Fix: only treat virtual events as synthesized if they arrive
+        // within ~50ms after super.commitText returned. Real key events
+        // from a paused user (keystroke-to-Enter latency >> 50ms in normal
+        // typing) fall outside the window and reach the PTY.
+        @Volatile
+        private var commitTextSynthExpiresMs: Long = 0L
+
         /**
          * Diff a previous composing region against a new value and emit
          * the equivalent edit to the active PTY. Used by both
@@ -536,7 +560,14 @@ class WarpInputView @JvmOverloads constructor(
             } catch (t: Throwable) {
                 Log.w(TAG, "GhostSuggest forward failed: ${t.message}")
             }
-            return super.commitText(text, newCursorPosition)
+            val result = super.commitText(text, newCursorPosition)
+            // V1-prep iteration 35: open the synthesized-event window so
+            // sendKeyEvent ignores BaseInputConnection's KeyCharacterMap
+            // synthesis for the next ~50ms. See doc on
+            // commitTextSynthExpiresMs above for why blanket-filtering by
+            // deviceId broke real soft-keyboard Enter / Backspace.
+            commitTextSynthExpiresMs = android.os.SystemClock.elapsedRealtime() + 50L
+            return result
         }
 
         override fun setComposingText(
@@ -598,9 +629,16 @@ class WarpInputView @JvmOverloads constructor(
             // Skip PTY writes from synthesized events; commitText covers
             // them. Hardware keyboards (deviceId >= 0) still get full
             // sendKeyEvent byte mapping.
+            // V1-prep iteration 35: only treat as synthesis if a recent
+            // super.commitText call set a window that hasn't expired.
+            // Real soft-keyboard Enter / Backspace via sendKeyEvent (Gboard
+            // when actionNone, hardware-mapped soft keys) and adb-injected
+            // keyevents fall outside the window and DO reach the PTY.
+            val now = android.os.SystemClock.elapsedRealtime()
             val isSynthesizedFromCommit =
                 event != null &&
-                    event.deviceId == android.view.KeyCharacterMap.VIRTUAL_KEYBOARD
+                    event.deviceId == android.view.KeyCharacterMap.VIRTUAL_KEYBOARD &&
+                    now < commitTextSynthExpiresMs
             if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN && !isSynthesizedFromCommit) {
                 // V1-prep iteration 19: forward the byte sequence for
                 // common control keys to the active PTY. Without this,
