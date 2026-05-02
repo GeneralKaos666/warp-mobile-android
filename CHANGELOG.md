@@ -18,7 +18,16 @@ For per-iteration lessons learned, see [`progress.txt`](progress.txt).
 
 ## [Unreleased] — v1-prep
 
-In progress: same-day continuation of M6 close. Final v1.0 ship blockers (keystore generation + F-Droid recipe submission) gated on user.
+In progress: engine layer + launcher-path UIUX + IME→PTY input now functional on Galaxy S24 Ultra. v1.0 ship is **gated on M7-M10** (Warp-shape UX layer — sidebar, agent-first prompt screen, Block-as-card rendering, model picker, tab manager) per `.omc/m7-plan-warp-ux-layer.md`. Keystore generation + F-Droid recipe submission still gated on user.
+
+### Fixed (iteration 19, 2026-05-02 — IME → PTY input)
+
+- **Gboard typing now reaches the spawned shell** (commit `c6a7359`, "Blocker #4"). Previously every key tap on Gboard updated only the M2-S10 IME stats counter (the Rust `ime::commit_text` driver-test instrumentation) and never wrote any bytes to the PTY. Every prior "device-verified" device test bypassed the InputConnection entirely by sending `am broadcast PTY_WRITE --es data …`, so this regression had been latent since M2 and was not caught by any milestone gate. `WarpInputConnection.commitText` / `sendKeyEvent` / `deleteSurroundingText` now broadcast to the active PTY cmd_id via the existing `PTY_WRITE` pipeline. ASCII DEL (0x7F) for Backspace, `\n` for Enter, `\t` for Tab, `\x1B` for Escape, `ESC[A/B/C/D` for arrow keys, `ESC[3~` for forward-delete, Ctrl+letter → 0x01..0x1F. Verified: 4 IC.commitText → 4 PTY_WRITE → 4 echoed chars on Galaxy S24 Ultra (no double-write). Screenshots `12-` and `13-` in `.omc/v1-prep-screenshots/`.
+
+### Documented (iteration 19, 2026-05-02 — Warp UX layer plan)
+
+- **`.omc/m7-plan-warp-ux-layer.md`** — explicit plan to build the Warp UX layer (sidebar / Block cards / agent-first prompt screen / model picker / tab manager) that M0–M6 deliberately punted on. Recommends Option A (Compose chrome around the existing Vulkan terminal pane), spans 4 milestones (M7-M10) at 7-10 weeks solo-dev. Lists 5 open architectural questions + 4 user decision gates needed before M7-S01.
+- **README** reframed: explicit "What does NOT work yet (M7+ scope)" table; status line clarifies engine-layer vs UX-layer; current-status table extended through v1-prep / v1.1 / M7-M10. Removes the implicit "v1.0 imminent" framing of the prior README.
 
 ### Fixed (iteration 18, 2026-05-02 — launcher-path UIUX)
 

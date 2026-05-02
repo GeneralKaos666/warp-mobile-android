@@ -4,19 +4,21 @@ An open-source Android port of [Warp Terminal](https://github.com/warpdotdev/War
 
 [![Test (Rust + Android smoke)](https://github.com/ImL1s/warp-mobile-android/actions/workflows/test.yml/badge.svg)](https://github.com/ImL1s/warp-mobile-android/actions/workflows/test.yml)
 
-**Status**: M0–M6 CLOSED — DCS+Block pipeline + per-cell Vulkan + Termux runtime + AI integration (BYOK) on Android 12+ (API 31+) &nbsp;|&nbsp; v1-prep ACTIVE &nbsp;|&nbsp; License: AGPL-3.0-only
+**Status**: M0–M6 CLOSED — Warp **engine layer** functional on Android 12+ (PTY + Vulkan grid + DCS-hook Block model + Termux runtime + BYOK AI client). Warp **UX layer** (sidebar, agent-first conversation screen, Block-as-card rendering, prompt-first input box, search overlay, model picker, tab management) is **NOT YET BUILT** — M7+ scope. &nbsp;|&nbsp; License: AGPL-3.0-only
+
+> ⚠️ **What you actually see when you tap the icon today**: a fullscreen black Vulkan surface with a single mksh shell prompt at the top, the system Gboard at the bottom, and a custom modifier/symbol AccessoryRow above it. **This is engine-preview shape, not Warp Desktop shape.** The Block model + AI BYOK + Termux runtime + AGPL framework are all wired up underneath, but the user-facing chrome that makes Warp feel like Warp (agent conversation, block cards, sidebar, prompt suggestions) is the next major milestone.
 
 ---
 
 ## What is this?
 
-[Warp Terminal](https://github.com/warpdotdev/Warp) introduced a fundamentally different terminal UX: commands and their output are grouped into discrete, navigable Blocks; output is colored and structured rather than a raw scrollback stream; and an AI layer (Haiku for inline ghost-text, Sonnet for agent) is built into the shell workflow. This project is a community-driven port of that experience to Android.
+[Warp Terminal](https://github.com/warpdotdev/Warp) introduced a fundamentally different terminal UX: commands and their output are grouped into discrete, navigable Blocks; output is colored and structured rather than a raw scrollback stream; and an AI layer (Haiku for inline ghost-text, Sonnet for agent) is built into the shell workflow. This project is a community-driven Android port that is **building Warp bottom-up**: the engine layer first (M0–M6), the UX layer afterward (M7+).
 
 The port is not a thin wrapper or a Compose-based re-implementation. Warp's own `warpui` framework (a Vulkan/GPU-accelerated UI crate derived from GPUI) runs natively on-device via the Android NDK. An Android-specific backend (`warpui::platform::android`) drives a real `ANativeWindow` surface using `ash` (Vulkan), `cosmic-text` for text shaping, and Android system fonts including CJK. A foreground service manages PTY sessions; Block detection comes from the same DCS-hook parser (`ESC P $ d ... 0x9c`) that Warp's desktop shell integration uses.
 
-Starting with M4, the port bundles a forked `termux-packages` collection so the device ships a proper Linux `$PREFIX` (zsh, GNU coreutils, APT). The terminal GUI is Warp; the runtime is Termux's package ecosystem rehosted under this project's package name. This is not a Termux fork — we do not fork `termux-app`.
+Starting with M4, the port bundles a forked `termux-packages` collection so the device ships a proper Linux `$PREFIX` (zsh, GNU coreutils, APT). The terminal GUI substrate is Warp's `warpui`; the runtime is Termux's package ecosystem rehosted under this project's package name. This is not a Termux fork — we do not fork `termux-app`.
 
-This is a solo-developer project on a 12-18 month constrained-beta timeline. It is honest-beta software: flagship Android devices work; low-end devices and full Termux integration are still in progress. F-Droid and GitHub Releases are the primary distribution targets; Play Store is a v3+ optional path.
+This is a solo-developer project on a 12-18 month constrained-beta timeline. It is honest-beta software: flagship Android devices show the engine working; low-end devices, full Termux integration, and the Warp-shaped UX layer are all in progress. F-Droid and GitHub Releases are the primary distribution targets; Play Store is a v3+ optional path.
 
 ---
 
@@ -28,9 +30,12 @@ This is a solo-developer project on a 12-18 month constrained-beta timeline. It 
 | **M1** | Android PTY/FGS prototype — no UI; service + PTY plumbing only | CLOSED ✅ | 10/10 PASS |
 | **M2** | `warpui::platform::android` backend — Vulkan renderer, FontDB, IME, gestures | CLOSED ✅ | 12/14 PASS |
 | **M3** | Facade + DCS parser + Block model + dynamic_grid renderer | CLOSED ✅ | 12/12 PASS |
-| **M4** | Termux runtime — zsh + GNU coreutils + APT + F-Droid distribution prep | IN PROGRESS 🚧 | 3/15 |
-| **M5** | Mobile UX polish — colored ls, pixel-similarity gate, low-end devices | Pending |  |
-| **M6** | AI integration — Haiku inline ghost-text, Sonnet agent | Pending |  |
+| **M4** | Termux runtime — zsh + GNU coreutils + APT + F-Droid distribution prep | CLOSED ✅ | 14/15 PASS |
+| **M5** | Mobile UX polish — selection / accessory row / blocks / paste / paste UX | CLOSED PARTIAL ✅ | 5/8 PASS |
+| **M6** | AI integration — Haiku inline ghost-text, Sonnet agent (BYOK) | CLOSED ✅ | 7/7 PASS |
+| **v1-prep** | CI / release script / APK shrink / license / launcher-path UIUX / IME→PTY input | ACTIVE 🛠️ |  |
+| **v1.1** | SELinux nativeLibraryDir refactor — `$PREFIX/bin/*` exec restored | Planned | `.omc/v1.1-plan-selinux-nativelib.md` |
+| **M7–M10** | **Warp-shape UX layer** (sidebar / Block cards / agent-first prompt screen / model picker / tab manager) — see "What does NOT work yet" below | Not started | TBD |
 
 **Primary test device**: Galaxy S24 Ultra (Snapdragon 8 Gen 3 / Adreno 750 / API 36).
 **Minimum supported**: Android 12 (API 31), Adreno 6xx+ GPU (raised from API 26 in Plan Amendment 3 after Mali-G71 devices failed the 200ms swapchain gate).
@@ -75,6 +80,27 @@ All of the following are empirically verified on Galaxy S24 Ultra.
 **Upstream compatibility**
 
 - Cherry-pick dry-run against 10 upstream `warpdotdev/Warp` commits: 3 conflicting files (1 in `app/`, 1 in `warpui/`, 1 in `warpui_core/`); estimated full resolution 25-50 min
+
+---
+
+## What does NOT work yet (M7+ scope)
+
+These are the things a user familiar with Warp Desktop will notice missing the moment they tap the icon. They are real gaps, not polish:
+
+| Missing UX | What's there now | Plan |
+|---|---|---|
+| Sidebar with sessions / agents / files | Single fullscreen surface, no sidebar | M7 |
+| Top search bar ("Search sessions, agents, files…") | None | M7 |
+| Agent-first prompt screen ("New Oz agent conversation") | Raw mksh prompt | M9 |
+| Block rendered as interactive card with copy / explain / re-run | Flat Vulkan grid text | M8 |
+| Bottom prompt box ("Warp anything…") with autocomplete + model picker | System Gboard + AccessoryRow | M9 |
+| `/model`, `/remote-control`, command palette | None | M9 |
+| Tab management | None — single grid | M7 |
+| `$PREFIX/bin/*` commands runnable (zsh, ls, cat, …) | Blocked by SELinux `app_data_file` exec denial | v1.1 (`.omc/v1.1-plan-selinux-nativelib.md` — relocate Termux binaries into `nativeLibraryDir`) |
+
+The engine pieces are in place: Block aggregation logic, BYOK Anthropic client (Haiku ghost-text + Sonnet agent), Termux bootstrap zip, font shaping with CJK, IME → PTY input pipeline. M7+ work is to surface them through a Warp-shaped chrome layer instead of the current bare Vulkan grid + Gboard.
+
+See `.omc/v1-prep-uiux-verification.md` for screenshots of the current launcher path and the gap-analysis honest accounting that drove this section.
 
 ---
 
