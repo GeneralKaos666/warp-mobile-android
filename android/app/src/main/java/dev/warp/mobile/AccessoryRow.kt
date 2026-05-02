@@ -293,19 +293,24 @@ class AccessoryRow @JvmOverloads constructor(
             }
             context.startActivity(intent)
         }
-        // M6-S03 round-2: AI ghost-suggest button. Sends a hardcoded
-        // "suggest a shell completion for 'ls -'" prompt to Claude
-        // Haiku via the warp_ai_mobile Rust crate (synchronous round-
-        // trip; round-3 will hook into the IME path for live typing-
-        // driven ghost-text + Tab-accept). The result is shown as a
-        // Toast and ALSO inserted into the PTY as a one-shot
-        // "echo SUGGESTION:..." line so users can see it in their
-        // terminal scrollback.
+        // M6-S03: AI ghost-suggest button (manual one-shot trigger).
+        // Sends a hardcoded "suggest a shell completion for 'ls -'"
+        // prompt to Claude Haiku via the warp_ai_mobile Rust crate
+        // (synchronous round-trip). The result is shown as a Toast
+        // AND inserted into the PTY as a one-shot "echo SUGGESTION:..."
+        // line so users can see it in their terminal scrollback.
+        //
+        // This sits alongside the M6-CO1 IME-driven debounced auto-
+        // trigger (GhostSuggestController, with the ghostStrip above
+        // and Tab-accept on this row's Tab button) — manual button +
+        // typing-driven controller are intentionally both available.
         ghostButton = addBtn("💡") { triggerAiSuggest() }
         // M6-S04: agent task button. Opens AgentBlockSheet (Dialog
-        // with streaming Sonnet response). Round-1 hardcoded prompt;
-        // round-2 will accept a Block ID parameter from a Long-press
-        // BottomSheet menu (per M5-S03 deferred UI integration).
+        // with streaming Sonnet response). The button itself uses a
+        // hardcoded prompt; the 📋 BlockActionsSheet's Explain button
+        // (M6-S04 round-2 / commit 06c86d7) forwards real Block context
+        // (command + exit_code + captured output as XML-tagged content)
+        // for Block-aware "explain this" flows.
         agentButton = addBtn("🤖") { triggerAgentTask() }
         // Mic placeholder for M5-S04. Voice input via RecognizerIntent is a
         // future enhancement (need explicit RECORD_AUDIO permission flow);
