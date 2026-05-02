@@ -97,6 +97,11 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     // M5-S02: keyboard accessory row (Esc/Tab/Ctrl/Alt/arrows + symbols).
     // Visibility + bottom-margin maintained by the WindowInsets listener.
     private var accessoryRow: AccessoryRow? = null
+    // V1-prep iteration 25 (2026-05-02): track whether we're in the Compose
+    // path so the legacy WindowInsets listener can skip Compose-specific
+    // adjustments (Scaffold + imePadding already handle IME inset for the
+    // AndroidView and the bottomBar; doing it again here double-counts).
+    private var composePath: Boolean = false
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -308,6 +313,13 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // warpInputView (later children of FrameLayout sit higher in
         // Z-order and get touch dispatch first).
         accessoryRow = AccessoryRow(this).apply {
+            // V1-prep iteration 25 (2026-05-02): legacy_layout path keeps
+            // the GONE-by-default + WindowInsets-listener-driven toggle
+            // (modifier keys only show alongside the IME). Compose path
+            // overrides this below to View.VISIBLE because the legacy
+            // listener does not fire when `frame` is wrapped by an
+            // AndroidView (Compose consumes the WindowInsets dispatch
+            // before children of AndroidView see it).
             visibility = View.GONE
         }
         frame.addView(
@@ -339,33 +351,29 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             // `--ez legacy_layout true`. Production users always go through
             // the new Compose path.
             setContentView(frame)
+            composePath = false
         } else {
+            composePath = true
+            // Compose path: AccessoryRow's WindowInsets listener never
+            // fires (frame is wrapped in AndroidView), so we override
+            // visibility to VISIBLE here. Termux-style: modifier keys
+            // always available regardless of IME state.
+            accessoryRow?.visibility = View.VISIBLE
             val composeView = androidx.compose.ui.platform.ComposeView(this).apply {
                 setContent {
                     dev.warp.mobile.ui.WarpAppTheme {
-                        // V1-prep iteration 25 (2026-05-02): Compose's
-                        // Scaffold(bottomBar = WarpPromptComposer) makes
-                        // the AndroidView content area shrink when the IME
-                        // pushes the bottomBar up; our SurfaceView's
-                        // surfaceChanged callback re-runs with the smaller
-                        // height and the Rust renderer re-attaches to the
-                        // new swapchain. So setRenderInsets() is NOT
-                        // needed in Compose path — Compose layout already
-                        // does the work. (The pre-Compose listener at
-                        // MainActivity:420 still applies in legacy_layout
-                        // path where setContentView(frame) gives the frame
-                        // the full window and IME inset must be subtracted
-                        // explicitly.)
-                        // AccessoryRow position management is also legacy-
-                        // only: Scaffold hosts our bottomBar at the right
-                        // place in Compose path, so AccessoryRow is hidden
-                        // there to avoid the "row floats at top of screen"
-                        // misposition seen in iteration-25 first attempt.
-                        accessoryRow?.let { row ->
-                            if (row.visibility != View.GONE) {
-                                row.visibility = View.GONE
-                            }
-                        }
+                        // V1-prep iteration 25 (2026-05-02): in Compose
+                        // path, AccessoryRow stays inside `frame` (the
+                        // AndroidView wrapped by Scaffold's content slot).
+                        // Scaffold + imePadding on the bottomBar shrink
+                        // the AndroidView so its bottom edge sits just
+                        // above the prompt composer + IME; AccessoryRow
+                        // gravity=BOTTOM places it at that edge naturally,
+                        // so we DON'T touch its bottomMargin in Compose
+                        // path (the legacy listener does that for the
+                        // legacy_layout escape hatch only). Visibility is
+                        // still IME-driven via the listener at MainActivity
+                        // line ~454.
                         val tabs = remember {
                             listOf(
                                 dev.warp.mobile.ui.WarpTab(
@@ -451,19 +459,38 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     "sysBars={top=${sysBars.top} l=${sysBars.left} r=${sysBars.right} b=${sysBars.bottom}} " +
                     "effectiveBottom=$effectiveBottom"
             )
-            NativeBridge.setRenderInsets(sysBars.top, sysBars.left, sysBars.right, effectiveBottom)
+            // V1-prep iteration 25 (2026-05-02): only setRenderInsets in
+            // legacy_layout path. Compose path's Scaffold already shrinks
+            // the AndroidView (and therefore the SurfaceView) for IME +
+            // bottomBar, so doing it again here would double-count and
+            // collapse the visible terminal area to ~0 px (the bug from
+            // iteration-25 first attempt).
+            if (!composePath) {
+                NativeBridge.setRenderInsets(sysBars.top, sysBars.left, sysBars.right, effectiveBottom)
+            }
 
             // M5-S02: accessory row visibility + position. When IME is up
             // (ime.bottom > 0), show the row just above the IME panel by
             // setting the bottom margin to ime.bottom. When IME is down,
             // hide the row entirely (no value in showing modifier keys
             // when there's no soft keyboard to modify).
+            //
+            // V1-prep iteration 25: in Compose path, the bottom margin is
+            // ALREADY handled by Scaffold + imePadding on the bottomBar
+            // (AccessoryRow gravity=BOTTOM in `frame` puts it at the bottom
+            // of the AndroidView, which Compose has already shrunk to sit
+            // above the IME). Setting bottomMargin = ime.bottom here would
+            // push the row above its container by an extra ime.bottom px
+            // → "row floats at top of screen" bug. So skip the margin
+            // assignment in Compose path; only update visibility.
             accessoryRow?.let { row ->
                 if (ime.bottom > 0) {
-                    val lp = row.layoutParams as FrameLayout.LayoutParams
-                    if (lp.bottomMargin != ime.bottom) {
-                        lp.bottomMargin = ime.bottom
-                        row.layoutParams = lp
+                    if (!composePath) {
+                        val lp = row.layoutParams as FrameLayout.LayoutParams
+                        if (lp.bottomMargin != ime.bottom) {
+                            lp.bottomMargin = ime.bottom
+                            row.layoutParams = lp
+                        }
                     }
                     if (row.visibility != View.VISIBLE) {
                         row.visibility = View.VISIBLE
