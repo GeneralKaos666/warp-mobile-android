@@ -455,6 +455,59 @@ class WarpInputView @JvmOverloads constructor(
         fullEditor: Boolean
     ) : BaseInputConnection(view, fullEditor) {
 
+        // V1-prep iteration 22 (2026-05-02): track the most-recent composing
+        // region so setComposingText can write the DIFF to PTY rather than
+        // re-typing the whole region every keystroke. Real Gboard sends
+        // setComposingText("a"), setComposingText("ab"), … per tap; without
+        // diff-based forwarding the PTY would receive "a", "ab", "abc" =
+        // 6 chars typed for 3 keystrokes. With it the PTY receives just
+        // "a", "b", "c" — exactly what the user wanted.
+        //
+        // Autocorrect rewrite case (Gboard sometimes sends
+        // setComposingText("teh") then setComposingText("the")) is handled
+        // by the diff: the suffix that differs gets DEL-erased then the
+        // new suffix gets typed.
+        private var lastComposingText: String = ""
+
+        /**
+         * Diff a previous composing region against a new value and emit
+         * the equivalent edit to the active PTY. Used by both
+         * `setComposingText` and `commitText` to keep the PTY-side state
+         * synchronized with what the user sees in the IME.
+         */
+        private fun forwardComposingDiff(prev: String, next: String) {
+            if (prev == next) return
+            // Find longest common prefix.
+            var i = 0
+            val maxI = minOf(prev.length, next.length)
+            while (i < maxI && prev[i] == next[i]) i++
+            // Erase the part of prev past the common prefix using DEL (0x7F).
+            // For multi-byte (CJK) chars we need byte counts not char counts;
+            // use the trailing-suffix UTF-8 length since the shell treats
+            // each visible glyph as one cell but DEL deletes one byte unless
+            // the line editor is locale-aware. Most modern shells (zsh,
+            // bash with `set -o emacs`) handle wchar deletion correctly via
+            // termios + line discipline — DEL one per char.
+            val toErase = prev.length - i
+            if (toErase > 0) {
+                try {
+                    val dels = ByteArray(toErase.coerceAtMost(256)) { 0x7F }
+                    writeBytesToActivePty(view.context, dels)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "PTY composing-erase forward failed: ${t.message}")
+                }
+            }
+            // Type the new suffix.
+            val toAdd = next.substring(i)
+            if (toAdd.isNotEmpty()) {
+                try {
+                    writeBytesToActivePty(view.context, toAdd.toByteArray(Charsets.UTF_8))
+                } catch (t: Throwable) {
+                    Log.w(TAG, "PTY composing-add forward failed: ${t.message}")
+                }
+            }
+        }
+
         override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
             val s = text?.toString() ?: ""
             Log.i(
@@ -462,17 +515,19 @@ class WarpInputView @JvmOverloads constructor(
                 "IC.commitText text=${quote(s)} cursorPos=$newCursorPosition len=${s.length}"
             )
             NativeBridge.imeCommitText(s, newCursorPosition)
-            // V1-prep iteration 19: forward typed text to the active PTY
-            // session. Without this, Gboard input is invisible to the shell
-            // (the M2-S10 imeCommitText path only updates a stats counter
-            // for driver tests, never writes to the PTY).
-            if (s.isNotEmpty()) {
-                try {
-                    writeBytesToActivePty(view.context, s.toByteArray(Charsets.UTF_8))
-                } catch (t: Throwable) {
-                    Log.w(TAG, "PTY commit forward failed: ${t.message}")
-                }
-            }
+            // V1-prep iteration 22: emit the DIFF between the last composing
+            // region and the committed text. This handles three IME shapes
+            // uniformly:
+            //   1. Immediate-commit (Gboard with NO_SUGGESTIONS hint
+            //      respected): lastComposingText="" → write the full text.
+            //   2. After composing (Gboard committing a word): the chars
+            //      were already typed by setComposingText; here we only
+            //      type the delta (often nothing — the committed text
+            //      equals the last composing).
+            //   3. Autocorrect rewrite at commit time: prev composing
+            //      "teh" + commit "the" → erase "h" + "e" → type "h" + "e".
+            forwardComposingDiff(lastComposingText, s)
+            lastComposingText = ""
             // M6 carry-over #1: forward to ghost-suggest controller for
             // debounced auto-trigger. Controller filters / debounces /
             // resets on Enter internally — a no-op when feature disabled.
@@ -496,6 +551,12 @@ class WarpInputView @JvmOverloads constructor(
                 "IC.setComposingText text=${quote(s)} cursorPos=$newCursorPosition len=${s.length} spanned=${text is Spanned}"
             )
             NativeBridge.imeSetComposingText(s, newCursorPosition)
+            // V1-prep iteration 22: forward composing text to PTY via DIFF.
+            // Real Gboard composing → user sees each tap immediately reach
+            // the shell. Without this, only commit-time text reached PTY
+            // (= silent typing until space/punctuation/Enter).
+            forwardComposingDiff(lastComposingText, s)
+            lastComposingText = s
             // M6 carry-over #1: forward composing text to ghost-suggest
             // controller — round-1 ignores composing (CJK candidate
             // previews would thrash); placeholder for round-2 wiring.
@@ -510,6 +571,12 @@ class WarpInputView @JvmOverloads constructor(
         override fun finishComposingText(): Boolean {
             Log.i(TAG, "IC.finishComposingText")
             NativeBridge.imeFinishComposingText()
+            // V1-prep iteration 22: composing region is being abandoned
+            // without a commit. The chars were already typed via
+            // setComposingText forwarding; finishComposingText doesn't
+            // need to write anything more. Just reset the tracker so the
+            // next setComposingText starts from a clean slate.
+            lastComposingText = ""
             return super.finishComposingText()
         }
 

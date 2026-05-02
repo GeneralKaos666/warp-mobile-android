@@ -108,6 +108,7 @@ dist/
 # 30-50 MB binary artifact, never commit. CI uploads as workflow artifact;
 # release builds publish to GitHub Releases.
 _bootstrap-out/
+_bootstrap-out2/
 
 # M4-S04 staged bootstrap inside APK assets — copied at gradle assemble time
 # from _bootstrap-out/ via copyBootstrapZip + generateBootstrapVersion tasks.
