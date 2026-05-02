@@ -1496,6 +1496,14 @@ pub fn snapshot_cells() -> Vec<Vec<Cell>> {
     global_model().snapshot_cells()
 }
 
+/// V1-prep iteration 32: process-wide accessor for cursor row/col. Used by
+/// `terminalTakeDirtyAndPushFrame` to bottom-anchor short content under the
+/// composer instead of leaving the active prompt row pinned at the top of
+/// the viewport with empty rows below it (the user's "反著來" complaint).
+pub fn cursor_position() -> Cursor {
+    global_model().cursor()
+}
+
 pub fn dims() -> (usize, usize) {
     global_model().dims()
 }

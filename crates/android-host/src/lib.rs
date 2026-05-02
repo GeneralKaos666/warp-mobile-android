@@ -1362,7 +1362,7 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFram
     // wire shape; the duplication exists to keep dynamic_grid free of the
     // facade-layer Cargo dep). Sized at construction so we don't grow the
     // outer/inner Vecs on the hot path.
-    let dyn_cells: Vec<Vec<crate::dynamic_grid::Cell>> = cells
+    let mut dyn_cells: Vec<Vec<crate::dynamic_grid::Cell>> = cells
         .iter()
         .map(|row| {
             row.iter()
@@ -1375,6 +1375,43 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFram
                 .collect()
         })
         .collect();
+
+    // V1-prep iteration 32: bottom-anchor short content. Without this, when
+    // the user has only typed a few commands, the prompt row sits at the top
+    // of the viewport and a large empty area separates it from the on-screen
+    // composer at the bottom — the user's "反著來" complaint. Standard
+    // terminal UX (Warp Desktop, alacritty, iTerm, native xterm at startup)
+    // keeps the active prompt at the bottom of the visible area with any
+    // empty rows above it.
+    //
+    // We do this purely in the render-time projection — the underlying
+    // TerminalState still holds rows×cols with content top-down, so zsh's
+    // line-wrapping and scroll semantics are unchanged. We only shift WHICH
+    // rows go into the dynamic_grid output: prepend (rows - cursor_row - 1)
+    // blank rows, then the actual content rows up to the cursor row.
+    let cursor = terminal_model::cursor_position();
+    let total_rows = dyn_cells.len();
+    // Leave 2 rows of padding at the bottom: 1 for the cursor row itself
+    // (which may render its underline/block past the cell origin), plus 1
+    // to keep visible separation between the active prompt and the
+    // AccessoryRow chrome below the terminal viewport. This avoids the
+    // partial-clipping seen in iter-32a (cursor row rendered just past the
+    // SurfaceView's bottom edge).
+    let shift = total_rows.saturating_sub(cursor.row + 3);
+    if shift > 0 && total_rows > 0 {
+        let cols_count = dyn_cells.first().map(|r| r.len()).unwrap_or(0);
+        let blank_row: Vec<crate::dynamic_grid::Cell> =
+            (0..cols_count).map(|_| crate::dynamic_grid::Cell::blank()).collect();
+        let content_rows: Vec<Vec<crate::dynamic_grid::Cell>> =
+            dyn_cells.into_iter().take(cursor.row + 1).collect();
+        let mut bottom_anchored: Vec<Vec<crate::dynamic_grid::Cell>> =
+            Vec::with_capacity(total_rows);
+        for _ in 0..shift {
+            bottom_anchored.push(blank_row.clone());
+        }
+        bottom_anchored.extend(content_rows);
+        dyn_cells = bottom_anchored;
+    }
 
     let init_ok = vulkan::init_dynamic_grid(
         &dyn_cells,
