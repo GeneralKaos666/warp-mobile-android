@@ -103,18 +103,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install cargo-audit + cargo-deny
-        # Lightweight security + license + supply-chain checks.
-        # cargo-audit:  RUSTSEC advisories (vulns + unmaintained)
-        # cargo-deny:   license allowlist (AGPL-3.0 compatibility),
-        #               banned crates, source allowlist (only crates.io
-        #               + ImL1s/warp + warpdotdev/cosmic-text forks),
-        #               multi-version warnings.
-        # Both cached via actions/cache above so subsequent runs skip
-        # the 30-60s install.
-        run: |
-          cargo install --locked cargo-audit
-          cargo install --locked cargo-deny
+      - name: Install cargo-audit + cargo-deny (prebuilt binaries)
+        # taiki-e/install-action downloads prebuilt binaries from each
+        # tool's GitHub release page — completes in ~5-10s vs the
+        # ~5+ min that `cargo install --locked` takes for a cold cache
+        # (caught after CI run 25240221990 went from 33s to 5m31s when
+        # we added the cargo deny step). Same end result, much faster
+        # CI cycle.
+        # Refs: https://github.com/taiki-e/install-action
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
 
       - name: Security audit (main-repo deps)
         # Audits ONLY the main warp-mobile-android workspace (276 deps).
