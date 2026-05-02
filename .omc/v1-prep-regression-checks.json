@@ -88,12 +88,12 @@
     {
       "name": "test-zsh-asset.sh",
       "story": "M3-S06",
-      "verdict": "PASS (under bash; pre-existing #!/usr/bin/env zsh + set -euo pipefail bug in the script causes Gate-1 false-fail under zsh)",
+      "verdict": "PASS (stable across 3 consecutive runs)",
       "iteration": 18,
-      "verified_at": "2026-05-02T13:19Z",
+      "verified_at": "2026-05-02T13:57Z",
       "criteria": "APK contains assets/warp/zsh_body.sh + extracted to /data/data/.../files/warp/.",
       "result_excerpt": { "PASS": 6, "FAIL": 0 },
-      "implications": "Asset shipping + first-launch extraction still functional. Note the script's #!/usr/bin/env zsh shebang interacts badly with set -euo pipefail when unzip pipes through grep — running explicitly with `bash tools/scripts/test-zsh-asset.sh <serial>` produces a clean PASS. Pre-existing issue, not caused by iteration 18."
+      "implications": "Asset shipping + first-launch extraction still functional. Earlier transient Gate-1 false-fail (one occurrence, not reproducible across 3 follow-up runs) hypothesised to be a race with concurrent adb install / am force-stop traffic from a back-to-back test-pty-resize.sh invocation. Script shebang is already #!/usr/bin/env bash; no script change needed."
     },
     {
       "name": "test-pty-resize.sh",
@@ -116,6 +116,7 @@
     "Test drivers run only on connected adb devices. CI on ubuntu-latest can't exercise these — they're for manual + pre-release regression verification.",
     "The full driver suite is in tools/scripts/test-*.sh — 24 scripts spanning M1 PTY through M5 UX. This file documents only the v1-prep re-verification spot-check; original verifications are in .omc/m{1..6}-artifacts/.",
     "Spot-checked drivers (iteration 17): test-block-model.sh (M3-S07 PASS), test-ime.sh (M2-S10 environmental — no regression vs original).",
-    "Spot-checked drivers (iteration 18): test-block-model.sh (PASS again), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS), test-zsh-asset.sh (PASS under bash), test-pty-resize.sh (environmental SELinux $PREFIX/bin issue, pre-existing)."
+    "Spot-checked drivers (iteration 18): test-block-model.sh (PASS again), test-touch.sh (PASS), test-fgs-clean-kill.sh (PASS), test-zsh-asset.sh (PASS, stable across 3 runs), test-pty-resize.sh (environmental SELinux $PREFIX/bin issue, pre-existing).",
+    "Iteration 18 origin CI: test.yml run 25245264284 on commit 0f5e2d0 = SUCCESS (Rust + Android smoke green)."
   ]
 }
