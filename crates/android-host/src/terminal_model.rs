@@ -162,6 +162,21 @@ enum AnsiState {
     /// 7-bit ST handler for the ignore path — distinguished from
     /// `DcsFinish7Bit` so we don't dispatch through `finish_dcs`.
     DcsIgnoreFinish7Bit,
+    /// V1-prep iteration 21 (2026-05-02): OSC sequence body consumer.
+    /// Used for OSC 0/2 (terminal title), OSC 7 (cwd), OSC 8 (hyperlinks),
+    /// OSC 133 (Warp Block-model prompt-mode markers), OSC 9/777
+    /// (notifications), etc. Currently consumed silently — Warp's Block
+    /// model receives the same metadata via the DCS hook channel
+    /// (M3-S07) so OSC 133 is redundant for our pipeline. The previous
+    /// terminal_model state machine had no OSC variant, which caused
+    /// `\x1b]133;Alocalhost%\x1b\\` to be eaten as `]` (Esc fall-through)
+    /// + `133;Alocalhost%` typed as visible glyphs in the grid (user-
+    /// reported "133;Alocalhost% 133;B" leak in iteration 20).
+    OscString(Vec<u8>),
+    /// 7-bit ST handler for OSC: ESC was seen inside the OSC body, so
+    /// the next byte is either `\\` (ST → Ground) or anything else
+    /// (treat as ESC + that byte by re-entering Esc state).
+    OscFinish7Bit(Vec<u8>),
 }
 
 impl Default for AnsiState {
@@ -733,7 +748,21 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
         AnsiState::Esc => match b {
             b'[' => AnsiState::Csi(Vec::new()),
             b'P' => AnsiState::DcsAwaitMarker { seen_dollar: false },
+            // V1-prep iteration 21: OSC start. Consume silently until ST
+            // (ESC \ or 0x9c or BEL 0x07). Without this, OSC 133 prompt-
+            // mode markers + OSC 0/2 title sets + OSC 7 cwd + OSC 8
+            // hyperlinks all leaked as visible glyphs in the cell grid.
+            b']' => AnsiState::OscString(Vec::new()),
             b'\\' => AnsiState::Ground,
+            // 0x40..=0x5F was the catch-all that previously consumed `]`
+            // as a no-op. Now `]` is handled above so this range matches
+            // only the rest of the C1 controls (e.g. ESC @ = NUL, ESC ^ =
+            // PM, ESC _ = APC) which we still discard. Note: PM (^) and
+            // APC (_) are like OSC in that they need a string body
+            // consumer; for now we drop them on the floor since they're
+            // rare enough that the leak isn't user-visible. If users
+            // start seeing PM/APC payloads, add OscString-shaped variants
+            // for them.
             0x40..=0x5F => AnsiState::Ground,
             0x20..=0x2F => AnsiState::EscIntermediate,
             _ => AnsiState::Ground,
@@ -867,6 +896,45 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
             b'\\' => AnsiState::Ground,
             // Stay in ignore mode if the ESC wasn't a valid 7-bit ST.
             _ => AnsiState::DcsIgnoreUntilST,
+        },
+        // V1-prep iteration 21: OSC body consumer. Spec: OSC = ESC ] ;
+            // payload ; ST. ST may be ESC \\ (7-bit, two bytes), 0x9c
+            // (8-bit, one byte), or BEL 0x07 (xterm extension, common in
+            // OSC 0/2/7/8/133). Consume bytes silently — Warp's Block
+            // model already gets the same metadata via DCS hooks
+            // (M3-S07), so OSC 133 is redundant for our pipeline.
+        AnsiState::OscString(mut buf) => match b {
+            // 8-bit ST or BEL — both terminate the OSC and return to ground.
+            0x9c | 0x07 => AnsiState::Ground,
+            // 7-bit ST starts with ESC; the next byte decides.
+            0x1b => AnsiState::OscFinish7Bit(buf),
+            // Cap the buffer to avoid unbounded growth from a malformed
+            // sequence with no terminator. 4 KB matches the practical
+            // OSC 8 hyperlink upper bound.
+            _ => {
+                if buf.len() < 4096 {
+                    buf.push(b);
+                }
+                AnsiState::OscString(buf)
+            }
+        },
+        AnsiState::OscFinish7Bit(buf) => match b {
+            b'\\' => AnsiState::Ground,
+            // ESC was followed by something other than `\\` — re-enter
+            // OscString with the discarded ESC + this byte appended.
+            // (In practice this case is rare; most ESC mid-OSC indicates
+            // a stray ESC and the OSC was supposed to end at the prior
+            // 0x07 / 0x9c.)
+            _ => {
+                let mut next = buf;
+                if next.len() < 4096 {
+                    next.push(0x1b);
+                    if next.len() < 4096 {
+                        next.push(b);
+                    }
+                }
+                AnsiState::OscString(next)
+            }
         },
     };
 }
@@ -1483,6 +1551,46 @@ mod tests {
         assert!(snap.contains("hello"));
         assert!(snap.contains("world"));
         assert!(!m.take_dirty(), "second take_dirty returns false");
+    }
+
+    /// V1-prep iteration 21 regression gate: OSC 133 prompt-mode markers
+    /// + OSC 0/2 title sets MUST be consumed silently — none of their
+    /// payload bytes should ever appear in the rendered cell grid. Before
+    /// the OSC handler landed, zsh's `\x1b]133;Alocalhost%\x1b\\` leaked as
+    /// "133;Alocalhost%" rendered glyphs (see iteration-20 screenshots).
+    #[test]
+    fn osc_133_and_title_are_consumed_silently() {
+        let m = TerminalModel::new(2, 32);
+        // OSC 133;A (start prompt) ESC \\ then literal "%"
+        // OSC 0;tab title BEL terminator
+        // Then a literal "x" sentinel.
+        let bytes: Vec<u8> = b"\x1b]133;A\x1b\\%\x1b]0;localhost\x07x".to_vec();
+        m.ingest_pty_bytes(&bytes);
+        let snap = m.snapshot_text();
+        // Visible glyphs MUST be exactly "%x" — no "133", no "0;", no
+        // "Alocalhost", no "localhost".
+        assert!(!snap.contains("133"), "OSC 133 payload leaked: {:?}", snap);
+        assert!(!snap.contains("Alocalhost"), "OSC 133 payload leaked: {:?}", snap);
+        assert!(!snap.contains("localhost"), "OSC 0 title payload leaked: {:?}", snap);
+        let trimmed = snap.replace(' ', "").replace('\n', "").replace('\u{0}', "");
+        assert_eq!(trimmed, "%x", "expected only '%x' to render, got {:?}", snap);
+    }
+
+    /// OSC 8 hyperlink (commonly emitted by GNU ls with --color=auto when
+    /// terminal advertises file-clickable support). Format:
+    ///   ESC ] 8 ; <params> ; <uri> ESC \\ <text> ESC ] 8 ; ; ESC \\
+    /// The text in the middle is normal payload and SHOULD render; the
+    /// envelope must be silent.
+    #[test]
+    fn osc_8_hyperlink_envelope_silent_text_visible() {
+        let m = TerminalModel::new(1, 32);
+        let bytes: Vec<u8> =
+            b"\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\".to_vec();
+        m.ingest_pty_bytes(&bytes);
+        let snap = m.snapshot_text();
+        assert!(snap.contains("click"), "expected 'click' to render, got {:?}", snap);
+        assert!(!snap.contains("8;"), "OSC 8 envelope leaked: {:?}", snap);
+        assert!(!snap.contains("example.com"), "OSC 8 URI leaked: {:?}", snap);
     }
 
     #[test]
