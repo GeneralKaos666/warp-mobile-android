@@ -466,6 +466,26 @@ class WarpTerminalService : Service() {
             |    autoload -Uz compinit
             |fi
             |compinit -u -d ${"$"}{ZDOTDIR:-${"$"}HOME}/.zcompdump 2>/dev/null
+            |
+            |# 8. V1-prep iteration 33 (2026-05-03): conventional aliases +
+            |#    colorised ls / grep / diff. M4 bundles GNU coreutils 9.10
+            |#    so ls --color=auto is supported (toybox ls-from-stock
+            |#    Android does not support --color, but our PATH puts
+            |#    ${"$"}PREFIX/bin first so the GNU one wins). LS_COLORS is a
+            |#    dark-bg-friendly palette: di (dirs) bold blue, ln (symlinks)
+            |#    cyan, ex (executables) green, .tar/.gz/.zip red.
+            |alias ls='ls --color=auto'
+            |alias ll='ls -lah --color=auto'
+            |alias la='ls -lAh --color=auto'
+            |alias l='ls -CF --color=auto'
+            |alias grep='grep --color=auto'
+            |alias egrep='grep -E --color=auto'
+            |alias fgrep='grep -F --color=auto'
+            |alias diff='diff --color=auto'
+            |alias ..='cd ..'
+            |alias ...='cd ../..'
+            |alias ....='cd ../../..'
+            |export LS_COLORS='di=1;34:ln=36:so=35:pi=33:ex=32:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43:*.tar=31:*.tgz=31:*.zip=31:*.gz=31:*.bz2=31:*.xz=31:*.7z=31:*.jpg=35:*.jpeg=35:*.png=35:*.gif=35:*.mp4=35:*.mp3=35'
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.
