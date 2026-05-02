@@ -703,3 +703,119 @@ clearly documented and the structural fix slated for v1.1.
   surface, sliding under the status bar. Defaulting fullscreen
   works around it for v1.0; the proper fix is making the renderer
   honor the top inset.
+
+## Iteration 19 — IME → PTY input wiring (2026-05-02, commit c6a7359)
+
+User push-back on iteration 18: "我還是打不出來 應該按下一個按鍵文字字母就跑處來".
+Bug found: WarpInputConnection.commitText forwarded only to NativeBridge.imeCommitText →
+Rust ime::commit_text which updates a stats counter for the M2-S10 driver test path,
+NOT a PTY write. Every prior "device-verified" device test bypassed this by sending
+`am broadcast PTY_WRITE --es data ...` directly. Real Gboard typing has been
+silently dropped since M2.
+
+Fix: WarpInputConnection.commitText / sendKeyEvent / deleteSurroundingText now
+broadcast to PtyBroadcastReceiver via explicit ComponentName so the dynamic
+in-Service receiver doesn't double-deliver. Byte mappings:
+  - commitText(text) → text bytes
+  - KEYCODE_ENTER → \n
+  - KEYCODE_DEL → 0x7F (DEL — what mksh/zsh/bash default termios expects for backspace)
+  - KEYCODE_FORWARD_DEL → ESC[3~
+  - KEYCODE_TAB → \t / KEYCODE_ESCAPE → \x1B
+  - DPAD_UP/DOWN/LEFT/RIGHT → ESC[A/B/C/D
+  - Ctrl+letter → 0x01..0x1F
+  - deleteSurroundingText(N) → emit N × 0x7F
+
+Subtle: BaseInputConnection.commitText synthesizes KeyEvent.ACTION_DOWN+UP via
+KeyCharacterMap.VIRTUAL_KEYBOARD for each printable char committed; those route
+back through sendKeyEvent. Detect synthesized events (deviceId == VIRTUAL_KEYBOARD)
+and skip the byte-write in sendKeyEvent — commitText already wrote. Hardware
+keyboards (deviceId >= 0) keep full sendKeyEvent byte mapping.
+
+Regression gate: tools/scripts/test-ime-input-pty.sh asserts commit_count ==
+write_count (1:1, no double-write).
+
+## Iteration 20 — Termux smooth + Warp UX scaffold (2026-05-02, commits 3bb475a + 7b0e145)
+
+User mandate: "我就是要在 Android 的 warp 並且終端機功能跟 termux 一樣絲滑".
+Two halves shipped together:
+
+(a) **Termux smooth via nativeLibraryDir refactor** — every $PREFIX/bin/* ELF
+binary is now packaged as APK lib/<abi>/lib<sanitized>.so. Android's SELinux
+domain `untrusted_app` has neverallow on `app_data_file:file execute` since
+API 29 (the cause of "zsh dies in 10 ms" through M1–M6) but DOES have execute
+on `apk_data_file` which is the label of files in ${nativeLibraryDir}.
+Modern Termux uses the same trick. Build pipeline added to android/app/
+build.gradle: `extractTermuxBinariesAsLibs{Debug,Release}` opens the
+bootstrap zip, ELF-detects each `bin/<name>` entry, sanitizes the name,
+writes lib<name>.so to a per-variant intermediate, emits a JSON manifest
+into APK assets. Device-side first-launch + every-spawn:
+WarpTerminalService.installTermuxBinSymlinks() reads the manifest and
+replaces each $PREFIX/bin/<name> regular file (extracted by
+bootstrap_install) with a symlink to ${nativeLibraryDir}/lib<name>.so.
+Idempotent. 158 ELF binaries shipped (apt, bash, curl, dpkg, find, gawk,
+grep, less, sed, tar, xz, zstd, zsh, …); shell scripts in $PREFIX/bin
+remain as the original regular files. APK 134 MB → 140 MB. Verified:
+zsh prompt renders, `awk --version` = GNU 5.3.2, `bash --version` = GNU
+5.3.9, `curl --version` = full HTTP/3 stack with ngtcp2 + nghttp3.
+
+(b) **Warp UX scaffold** — Compose Material 3 chrome around the existing
+warpui Vulkan terminal pane, matching Warp Desktop's reference shape:
+  - Top app bar: hamburger / "Search sessions, agents, files…" pill /
+    new tab + / settings ⚙
+  - ModalNavigationDrawer with "Search tabs…" filter + tabs list
+  - Bottom prompt composer ("Warp anything…") with cwd-folder icon +
+    model picker chip ("● auto (cost-efficient)") + mic + send
+  - Material You dynamic color on Android 12+
+
+Compose hosts the existing FrameLayout (SurfaceView + WarpInputView +
+AccessoryRow) via AndroidView. Driver-mode escape hatch
+`--ez legacy_layout true` skips Compose for backwards-compatible
+device-test geometry. New file: dev/warp/mobile/ui/WarpAppTheme.kt +
+WarpScaffold.kt.
+
+Lessons:
+
+- **Test "tap the icon and type" every milestone**. Iteration 18+19+20
+  surfaced four user-facing bugs that every prior milestone-close had
+  signed off on (magenta launcher, hardcoded grid 80×24, Gboard
+  silent-input, $PREFIX/bin all blocked). All four traced to "device-
+  verified" tests using `am broadcast` to bypass the InputConnection +
+  PATH path real users take. Add a "tap the icon and type" gate to
+  every milestone close.
+- **SELinux > mount flags for app sandbox understanding**. The /data/
+  user/0 mount on Galaxy S24 Ultra has `nosuid,nodev` only — no
+  `noexec`. So mount-flag-level analysis suggested $PREFIX/bin/* should
+  exec. SELinux `neverallow untrusted_app app_data_file:file execute`
+  is the actual gate. ${nativeLibraryDir}'s `apk_data_file` label
+  bypasses it. Always check `ls -laZ` (SELinux context column) when
+  EACCES on execve in app-private paths.
+- **The dynamic linker is not bound by the same SELinux rule as
+  execve(2)**. zsh's dynamic deps in $PREFIX/lib/* (libpcre2-8,
+  libncursesw, libandroid-support, …) are all `app_data_file`-labelled
+  but PROT_EXEC mmap on them succeeds — the policy denies execve(2)
+  on `app_data_file:file` but permits `execmod` for already-running
+  processes. So we ONLY need to relocate the bin/ tree, not the lib/
+  tree. The original v1.1 plan estimated 7+ days; the actual refactor
+  was a single session.
+
+## Iteration 21 — OSC 133 leak silenced (2026-05-02, commit 2e4453c)
+
+Once iteration-20's Termux refactor put zsh in a real PTY, the rendered
+terminal showed `% 133;Alocalhost% 133;B` instead of `localhost%`. The
+streaming ANSI parser had no OSC variant: ESC `]` fell into the catch-all
+`0x40..=0x5F => Ground` arm which ate the `]` and let the OSC body type
+as visible glyphs. Fix: AnsiState::OscString + OscFinish7Bit, ESC `]` →
+OscString, consume bytes silently until ST (ESC \\, 0x9c, BEL 0x07).
+Buffer cap 4 KB. Two regression tests added:
+osc_133_and_title_are_consumed_silently +
+osc_8_hyperlink_envelope_silent_text_visible.
+
+zsh prompt now renders cleanly. Affected sequences also fixed in passing:
+OSC 0/2 (title), OSC 7 (cwd tracking), OSC 8 (clickable hyperlinks,
+emitted by GNU ls --color=auto), OSC 9/777 (notifications).
+
+Lesson: every Warp-style integration we add to the streaming parser
+needs paired regression tests for the negative case ("the envelope
+bytes do NOT show up in the rendered grid") because the failure mode
+is "looks weird" not "crashes". The two tests added here would have
+caught iteration-20's leak immediately in CI.
