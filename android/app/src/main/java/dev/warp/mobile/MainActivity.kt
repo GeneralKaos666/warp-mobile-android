@@ -662,6 +662,16 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
                 if (spawnProgram != null) {
                     putExtra("program", spawnProgram)
                 }
+                // V1-prep iteration 27 (2026-05-02): pass initial winsize
+                // so zsh starts with the correct rows/cols. The renderer's
+                // dynamic_grid was already sized via NativeBridge.terminalResize
+                // a few lines above; PTY winsize must match or zsh wraps
+                // lines at the wrong column → "5"/"e" garbage glyphs at row
+                // 0 + typing overwrites prior output (M3-S08 dynamic_grid
+                // assumes the cell snapshot from TerminalModel matches
+                // zsh's view of the terminal).
+                putExtra("rows", gridRows)
+                putExtra("cols", gridCols)
             }
             sendBroadcast(spawnIntent)
             Log.i(
@@ -797,6 +807,39 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         renderActive = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         attachAndStartRender(holder.surface, width, height)
+
+        // V1-prep iteration 27 (2026-05-02): when the SurfaceView dimensions
+        // change (typically: IME shows / hides → Compose Scaffold + imePadding
+        // shrinks the AndroidView → SurfaceView resizes → surfaceChanged),
+        // recompute the dynamic grid rows/cols and propagate to BOTH the
+        // renderer (NativeBridge.terminalResize) AND the PTY (TIOCSWINSZ via
+        // PTY_RESIZE broadcast). Without the PTY resize zsh keeps wrapping
+        // lines at its old column count → mismatched line wrap with the
+        // visible cells → leftover "5"/"e" garbage at row 0 and typing
+        // appears to overwrite earlier text.
+        if (terminalMode && gridCellWPx > 0 && gridCellHPx > 0) {
+            val newRows = maxOf(8, (height / gridCellHPx).toInt())
+            val newCols = maxOf(20, (width / gridCellWPx).toInt())
+            if (newRows != gridRows || newCols != gridCols) {
+                Log.i(
+                    TAG,
+                    "surfaceChanged → grid resize from " +
+                        "${gridRows}x${gridCols} to ${newRows}x${newCols} " +
+                        "(surface=${width}x${height} cell=${gridCellWPx}x${gridCellHPx})"
+                )
+                gridRows = newRows
+                gridCols = newCols
+                NativeBridge.terminalResize(newRows, newCols)
+                // PTY winsize: tell zsh the terminal got resized.
+                val resizeIntent = Intent(WarpTerminalService.ACTION_RESIZE).apply {
+                    setPackage(packageName)
+                    putExtra("cmd_id", "terminal_mode")
+                    putExtra("rows", newRows)
+                    putExtra("cols", newCols)
+                }
+                sendBroadcast(resizeIntent)
+            }
+        }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {

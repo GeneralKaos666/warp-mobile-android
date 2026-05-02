@@ -707,7 +707,21 @@ class WarpTerminalService : Service() {
         Log.i(LOG_TAG, "PTY_SPAWN cmdId=$cmdId program=$resolvedProgram args=${resolvedArgs.toList()} env_keys=${env.keys.sorted()}")
         // Fix #2: PtyManager.spawn() kills existing session before replacing
         val ok = ptyManager.spawn(cmdId, resolvedProgram, resolvedArgs, env)
-        if (ok) startReadLoop(cmdId, resolvedProgram, env)
+        if (ok) {
+            // V1-prep iteration 27 (2026-05-02): apply initial winsize from
+            // spawn extras BEFORE startReadLoop fires the first read. Without
+            // this, zsh inherits the kernel default 80×24 which doesn't
+            // match the renderer's dynamic_grid (computed from actual
+            // SurfaceView dims) — line wraps misalign with visible grid,
+            // cursor lands outside visible area, prompts overwrite output.
+            val initRows = intent.getIntExtra("rows", 0).toShort()
+            val initCols = intent.getIntExtra("cols", 0).toShort()
+            if (initRows > 0 && initCols > 0) {
+                Log.i(LOG_TAG, "PTY_SPAWN initial winsize cmdId=$cmdId rows=$initRows cols=$initCols")
+                ptyManager.resize(cmdId, initRows, initCols)
+            }
+            startReadLoop(cmdId, resolvedProgram, env)
+        }
     }
 
     private fun handleWrite(intent: Intent) {

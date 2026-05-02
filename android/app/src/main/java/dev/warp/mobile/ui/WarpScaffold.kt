@@ -296,7 +296,16 @@ private fun WarpPromptComposer(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                singleLine = false,
+                // V1-prep iteration 27 (2026-05-02): singleLine = true so
+                // pressing the IME Enter key triggers actionSend (→ onSend →
+                // onSubmit) instead of inserting a literal newline. With
+                // singleLine = false the IME treats Enter as multi-line
+                // newline insertion regardless of imeAction = Send hint, so
+                // the user types, presses Enter, and nothing happens (their
+                // "按下 enter 沒反應" complaint). Multi-line paste still
+                // works via the AccessoryRow Paste button which writes raw
+                // bytes including embedded newlines.
+                singleLine = true,
                 textStyle = TextStyle(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 14.sp
