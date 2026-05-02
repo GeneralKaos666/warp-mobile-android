@@ -2,6 +2,9 @@
 name = "warp-mobile-android-host"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-only"
+description = "Warp Mobile Android — JNI host crate (PTY, IME, terminal model, font render, Vulkan, AI client, bootstrap extractor)"
+repository = "https://github.com/ImL1s/warp-mobile-android"
 # M4-S12 round-3 (codex round-2 finding): shader compile pipeline moved to
 # `warp_mobile_android_link` (the canonical home for static_grid/dynamic_grid
 # Vulkan rendering). This crate no longer needs a build.rs — all .spv blobs

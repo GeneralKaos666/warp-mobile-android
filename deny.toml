@@ -1,0 +1,89 @@
+# cargo-deny config — v1-prep AGPL-3.0 license compliance gate.
+#
+# Run via: cargo deny check
+# Fail CI on: license violations, advisories, banned crates, multi-version
+#             warnings (per-crate dup-check), source restrictions.
+#
+# Why we need this beyond `cargo audit`:
+#   - cargo audit only catches RUSTSEC advisories (vulns + unmaintained).
+#   - cargo deny ALSO enforces: license allowlist (AGPL compatibility),
+#     banned crate names (known-malicious or deprecated), source allowlist
+#     (only crates.io + our own forks), and duplicate-version checks.
+#
+# AGPL-3.0-only ships our own code under AGPL; we can include MIT,
+# Apache-2.0, BSD-*, ISC, Unicode-3.0, Unlicense, etc. dependencies under
+# the "AGPL incorporates permissive licensed code with notice" doctrine.
+# We CANNOT include GPL-2.0-only (incompatible with AGPL-3.0), proprietary
+# licenses, or unlicensed crates.
+
+[graph]
+# Targets to check: our actual ship target.
+targets = [
+    { triple = "aarch64-linux-android" },
+    { triple = "x86_64-apple-darwin" },     # dev host (macOS)
+    { triple = "x86_64-unknown-linux-gnu" }, # CI host (ubuntu-latest)
+]
+
+[advisories]
+# Same advisory DB as `cargo audit`. We deny vulnerabilities + unmaintained
+# warnings (matches the `cargo audit --deny warnings` policy in CI).
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Allowed licenses for crates linked into the shipped APK.
+# Sourced from `cargo tree --format "{l}"` of the warp-mobile-android
+# workspace at commit 4800aa5 — all currently-used licenses are listed
+# here. Adding a dep with a license NOT on this list will fail the check.
+allow = [
+    "AGPL-3.0-only",         # our own crates (warp_ai_mobile, android-host, font_picker)
+    "MIT",                   # most crates.io permissive default
+    "Apache-2.0",            # other common permissive default
+    "Apache-2.0 WITH LLVM-exception",  # Rust stdlib + some compiler-toolchain crates
+    "BSD-2-Clause",          # some test frameworks
+    "BSD-3-Clause",           # syn, encoding_rs, etc.
+    "0BSD",                  # adler, jaq-* etc.
+    "ISC",                   # rustls, tinyvec
+    "Unicode-3.0",           # unicode-ident (consortium license, AGPL-compatible)
+    "Unicode-DFS-2016",       # legacy unicode-id-related crate license; AGPL-compat
+    "BSL-1.0",               # Boost Software License — permissive, AGPL-compat
+    "Zlib",                  # tinyvec_macros
+    "Unlicense",             # public-domain dedication; AGPL-compat
+    "MPL-2.0",               # webpki-roots etc; AGPL-compat (per FSF)
+    "CDLA-Permissive-2.0",   # webpki-roots (Linux Foundation permissive)
+    "CC0-1.0",               # public-domain dedication; AGPL-compat
+]
+# Lint level for crates with NO declared license. Should never happen in
+# crates.io artifacts — if it does, that's worth investigating.
+unused-allowed-license = "allow"
+confidence-threshold = 0.93
+exceptions = []
+
+[bans]
+# Multi-version detection: warn if the same crate appears at multiple
+# versions in the tree (build-time bloat + license/audit complexity). Not
+# a hard error because some popular crates legitimately have v1+v2 paths
+# (rand, syn, etc.) during ecosystem migrations.
+multiple-versions = "warn"
+# Crates we explicitly DON'T want anywhere in the tree.
+deny = [
+    # Add specific bans as needed. Empty by default — the license + advisory
+    # checks are the main lockdown.
+]
+# Skip mvers warning for crates we know are legitimately split (warp-src
+# pulls in old versions; not in our control until cosmic-text upgrades).
+skip = []
+skip-tree = []
+
+[sources]
+# Where crates come from. Only crates.io + our own ImL1s GitHub forks
+# of cosmic-text and warp.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = [
+    "https://github.com/warpdotdev/cosmic-text.git",
+    "https://github.com/ImL1s/warp.git",
+]

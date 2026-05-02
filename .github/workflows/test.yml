@@ -103,11 +103,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install cargo-audit
-        # Lightweight security audit — scans Cargo.lock for crates with
-        # known RUSTSEC advisories. Cached via `actions/cache` above so
-        # subsequent runs skip the 30s install.
-        run: cargo install --locked cargo-audit
+      - name: Install cargo-audit + cargo-deny
+        # Lightweight security + license + supply-chain checks.
+        # cargo-audit:  RUSTSEC advisories (vulns + unmaintained)
+        # cargo-deny:   license allowlist (AGPL-3.0 compatibility),
+        #               banned crates, source allowlist (only crates.io
+        #               + ImL1s/warp + warpdotdev/cosmic-text forks),
+        #               multi-version warnings.
+        # Both cached via actions/cache above so subsequent runs skip
+        # the 30-60s install.
+        run: |
+          cargo install --locked cargo-audit
+          cargo install --locked cargo-deny
 
       - name: Security audit (main-repo deps)
         # Audits ONLY the main warp-mobile-android workspace (276 deps).
@@ -121,6 +128,12 @@ jobs:
         # The main-repo Cargo.lock here is the authoritative dep graph
         # for what actually ships in the APK.
         run: cargo audit --deny warnings
+
+      - name: License + supply-chain check (cargo deny)
+        # Enforces AGPL-3.0 compatibility on every dep; rejects unknown
+        # registries / git sources; warns on duplicate-version trees.
+        # Config: deny.toml at repo root.
+        run: cargo deny check
 
       - name: Test warp-mobile-android-host (66 tests)
         run: cargo test -p warp-mobile-android-host --no-fail-fast

@@ -2,6 +2,9 @@
 name = "warp_ai_mobile"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-only"
+description = "Warp Mobile Android — Anthropic Claude API client (BYOK ghost-text + agent task)"
+repository = "https://github.com/ImL1s/warp-mobile-android"
 # M6-S03 foundation: Rust async client for Anthropic Claude APIs.
 #
 # Round-1 (M6-S02) shipped a synchronous Java HttpsURLConnection client
