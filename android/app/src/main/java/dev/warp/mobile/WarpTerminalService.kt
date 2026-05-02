@@ -486,6 +486,27 @@ class WarpTerminalService : Service() {
             |alias ...='cd ../..'
             |alias ....='cd ../../..'
             |export LS_COLORS='di=1;34:ln=36:so=35:pi=33:ex=32:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43:*.tar=31:*.tgz=31:*.zip=31:*.gz=31:*.bz2=31:*.xz=31:*.7z=31:*.jpg=35:*.jpeg=35:*.png=35:*.gif=35:*.mp4=35:*.mp3=35'
+            |
+            |# 9. V1-prep iteration 34 (2026-05-03): once-per-session welcome
+            |#    banner. .zshenv gets sourced twice in our setup (zsh's normal
+            |#    init + a re-source somewhere in WARP bootstrap; observed by
+            |#    `[pid=N]` showing same N twice in iter-34b debug screenshot).
+            |#    iter-34c (same day): WARP_BANNER_PRINTED guard makes this
+            |#    idempotent so the banner only prints once per session.
+            |#    iter-34a (same day): banner is ASCII-only. The original CJK
+            |#    hint string ('傳送/Enter runs') triggered cosmic_text font
+            |#    fallback into NotoColorEmoji's cmap-format-12 enumeration on
+            |#    the first shape pass, which iterates >25k codepoints on the
+            |#    main thread and exceeds the 30s ANR budget. Tracked in
+            |#    .omc/v1-prep-regression-checks.json as a latent issue
+            |#    (real CJK content in PTY output will still hit it; proper
+            |#    fix is to bound fallback or cache codepoint lookup).
+            |if [[ -z ${"$"}WARP_BANNER_PRINTED ]]; then
+            |    print -P -- "%F{cyan}%BWarp Mobile%b%f - zsh ${"$"}{ZSH_VERSION}"
+            |    print -P -- "%F{8}Tab completes - Up arrow recalls history - Enter runs%f"
+            |    print
+            |    export WARP_BANNER_PRINTED=1
+            |fi
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.

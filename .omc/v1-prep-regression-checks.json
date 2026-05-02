@@ -247,5 +247,19 @@
     "Verified GNU coreutils 9.10 is bundled (M4-S08 confirmed via 'ls --version'); --color=auto works through the dynamic_grid renderer's SGR parser. Direct invocation without pipe shows colors: 'cd ~ && ll' renders 'gittest' (drwx) in bold blue against white file entries. With explicit --color=always, executables in $PREFIX/bin (addpart, am, apt, apt-cache, apt-config, apt-get) render green as expected. Pipe-with-head suppresses colors as standard --color=auto behavior (stdout-not-a-TTY check inside GNU ls).",
     "od -c verification: 'ls --color=always' emits standard SGR sequences (ESC[0m, ESC[36m, etc.); the renderer correctly interprets these per the M3 SGR pipeline. Evidence: /tmp/warp-qa/autopilot/82-83-84-85-86-iter33-*.png covering alias listing, colored executable list, color-always forced, od byte dump, and natural ll color output.",
     "Also verified iter-32 bottom-anchor STILL works on top of iter-33: 'cd ~ && ll' output sits just above the AccessoryRow with empty space above. Aliases are render-layer additions only, do not affect the terminal_model::cursor_position() bottom-anchor projection."
+  ],
+  "iteration_34_notes": [
+    "Welcome banner added to ZDOTDIR/.zshenv",
+    "iter-34 (initial): banner contained CJK '傳送/Enter runs' string",
+    "iter-34 (initial): triggered ANR — cosmic_text font fallback into NotoColorEmoji's cmap-format-12 enumeration on first shape, iterated >25k codepoints on main thread, exceeded 30s ANR budget",
+    "iter-34 (initial): root-cause via /data/anr/anr_2026-05-03-02-50-59-672 — main thread stuck at ttf_parser::tables::cmap::format12::Subtable12::codepoints",
+    "iter-34a: fix — banner converted to ASCII-only ('Tab completes - Up arrow recalls history - Enter runs')",
+    "iter-34a: ANR resolved, banner renders",
+    "iter-34b: regression — banner appeared TWICE in viewport with same [pid=N] proving same zsh process; .zshenv being sourced multiple times in our setup",
+    "iter-34c: fix — WARP_BANNER_PRINTED idempotency guard. if [[ -z $WARP_BANNER_PRINTED ]]; then ... export WARP_BANNER_PRINTED=1; fi",
+    "iter-34c: verified once-only banner via screenshot 98 (no keyboard) and 99 (keyboard hidden)",
+    "iter-34c: prompt '/ %' visible at bottom, just above AccessoryRow (cwd is / because PtyManager spawns zsh from /)",
+    "iter-34c: composer typing reaches terminal (pwd appears as '/ % pwd' in viewport per screenshot 102) — separate v1+1 issue: send-button tap doesn't trigger Enter to PTY",
+    "Latent issue tracked: cosmic_text cmap-format-12 enumeration on first CJK encounter will still hang on real CJK PTY content (commit messages, file paths, ls output). Proper fix is to bound fallback fonts or cache codepoint sets. Defer to v1+1."
   ]
 }
