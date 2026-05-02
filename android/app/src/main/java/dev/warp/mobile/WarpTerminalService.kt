@@ -437,9 +437,23 @@ class WarpTerminalService : Service() {
             |    warp_update_prompt_vars() { :; }
             |fi
             |unset RPROMPT
-            |PROMPT=${"$"}'%{\e]133;A\a%}%# %{\e]133;B\a%}'
+            |# V1-prep iteration 31 (2026-05-03): show last cwd component before
+            |# the prompt char so the user knows where they are. %1~ gives the
+            |# last 1 path segment with HOME substituted as ~. The trailing
+            |# space + %# (= '#' for root, '%' otherwise) plus the OSC 133 A/B
+            |# wrapping for Block aggregator are unchanged.
+            |PROMPT=${"$"}'%{\e]133;A\a%}%1~ %# %{\e]133;B\a%}'
             |PS2='> '
             |setopt no_prompt_sp 2>/dev/null || true
+            |
+            |# V1-prep iteration 31: persist zsh history across app restarts
+            |# under ZDOTDIR. Without this, HISTFILE defaults to HOME/.zsh_history
+            |# but Android's app sandbox HOME may differ between cold launches.
+            |# 1000-entry rolling buffer is plenty for mobile use.
+            |HISTFILE=${"$"}{ZDOTDIR:-${"$"}HOME}/.zsh_history
+            |HISTSIZE=1000
+            |SAVEHIST=1000
+            |setopt SHARE_HISTORY EXTENDED_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE 2>/dev/null || true
             |
             |# 7. V1-prep iteration 30 (2026-05-03): enable Tab completion.
             |#    Termux's zsh ships the stock Completion/ tree under
