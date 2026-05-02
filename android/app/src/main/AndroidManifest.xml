@@ -162,6 +162,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- v1-prep: GhostSuggestController test hook. End-to-end UX
+             verification without a real Anthropic API key — the Settings
+             test key always 401s, so the happy-path strip-renders + Tab-
+             accept flow couldn't be device-verified without this. Drives
+             GhostSuggestController.injectSimulatedSuggestion. Same PTY_CONTROL
+             signature permission as the other debug-only test hooks; the
+             debug overlay strips it so adb shell broadcasts can reach it. -->
+        <receiver
+            android:name=".GhostSuggestSimulationReceiver"
+            android:exported="true"
+            android:permission="dev.warp.mobile.permission.PTY_CONTROL">
+            <intent-filter>
+                <action android:name="dev.warp.mobile.GHOST_INJECT_SUGGESTION" />
+                <action android:name="dev.warp.mobile.GHOST_DISMISS" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

@@ -127,6 +127,39 @@ object GhostSuggestController {
     }
 
     /**
+     * Test-only hook for end-to-end UX verification without a real
+     * Anthropic API key. Drives the state machine into the same
+     * `phase = "ready"` state that fireSuggestion would produce on a
+     * successful `:DONE:` poll, so we can verify:
+     *   - the AccessoryRow ghostStrip renders "💡 <suggestion> · Tab to accept"
+     *   - Tab button → acceptCurrent() → suffix bytes get sent to PTY
+     *   - the strip's onClick (alt-accept) path works
+     *   - listener fan-out + UI thread marshalling all flow correctly
+     *
+     * Used by the test driver `tools/scripts/test-ghost-suggest.sh`
+     * via the `GhostSuggestSimulationReceiver` BroadcastReceiver, gated
+     * behind the same PTY_CONTROL signature permission as the other
+     * debug-only test hooks (release builds keep the permission;
+     * debug builds strip it via tools:remove so `adb shell am broadcast`
+     * from uid=2000 can reach it).
+     *
+     * NOT a back-door for real users — release production builds DO
+     * have the PTY_CONTROL signature permission gating this receiver,
+     * so without the matching app signing key, no external app can
+     * trigger this. The receiver lives in `src/main/` (not `src/debug/`)
+     * so its presence is consistent across variants; only the manifest
+     * permission gate differs.
+     */
+    fun injectSimulatedSuggestion(buffer: String, suggestion: String) {
+        if (!enabled) return
+        cancelActiveStream()
+        mutateState {
+            SuggestionState(buffer = buffer, suggestion = suggestion, phase = "ready")
+        }
+        Log.i(LOG_TAG, "test-hook: injected buffer=\"$buffer\" suggestion=\"$suggestion\"")
+    }
+
+    /**
      * IME committed text: append to buffer, reset on Enter, restart
      * debounce. Called from WarpInputConnection.commitText on UI thread.
      */

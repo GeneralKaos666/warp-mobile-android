@@ -35,6 +35,12 @@
         <receiver
             android:name=".TerminalSimulationReceiver"
             tools:remove="android:permission" />
+        <!-- v1-prep: same pattern — strip PTY_CONTROL so adb shell broadcasts
+             can deliver GHOST_INJECT_SUGGESTION / GHOST_DISMISS for the
+             AI ghost-strip end-to-end UX verification. -->
+        <receiver
+            android:name=".GhostSuggestSimulationReceiver"
+            tools:remove="android:permission" />
         <!-- Export service in debug so `adb shell am start-foreground-service` works -->
         <service
             android:name=".WarpTerminalService"
