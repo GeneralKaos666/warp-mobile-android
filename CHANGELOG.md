@@ -20,6 +20,16 @@ For per-iteration lessons learned, see [`progress.txt`](progress.txt).
 
 In progress: same-day continuation of M6 close. Final v1.0 ship blockers (keystore generation + F-Droid recipe submission) gated on user.
 
+### Fixed (iteration 18, 2026-05-02 — launcher-path UIUX)
+
+- **Plain launcher Intent now produces a working terminal.** Previously the `android.intent.action.MAIN` / `category.LAUNCHER` Intent reached `MainActivity` with no extras, hit the `terminal_mode=false` branch, and rendered the Vulkan magenta clear color forever — never spawning a shell. `MainActivity.kt` now treats the no-extras path as default-on `terminal_mode` + auto-spawn of the configured shell, and defaults to fullscreen so the status bar doesn't overlay row 0. Driver-style `--ez terminal_mode true …` invocations are unchanged.
+- **Grid sized from `displayMetrics`** instead of the VT100-shaped hardcoded 80×24. On a 1080×2340 portrait flagship the launcher path now produces a 45-col × 54-row grid; the 24×40 px cell defaults still apply when no driver overrides are supplied.
+- **Configured shell that fails fast falls back to `/system/bin/sh`.** When the auto-spawned `$PREFIX/bin/zsh` dies within 1.5 s of spawn, `WarpTerminalService` respawns mksh under the same cmd_id with the same env, sending `ESC[2J ESC[H` first so the failed shell's stderr diagnostic doesn't bleed into the user-facing grid.
+
+### Diagnosed (iteration 18, 2026-05-02 — root cause of "zsh dies in PTY")
+
+`execve` on `$PREFIX/bin/zsh` returns EACCES (errno 13). Android's SELinux policy denies the `untrusted_app` domain `execute` access to `app_data_file`-labelled binaries since API 29 (`neverallow untrusted_app app_data_file:file execute`). The bundled `$PREFIX/bin/*` tree is `app_data_file`-labelled, so zsh — and GNU coreutils + every other binary under `/data/user/0/dev.warp.mobile/files/usr/bin/` — cannot be exec'd from the app's own foreground-service process. v1.0 ships with the mksh fallback as the user-facing shell; v1.1 will load Termux binaries from `nativeLibraryDir` (`system_lib_file`-labelled, exec-allowed) so `$PREFIX/bin/*` becomes runnable again.
+
 ### Added
 
 - **GitHub Actions test CI** (`.github/workflows/test.yml`) — runs 157 host tests (66 host + 18 ai client + 73 facade) + Android Kotlin compile smoke + `cargo audit --deny warnings` on every push to main + every PR. Concurrency cancels superseded PR runs. paths-ignore skips doc-only commits.
