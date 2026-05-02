@@ -189,9 +189,9 @@ class WarpTerminalService : Service() {
      * so the symlinks get installed on the next spawn after extraction.
      */
     private fun installTermuxBinSymlinks() {
-        val prefixBinDir = File(applicationInfo.dataDir, "files/usr/bin")
-        if (!prefixBinDir.isDirectory) {
-            Log.i(LOG_TAG, "installTermuxBinSymlinks: $prefixBinDir not present yet (bootstrap not extracted); will retry at next spawn")
+        val prefixDir = File(applicationInfo.dataDir, "files/usr")
+        if (!prefixDir.isDirectory) {
+            Log.i(LOG_TAG, "installTermuxBinSymlinks: $prefixDir not present yet (bootstrap not extracted); will retry at next spawn")
             return
         }
         val nativeLibDir = applicationInfo.nativeLibraryDir
@@ -208,6 +208,7 @@ class WarpTerminalService : Service() {
             Log.e(LOG_TAG, "installTermuxBinSymlinks: manifest parse error: ${e.message}")
             return
         }
+        val schemaVersion = parsed.optInt("version", 1)
         val bins = parsed.optJSONArray("bins") ?: run {
             Log.w(LOG_TAG, "installTermuxBinSymlinks: manifest has no 'bins' array")
             return
@@ -227,8 +228,19 @@ class WarpTerminalService : Service() {
                 skippedMissingLib++
                 continue
             }
-            val target = File(prefixBinDir, original)
+            // Schema v1 stored just the basename relative to $PREFIX/bin/. v2
+            // stores the full relative path from $PREFIX (e.g. "bin/ls",
+            // "libexec/git-core/git-remote-http") so we can relocate the
+            // libexec subtree too. Treat schema v1 entries as "bin/<original>"
+            // for backwards compatibility.
+            val rel = if (schemaVersion >= 2) original else "bin/$original"
+            val target = File(prefixDir, rel)
             val targetPath = target.toPath()
+
+            // mkdirs the parent — libexec/git-core/ may not exist yet on a
+            // partial bootstrap_install (defensive; bootstrap_install
+            // normally creates these dirs from SYMLINKS.txt).
+            target.parentFile?.mkdirs()
 
             // Check if symlink already points at the right place.
             try {
@@ -252,12 +264,12 @@ class WarpTerminalService : Service() {
                 java.nio.file.Files.createSymbolicLink(targetPath, libPath.toPath())
                 installed++
             } catch (e: Exception) {
-                Log.w(LOG_TAG, "installTermuxBinSymlinks: failed to symlink $original -> $libPath: ${e.message}")
+                Log.w(LOG_TAG, "installTermuxBinSymlinks: failed to symlink $rel -> $libPath: ${e.message}")
             }
         }
         Log.i(
             LOG_TAG,
-            "installTermuxBinSymlinks: installed=$installed already_ok=$skippedAlreadyOk missing_lib=$skippedMissingLib total_manifest=${bins.length()}"
+            "installTermuxBinSymlinks: schema=$schemaVersion installed=$installed already_ok=$skippedAlreadyOk missing_lib=$skippedMissingLib total_manifest=${bins.length()}"
         )
     }
 
@@ -602,6 +614,19 @@ class WarpTerminalService : Service() {
             // /etc/apt/apt.conf.d/ which is unreachable from our app
             // sandbox.
             put("APT_CONFIG", "$prefix/etc/apt/apt.conf")
+
+            // V1-prep iteration 24 (2026-05-02): Termux's git is compiled
+            // with --with-pager=pager (Debian convention — `pager` is a
+            // wrapper that resolves to less). The wrapper isn't shipped in
+            // the bootstrap zip, so `git log` fails with
+            //   error: cannot run pager: No such file or directory
+            //   fatal: unable to execute pager 'pager'
+            // GIT_PAGER=less makes git use the actual less binary (which IS
+            // in $PREFIX/bin) without the user needing to set core.pager.
+            put("GIT_PAGER", "less")
+            // PAGER also serves man, less itself, and other tools that
+            // honor it. Defaulting to less matches every common shell rc.
+            put("PAGER", "less")
 
             // Caller-supplied overrides win (e.g., test scripts wanting a
             // specific TERM or TMPDIR for isolation).

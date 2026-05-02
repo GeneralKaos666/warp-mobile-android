@@ -382,6 +382,20 @@ def sanitizeBinName = { String original ->
     "lib" + original.replaceAll(/[^A-Za-z0-9_]/, "_") + ".so"
 }
 
+// V1-prep iteration 24 (2026-05-02): extend extraction beyond bin/.
+// Bootstrap zip contains ELF binaries in BOTH bin/ AND libexec/<subdir>/, e.g.
+// libexec/git-core/git, libexec/git-core/git-remote-http, libexec/git-core/git-daemon.
+// git's multi-binary architecture invokes these at fixed paths (GIT_EXEC_PATH default
+// is $PREFIX/libexec/git-core), so we must relocate them too — otherwise `git clone`
+// fails at "git-remote-https permission denied" inside the SELinux app_data_file
+// domain. We process every file whose first 4 bytes are the ELF magic, regardless
+// of subdirectory. Each manifest entry records the full path relative to $PREFIX
+// (e.g. "bin/ls", "libexec/git-core/git-remote-http") so installTermuxBinSymlinks
+// can mkdirs the parent and create the symlink at the correct location.
+//
+// Skipped: dotfiles, share/ (man pages, locale, docs — never executed), include/
+// (C headers), lib/ (shared libs are dlopened, not exec'd; bootstrap_install
+// places them correctly under $PREFIX/lib/ where ld finds them via DT_RUNPATH).
 def extractTermuxBinariesAction = { File outDir ->
     outDir.mkdirs()
     termuxManifestAssetPath.parentFile.mkdirs()
@@ -392,10 +406,13 @@ def extractTermuxBinariesAction = { File outDir ->
         while (entries.hasMoreElements()) {
             def e = entries.nextElement()
             if (e.directory) continue
-            if (!e.name.startsWith("bin/")) continue
-            // Only flat top-level entries — skip nested files (defensive).
-            def baseName = e.name.substring("bin/".length())
-            if (baseName.contains("/")) continue
+            // Only process subtrees that contain executables. share/, include/,
+            // etc/, var/ are documentation/config/runtime data — never exec'd.
+            // lib/ holds shared libraries — exec_blocked but mmap PROT_EXEC is
+            // permitted on app_data_file (the 100KB+ shared libs would also
+            // double APK size, and bootstrap_install already places them
+            // correctly for the dynamic linker).
+            if (!(e.name.startsWith("bin/") || e.name.startsWith("libexec/"))) continue
             // Read first 4 bytes to detect ELF.
             def head = new byte[4]
             zipFile.getInputStream(e).withCloseable { is ->
@@ -409,7 +426,7 @@ def extractTermuxBinariesAction = { File outDir ->
             def isElf = head[0] == (byte) 0x7F && head[1] == (byte) 0x45 &&
                         head[2] == (byte) 0x4C && head[3] == (byte) 0x46
             if (!isElf) continue
-            def libName = sanitizeBinName(baseName)
+            def libName = sanitizeBinName(e.name)
             def outFile = new File(outDir, libName)
             zipFile.getInputStream(e).withCloseable { is ->
                 outFile.withOutputStream { os ->
@@ -417,15 +434,15 @@ def extractTermuxBinariesAction = { File outDir ->
                 }
             }
             outFile.setExecutable(true)
-            manifest << [original: baseName, lib_name: libName, size_bytes: outFile.length()]
+            manifest << [original: e.name, lib_name: libName, size_bytes: outFile.length()]
         }
     } finally {
         zipFile.close()
     }
     manifest = manifest.sort { it.original }
     def jsonOut = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
-        version: 1,
-        purpose: "v1-prep iteration 20: Termux binary relocation. \$PREFIX/bin/<original> should be a symlink to \${nativeLibraryDir}/<lib_name>. Created by WarpTerminalService at first launch (post bootstrap_install).",
+        version: 2,
+        purpose: "v1-prep iteration 24: Termux binary relocation (bin/ + libexec/). \$PREFIX/<original> should be a symlink to \${nativeLibraryDir}/<lib_name>. Created by WarpTerminalService at first launch (post bootstrap_install). Schema v2: original is the full relative path from \$PREFIX (e.g. 'bin/ls' or 'libexec/git-core/git-remote-http').",
         bin_count: manifest.size(),
         bins: manifest
     ]))
