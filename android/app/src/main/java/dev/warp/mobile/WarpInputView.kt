@@ -1,12 +1,14 @@
 package dev.warp.mobile
 
 import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.text.Spanned
 import android.util.AttributeSet
 import android.util.Log
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -429,7 +431,7 @@ class WarpInputView @JvmOverloads constructor(
      * exercised in M2-S10).
      */
     class WarpInputConnection(
-        view: View,
+        private val view: View,
         fullEditor: Boolean
     ) : BaseInputConnection(view, fullEditor) {
 
@@ -440,6 +442,17 @@ class WarpInputView @JvmOverloads constructor(
                 "IC.commitText text=${quote(s)} cursorPos=$newCursorPosition len=${s.length}"
             )
             NativeBridge.imeCommitText(s, newCursorPosition)
+            // V1-prep iteration 19: forward typed text to the active PTY
+            // session. Without this, Gboard input is invisible to the shell
+            // (the M2-S10 imeCommitText path only updates a stats counter
+            // for driver tests, never writes to the PTY).
+            if (s.isNotEmpty()) {
+                try {
+                    writeBytesToActivePty(view.context, s.toByteArray(Charsets.UTF_8))
+                } catch (t: Throwable) {
+                    Log.w(TAG, "PTY commit forward failed: ${t.message}")
+                }
+            }
             // M6 carry-over #1: forward to ghost-suggest controller for
             // debounced auto-trigger. Controller filters / debounces /
             // resets on Enter internally — a no-op when feature disabled.
@@ -489,21 +502,66 @@ class WarpInputView @JvmOverloads constructor(
             // "\n" commit to the controller (idempotent — multiple resets
             // just clear an already-empty buffer).
             if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                // V1-prep iteration 19: forward the byte sequence for
+                // common control keys to the active PTY. Without this,
+                // Gboard's Enter / Backspace and any hardware keyboard
+                // input never reach the spawned shell.
+                val ptyBytes: ByteArray? = when (event.keyCode) {
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER -> byteArrayOf('\n'.code.toByte())
+                    // ASCII DEL (0x7F) — what most line editors expect for
+                    // Backspace; mksh / zsh / bash all map this to delete-
+                    // previous-char in their default termios.
+                    KeyEvent.KEYCODE_DEL -> byteArrayOf(0x7F)
+                    // Forward-delete (rare on phones; mapped to ESC[3~).
+                    KeyEvent.KEYCODE_FORWARD_DEL -> byteArrayOf(0x1B, '['.code.toByte(), '3'.code.toByte(), '~'.code.toByte())
+                    KeyEvent.KEYCODE_TAB -> byteArrayOf('\t'.code.toByte())
+                    KeyEvent.KEYCODE_ESCAPE -> byteArrayOf(0x1B)
+                    KeyEvent.KEYCODE_DPAD_UP -> byteArrayOf(0x1B, '['.code.toByte(), 'A'.code.toByte())
+                    KeyEvent.KEYCODE_DPAD_DOWN -> byteArrayOf(0x1B, '['.code.toByte(), 'B'.code.toByte())
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> byteArrayOf(0x1B, '['.code.toByte(), 'C'.code.toByte())
+                    KeyEvent.KEYCODE_DPAD_LEFT -> byteArrayOf(0x1B, '['.code.toByte(), 'D'.code.toByte())
+                    else -> {
+                        // Ctrl+letter — used to send 0x01..0x1F control chars
+                        // (Ctrl+C → SIGINT, Ctrl+D → EOF, Ctrl+L → clear).
+                        // Plain printable chars from a hardware keyboard
+                        // ALSO arrive here via sendKeyEvent, but we skip
+                        // them: BaseInputConnection.commitText synthesizes
+                        // exactly the same KeyEvents AFTER our commitText
+                        // override has already written the bytes — handling
+                        // them here would double-write every char. The
+                        // trade-off: a true USB-keyboard-only "no IME"
+                        // setup wouldn't get printable chars to the PTY
+                        // (none exist on phones). v1.x scope.
+                        val u = event.unicodeChar
+                        if (u != 0 && (event.metaState and KeyEvent.META_CTRL_ON) != 0 && u in 0x40..0x7F) {
+                            byteArrayOf((u and 0x1F).toByte())
+                        } else {
+                            null
+                        }
+                    }
+                }
+                if (ptyBytes != null && ptyBytes.isNotEmpty()) {
+                    try {
+                        writeBytesToActivePty(view.context, ptyBytes)
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "PTY key forward failed (kc=${event.keyCode}): ${t.message}")
+                    }
+                }
+
                 when (event.keyCode) {
-                    android.view.KeyEvent.KEYCODE_ENTER,
-                    android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    KeyEvent.KEYCODE_ENTER,
+                    KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                         try {
                             GhostSuggestController.onTextCommitted("\n")
                         } catch (t: Throwable) {
                             Log.w(TAG, "GhostSuggest enter-reset failed: ${t.message}")
                         }
                     }
-                    android.view.KeyEvent.KEYCODE_DEL,
-                    android.view.KeyEvent.KEYCODE_FORWARD_DEL -> {
+                    KeyEvent.KEYCODE_DEL,
+                    KeyEvent.KEYCODE_FORWARD_DEL -> {
                         // M6-CO1 v1-prep: hardware backspace shrinks the
-                        // ghost buffer by 1 char. Without this, "lsx"
-                        // backspaced to "ls" would leave the controller's
-                        // buffer stuck at "lsx", giving Haiku wrong context.
+                        // ghost buffer by 1 char.
                         try {
                             GhostSuggestController.onTextDeleted(1)
                         } catch (t: Throwable) {
@@ -528,6 +586,15 @@ class WarpInputView @JvmOverloads constructor(
                 } catch (t: Throwable) {
                     Log.w(TAG, "GhostSuggest deleteSurroundingText shrink failed: ${t.message}")
                 }
+                // V1-prep iteration 19: emit one DEL (0x7F) per char to be
+                // deleted so the shell's line editor erases the same
+                // characters Gboard thinks it removed.
+                try {
+                    val dels = ByteArray(beforeLength.coerceAtMost(256)) { 0x7F }
+                    writeBytesToActivePty(view.context, dels)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "PTY deleteSurroundingText forward failed: ${t.message}")
+                }
             }
             return super.deleteSurroundingText(beforeLength, afterLength)
         }
@@ -544,5 +611,43 @@ class WarpInputView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "WarpIme"
+
+        // V1-prep iteration 19 (2026-05-02): the M2-S10 IME pipeline
+        // (commitText → NativeBridge.imeCommitText → Rust ime::commit_text)
+        // only updates a stats counter for the device test driver. It does
+        // NOT forward typed bytes to the spawned PTY. Every prior "device-
+        // verified" test bypassed this by sending `am broadcast PTY_WRITE
+        // --es data ...` directly. Real users typing on Gboard saw nothing
+        // appear in the terminal.
+        //
+        // Fix: every IME / key-event path in WarpInputConnection also
+        // broadcasts ACTION_WRITE for the active PTY cmd_id (defaults to
+        // "terminal_mode" — the launcher-default cmd_id from MainActivity;
+        // driver scripts that use cmd_id="default" set this field
+        // accordingly when they spawn).
+        @Volatile
+        @JvmStatic
+        var activePtyCmdId: String = "terminal_mode"
+
+        /**
+         * Broadcast raw bytes to the active PTY cmd_id.
+         *
+         * Targets PtyBroadcastReceiver via explicit ComponentName so the
+         * dynamic receiver inside WarpTerminalService doesn't ALSO match
+         * the broadcast (which would double-write — same bug AccessoryRow
+         * already fixed in M5-S02 round-1).
+         */
+        fun writeBytesToActivePty(context: Context, bytes: ByteArray) {
+            if (bytes.isEmpty()) return
+            val intent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+                component = android.content.ComponentName(
+                    context.packageName,
+                    "${context.packageName}.PtyBroadcastReceiver"
+                )
+                putExtra("cmd_id", activePtyCmdId)
+                putExtra("data", bytes)
+            }
+            context.sendBroadcast(intent)
+        }
     }
 }
