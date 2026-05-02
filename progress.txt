@@ -613,3 +613,93 @@ user-gated steps (keystore generation + F-Droid recipe submission).
   "trust the tool author's CI" — for v1-prep where speed matters, the latter is the right
   call. Re-evaluate if either tool starts shipping malicious binaries (we'll know via
   the security advisories the tools themselves catch).
+
+## Iteration 18 — v1-prep UIUX blockers resolved (2026-05-02)
+
+User invoked `/autopilot 全部驗證好` + `你要確定 UIUX 每一個功能都能用` after
+a screenshot-driven verification surfaced 3 ship blockers in the launcher
+path (`.omc/v1-prep-uiux-verification.md`). All three resolved in this
+iteration; iteration 18 commits land directly on main per project policy.
+
+### What landed
+
+- Plain launcher Intent now defaults `terminal_mode=true` and auto-spawns
+  the configured shell (Blocker #1). `MainActivity.kt` distinguishes
+  driver-style intents (anything carrying a `grid_*` or `terminal_cmd`
+  extra) from the launcher path and treats the latter as default-on.
+- Terminal grid rows/cols derived from `resources.displayMetrics.widthPixels
+  / heightPixels` instead of the VT100-shaped 80×24 hardcode (Blocker #2).
+  On a 1080×2340 portrait surface the grid becomes 45 cols × 54 rows.
+- Launcher path defaults to fullscreen so the status bar doesn't overlay
+  row 0 — the renderer stores `setRenderInsets.top` but never reads it
+  back, and switching to inset-aware grid drawing is post-v1.0 work.
+  Theme switched to `Theme.AppCompat.NoActionBar` so the action bar
+  doesn't overlay row 0 either.
+- `WarpTerminalService.kt` detects "shell died within 1.5 s of spawn"
+  and auto-respawns `/system/bin/sh`, sending `ESC[2J ESC[H` through
+  the terminal model first so the failed shell's stderr diagnostic
+  doesn't bleed into the user-visible grid (Blocker #3 mitigation).
+- `crates/android-host/src/pty.rs` retains a 24×80 `TIOCSWINSZ` seed
+  (defensive — ZLE module needs non-zero winsize) and writes the
+  `execve` errno to stderr on the Android target so the next failure
+  is observable in logcat instead of producing a silent `_exit(127)`.
+- `crates/android-host/src/lib.rs` `ptyRead` now logs the errno on
+  read failure (EIO from Bionic on slave-close vs EBADF on kill).
+
+### What we learned about Blocker #3
+
+It was not zsh dying. zsh never started — `execve` returned errno 13
+(EACCES) because of Android's SELinux policy. The bundled
+`$PREFIX/bin/zsh` is labelled `app_data_file:s0`; the app process
+runs in `untrusted_app:s0` domain; AOSP `system/sepolicy/private/
+untrusted_app.te` since API 29 carries `neverallow untrusted_app
+app_data_file:file execute`. The mount itself isn't `noexec`
+(F2FS shows `nosuid,nodev` only on /data/user/0), but SELinux denies
+the transition before it gets that far. `run-as` works because that
+shell runs in a different domain that has the exception.
+
+This is the same restriction Termux historically dodged via
+`targetSdkVersion=28`. For v1.0 we ship around it with the
+`/system/bin/sh` fallback. The structural fix is to load Termux
+binaries from `nativeLibraryDir` (`system_lib_file:s0`-labelled,
+exec-allowed) — that's an M4-shaped refactor scheduled for v1.1.
+
+### What this means for v1.0 capabilities
+
+The launcher path produces a working mksh shell with the
+AccessoryRow + Gboard. mksh built-ins (`echo`, `cd`, `pwd`, `set`,
+redirects, pipes) work; any binary in `$PREFIX/bin/` (zsh, ls, cat,
+head, tail, uname, date, id, …) returns `Permission denied (errno
+13)` because of the same SELinux domain restriction. The CI/release/
+license/APK-shrink work all stays valid; we ship the v1.0 with this
+clearly documented and the structural fix slated for v1.1.
+
+### Lessons
+
+- **"Shell dies in PTY" was a misframing**. The symptom (read loop
+  ends ~10 ms after spawn) led the prior round to focus on PTY setup
+  (TIOCSWINSZ, setpgid, tcsetpgrp). The real failure was earlier —
+  `execve` itself. Adding a single stderr-printing diagnostic in the
+  post-fork-pre-exec child path collapsed 4+ rounds of speculation
+  into one log line. Lesson: when a child process exits before
+  producing expected output, log the EXEC failure path explicitly,
+  not just the read-side error.
+- **Test the actual entry point real users will take**. Every prior
+  M1-M6 device test launched via `am start ... --ez terminal_mode
+  true` because that was the M3-S04 driver convention. The plain
+  launcher Intent (no extras) is what real users see, and it had
+  never been exercised end-to-end. Lesson: include a "tap the icon
+  cold" pass in every milestone close, even when driver-shaped
+  tests are passing.
+- **SELinux is upstream of `mount noexec`**. The /data/user/0 mount
+  doesn't carry `noexec`, so `mount` output suggested exec should
+  work. SELinux denies it earlier. Lesson: when EACCES appears on
+  `execve` in an app-private path, check the policy domain before
+  the mount flags.
+- **Renderer insets stored but never read = silent UI bug**. The
+  `setRenderInsets` JNI accepted top/left/right/bottom values from
+  the WindowInsetsCompat callback and stored them in atomics that
+  no later code path consumed. The grid rendered into the full
+  surface, sliding under the status bar. Defaulting fullscreen
+  works around it for v1.0; the proper fix is making the renderer
+  honor the top inset.

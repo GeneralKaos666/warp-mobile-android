@@ -87,6 +87,25 @@ pub fn spawn_pty(
             unsafe {
                 libc::setsid();
                 libc::ioctl(slave, libc::TIOCSCTTY.into(), 0i32);
+
+                // V1-prep defensive hardening: seed a non-zero TTY window size
+                // so any TIOCGWINSZ before MainActivity sends its first
+                // PTY_RESIZE returns a usable 24×80 instead of 0×0. zsh's ZLE
+                // module logs a warning and falls back to a degraded
+                // line-editor on 0×0 (per zsh source: Src/Zle/zle_main.c).
+                // Real grid size is pushed by MainActivity onResume via the
+                // resize() path on the master fd. NOTE: this alone does NOT
+                // resolve v1-prep blocker #3 (zsh dies in PTY ~15 ms after
+                // spawn even with this seed) — kept because it is correct
+                // PTY hygiene and removes a known cause from the suspect list.
+                let ws = libc::winsize {
+                    ws_row: 24,
+                    ws_col: 80,
+                    ws_xpixel: 0,
+                    ws_ypixel: 0,
+                };
+                libc::ioctl(slave, libc::TIOCSWINSZ.into(), &ws);
+
                 libc::dup2(slave, 0);
                 libc::dup2(slave, 1);
                 libc::dup2(slave, 2);
@@ -97,7 +116,37 @@ pub fn spawn_pty(
 
                 // envp built in parent — use execve (no PATH lookup, fully AS-safe)
                 libc::execve(prog_cstr.as_ptr(), argv_ptrs.as_ptr(), envp_ptrs.as_ptr());
-                // execve only returns on error — AS-safe exit
+                // execve only returns on error. Surface the errno via stderr
+                // (now dup'd to slave → master → logcat tag PtyOutput) so the
+                // post-mortem isn't a silent _exit(127). AS-safe: write(2) and
+                // _exit(2) are both async-signal-safe per POSIX.1-2017.
+                // Android-only: __errno() is the Bionic AS-safe errno accessor;
+                // host tests on macOS use __error() which has the same role but
+                // a different name. We only need this on-device anyway.
+                #[cfg(target_os = "android")]
+                {
+                    let errno = *libc::__errno();
+                    let msg = b"warp-pty: execve failed errno=";
+                    libc::write(2, msg.as_ptr() as *const libc::c_void, msg.len());
+                    let mut digits = [0u8; 12];
+                    let mut n = errno;
+                    let mut i = digits.len();
+                    if n == 0 {
+                        i -= 1;
+                        digits[i] = b'0';
+                    } else {
+                        let neg = n < 0;
+                        if neg { n = -n; }
+                        while n > 0 && i > 0 {
+                            i -= 1;
+                            digits[i] = b'0' + (n % 10) as u8;
+                            n /= 10;
+                        }
+                        if neg && i > 0 { i -= 1; digits[i] = b'-'; }
+                    }
+                    libc::write(2, digits[i..].as_ptr() as *const libc::c_void, digits.len() - i);
+                    libc::write(2, b"\n".as_ptr() as *const libc::c_void, 1);
+                }
                 libc::_exit(127);
             }
         }

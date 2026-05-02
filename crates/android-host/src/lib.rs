@@ -512,7 +512,22 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_ptyRead(
                 Err(_) => std::ptr::null_mut(),
             }
         }
-        Err(_) => std::ptr::null_mut(),
+        Err(e) => {
+            // V1-prep blocker #3 diagnostic: surface the errno so we can tell
+            // EBADF (post-kill, expected) from EIO (slave fully closed by a
+            // child that exited — the v1-prep blocker we're chasing) from
+            // anything else (EINTR, EAGAIN if O_NONBLOCK ever sneaks in).
+            // Logged via android-host logger which is bridged to logcat tag
+            // "android-host" by lib.rs init_logger.
+            let errno = e.raw_os_error().unwrap_or(0);
+            log::warn!(
+                target: "android-host",
+                "ptyRead returned Err errno={} ({})",
+                errno,
+                e
+            );
+            std::ptr::null_mut()
+        }
     }
 }
 

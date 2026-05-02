@@ -39,6 +39,10 @@ class WarpTerminalService : Service() {
     private val serviceJob = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + serviceJob)
     private val readJobs = mutableMapOf<String, Job>()
+    // V1-prep: remember which spawns we have already auto-fallen-back so a
+    // bad fallback (e.g. /system/bin/sh somehow also dying) does not loop
+    // forever. Keyed by cmd_id.
+    private val fallbackAttempted = mutableSetOf<String>()
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -540,7 +544,7 @@ class WarpTerminalService : Service() {
         Log.i(LOG_TAG, "PTY_SPAWN cmdId=$cmdId program=$resolvedProgram args=${resolvedArgs.toList()} env_keys=${env.keys.sorted()}")
         // Fix #2: PtyManager.spawn() kills existing session before replacing
         val ok = ptyManager.spawn(cmdId, resolvedProgram, resolvedArgs, env)
-        if (ok) startReadLoop(cmdId)
+        if (ok) startReadLoop(cmdId, resolvedProgram, env)
     }
 
     private fun handleWrite(intent: Intent) {
@@ -582,14 +586,20 @@ class WarpTerminalService : Service() {
         val cmdId = intent.getStringExtra("cmd_id") ?: "default"
         Log.i(LOG_TAG, "PTY_KILL cmdId=$cmdId")
         readJobs.remove(cmdId)?.cancel()
+        // V1-prep: a fresh spawn cycle for this cmdId should be allowed to
+        // try the configured shell again before falling back, so reset the
+        // fallback-attempted flag here.
+        fallbackAttempted.remove(cmdId)
         ptyManager.kill(cmdId)
     }
 
     // ── PTY read loop ────────────────────────────────────────────────────────
 
-    private fun startReadLoop(cmdId: String) {
+    private fun startReadLoop(cmdId: String, program: String, env: Map<String, String>) {
         // Fix #2: cancel existing read job before replacing to avoid competing loops
         readJobs.remove(cmdId)?.cancel()
+        val spawnedAtMs = System.currentTimeMillis()
+        var bytesRead = 0L
         val job = scope.launch {
             val buf = ByteArray(4096)
             while (isActive) {
@@ -599,6 +609,7 @@ class WarpTerminalService : Service() {
                     kotlinx.coroutines.delay(20)
                     continue
                 }
+                bytesRead += chunk.size
                 // M3-S04: forward each PTY chunk to the Rust terminal model.
                 // Fire-and-forget: the model handles its own dirty bit. The
                 // MainActivity Choreographer per-vsync callback consumes the
@@ -629,7 +640,53 @@ class WarpTerminalService : Service() {
                 }
                 sendBroadcast(out)
             }
-            Log.i(LOG_TAG, "read loop ended cmdId=$cmdId")
+            val aliveForMs = System.currentTimeMillis() - spawnedAtMs
+            Log.i(LOG_TAG, "read loop ended cmdId=$cmdId alive_ms=$aliveForMs bytes_read=$bytesRead program=$program")
+
+            // V1-prep blocker #3 mitigation (2026-05-02): the configured shell
+            // died fast enough that the launcher path would otherwise leave
+            // the user staring at an empty grid. Auto-fallback to
+            // /system/bin/sh (mksh) once per cmdId so the user gets a working
+            // terminal. The mksh shell is verified to run reliably under
+            // PtyManager (M3 device tests).
+            //
+            // Root cause (confirmed 2026-05-02): execve fails with EACCES
+            // (errno 13) because Android's SELinux policy denies
+            // `untrusted_app` domain execute access on `app_data_file` since
+            // API 29 (`neverallow untrusted_app app_data_file:file execute`).
+            // The bundled `$PREFIX/bin/zsh` is labelled `app_data_file`, so
+            // execve from the app's own foreground-service process is
+            // blocked. The real fix (post-v1.0) is to load Termux binaries
+            // out of `nativeLibraryDir` (labelled `system_lib_file`, exec-
+            // allowed) instead of `app_data_file`. Tracked in
+            // .omc/v1-prep-uiux-verification.md.
+            //
+            // Trigger: alive < 1500 ms is a strong fast-death signal for
+            // an interactive auto-spawn — a healthy shell stays alive
+            // waiting for input. We do not gate on bytes_read because the
+            // pty.rs execve-failure diagnostic itself writes a "warp-pty:
+            // execve failed errno=…" line before _exit, so the buffer is
+            // not empty even though no real shell ever ran.
+            val fastDeath = aliveForMs in 0..1500
+            val isAlreadyFallback = program == "/system/bin/sh"
+            if (fastDeath && !isAlreadyFallback && cmdId !in fallbackAttempted) {
+                fallbackAttempted.add(cmdId)
+                Log.w(
+                    LOG_TAG,
+                    "blocker #3 fallback: $program died in ${aliveForMs}ms (read $bytesRead bytes); respawning /system/bin/sh cmdId=$cmdId"
+                )
+                // Clear the terminal grid so the failed shell's stderr
+                // diagnostic ("warp-pty: execve failed errno=…") doesn't
+                // bleed into the user-facing terminal. ESC[2J = erase
+                // entire screen, ESC[H = move cursor to home (0,0).
+                NativeBridge.terminalInputBytes(cmdId, "[2J[H".toByteArray())
+                val ok = ptyManager.spawn(cmdId, "/system/bin/sh", emptyArray(), env)
+                if (ok) {
+                    startReadLoop(cmdId, "/system/bin/sh", env)
+                } else {
+                    Log.e(LOG_TAG, "blocker #3 fallback: /system/bin/sh spawn ALSO failed cmdId=$cmdId")
+                }
+            }
         }
         readJobs[cmdId] = job
     }

@@ -397,12 +397,33 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         // Refs (M2-S12, 2026-04-30):
         //   https://developer.android.com/reference/androidx/core/view/WindowInsetsControllerCompat
         //   https://developer.android.com/develop/ui/views/layout/immersive
-        if (intent.getBooleanExtra("fullscreen", false)) {
+        // V1-prep blocker #2 follow-up (2026-05-02): the renderer does not
+        // currently honor `setRenderInsets.top` for the dynamic grid (it stores
+        // the value but never reads it back), so row 0 of the terminal grid
+        // would otherwise sit under the status bar. The pragmatic v1.0 fix is
+        // to default to fullscreen on the plain launcher Intent — same pattern
+        // Termux uses. The status bar is still summonable via swipe-down for
+        // notifications. Driver-style intents that do NOT set fullscreen=true
+        // explicitly stay non-fullscreen so device tests continue to interact
+        // with system UI normally.
+        // Detect "plain launcher tap" the same way the terminal_mode block
+        // below does: no terminal_mode, no grid_mode, no driver-style extras.
+        val launcherFullscreenDefault =
+            !intent.getBooleanExtra("terminal_mode", false) &&
+                !intent.getBooleanExtra("grid_mode", false) &&
+                (intent.extras?.let { ex ->
+                    ex.keySet().none { it.startsWith("grid_") || it == "terminal_cmd" }
+                } ?: true)
+        if (intent.getBooleanExtra("fullscreen", launcherFullscreenDefault)) {
             val controller = WindowInsetsControllerCompat(window, frame)
             controller.hide(WindowInsetsCompat.Type.systemBars())
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            Log.i(TAG, "fullscreen mode applied: systemBars hidden, transient-swipe behavior set")
+            Log.i(
+                TAG,
+                "fullscreen mode applied: systemBars hidden, transient-swipe behavior set " +
+                    "(launcher_default=$launcherFullscreenDefault)"
+            )
         }
 
         Log.i(TAG, "MainActivity ready ping=${NativeBridge.ping()} input_focus=${warpInputView!!.isFocused}")
@@ -453,74 +474,109 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             gridMode = true
         }
 
-        // M3-S04: optional terminal_mode at launch. Driver uses
+        // M3-S04: terminal_mode at launch. Driver path uses
         //   am start -n dev.warp.mobile/.MainActivity \
         //     --ez terminal_mode true \
         //     --ef grid_font_size_px 32.0 \
         //     --ei grid_rows 24 --ei grid_cols 80 \
         //     --ef grid_cell_w_px 24.0 --ef grid_cell_h_px 40.0
         //
-        // This activates the M3-S04 push_frame path: PTY output → Rust
-        // TerminalModel → Vulkan static grid re-init per dirty vsync.
-        // Grid params overlap with grid_mode parsing above; if both are
-        // set, terminal_mode wins at frame-callback time but both grid
-        // params and the Rust resize are applied here.
-        if (intent.getBooleanExtra("terminal_mode", false)) {
+        // V1-prep blocker #1 fix (2026-05-02): the plain launcher Intent
+        // (action=MAIN/category=LAUNCHER, no extras) ALSO triggers
+        // terminal_mode now. Without this, tapping the app icon led to a
+        // magenta clear-color surface with no terminal — useless for end
+        // users. We treat any launch where neither grid_mode nor
+        // terminal_mode is explicitly set AND no driver flag is present
+        // as the launcher path → default-on terminal_mode + auto-spawn
+        // the default shell.
+        val explicitTerminalMode = intent.getBooleanExtra("terminal_mode", false)
+        val launcherDefaultTerminal =
+            !explicitTerminalMode &&
+                !intent.getBooleanExtra("grid_mode", false) &&
+                intent.extras?.let { ex ->
+                    // No driver-style extras → plain launcher tap.
+                    ex.keySet().none { it.startsWith("grid_") || it == "terminal_cmd" }
+                } ?: true
+        if (explicitTerminalMode || launcherDefaultTerminal) {
             terminalMode = true
-            // Default grid params optimized for ~24×80 readable text on a
-            // flagship 1080×2400 portrait surface (S24 Ultra ~ 3120×1440 in
-            // landscape). M3-S08 will tune these via runtime ANativeWindow
-            // dims; for M3-S04 we let the launch intent override.
             gridFontSizePx = intent.getFloatExtra("grid_font_size_px", 32.0f)
-            gridRows = intent.getIntExtra("grid_rows", 24)
-            gridCols = intent.getIntExtra("grid_cols", 80)
+            // V1-prep blocker #2 fix (2026-05-02): cell defaults stay 24×40 px
+            // (good for the 32 px font on flagship density) BUT rows/cols are
+            // computed from the actual surface DisplayMetrics instead of the
+            // hardcoded 80×24 VT100 grid that overflowed every portrait
+            // device (1920×960 vs 1080×2340). M3-S08's renderer-side dynamic-
+            // grid path already takes the rows/cols we send via
+            // terminalResize, so this end-to-end produces a grid that fills
+            // the visible region without clipping.
             gridCellWPx = intent.getFloatExtra("grid_cell_w_px", 24.0f)
             gridCellHPx = intent.getFloatExtra("grid_cell_h_px", 40.0f)
-            // M3-S09: report cell height to the input view so its onScroll /
-            // onFling pixel→rows conversion uses the right divisor. Reset
-            // any prior scroll state too (rotation / Activity recreate).
+            val dm = resources.displayMetrics
+            // Reserve ~2 cell-rows of vertical chrome (action bar + bottom
+            // accessory row when IME is up). The renderer's setRenderInsets
+            // will paint inside the inset-aware region, so we only need to
+            // make sure the grid's logical row count is small enough that
+            // bottom rows aren't clipped on common devices.
+            val chromeRowsReserve = 4
+            val derivedRows = maxOf(8, (dm.heightPixels / gridCellHPx).toInt() - chromeRowsReserve)
+            val derivedCols = maxOf(20, (dm.widthPixels / gridCellWPx).toInt())
+            gridRows = intent.getIntExtra("grid_rows", derivedRows)
+            gridCols = intent.getIntExtra("grid_cols", derivedCols)
             warpInputView?.setCellHeightPx(gridCellHPx)
             warpInputView?.resetScroll()
-            // Reshape the Rust model so PTY chunks land in the right grid
-            // size from the start (the model's dirty bit will trigger the
-            // first push_frame on the next dirty vsync).
             NativeBridge.terminalResize(gridRows, gridCols)
             Log.i(
                 TAG,
-                "terminal_mode requested rows=$gridRows cols=$gridCols " +
-                    "font_size_px=$gridFontSizePx cell=${gridCellWPx}x${gridCellHPx}px"
+                "terminal_mode rows=$gridRows cols=$gridCols " +
+                    "font_size_px=$gridFontSizePx cell=${gridCellWPx}x${gridCellHPx}px " +
+                    "screen=${dm.widthPixels}x${dm.heightPixels} " +
+                    "source=${if (explicitTerminalMode) "explicit" else "launcher_default"}"
             )
 
-            // Optional auto-spawn: --es terminal_cmd "/system/bin/sh"
-            // with --es terminal_initial_input "echo hello\n". Useful for
-            // M3-S04 device verification without needing a separate adb
-            // broadcast for PTY_SPAWN. The driver may set both extras to
-            // get a one-shot end-to-end smoke test.
             val terminalCmd = intent.getStringExtra("terminal_cmd")
-            if (!terminalCmd.isNullOrBlank()) {
-                val cmdId = intent.getStringExtra("terminal_cmd_id") ?: "terminal_mode"
-                val initialInput = intent.getStringExtra("terminal_initial_input")
-                val spawnIntent = Intent(WarpTerminalService.ACTION_SPAWN).apply {
-                    setPackage(packageName)
-                    putExtra("cmd_id", cmdId)
-                    putExtra("program", terminalCmd)
+            val cmdId = intent.getStringExtra("terminal_cmd_id") ?: "terminal_mode"
+            // Launcher-default path: spawn whatever WarpTerminalService picks
+            // by default ($PREFIX/bin/zsh if extracted, else /system/bin/sh).
+            // Driver path: honor explicit terminal_cmd. When neither is
+            // present, still spawn the default — the user just tapped the
+            // icon and expects a working terminal.
+            val spawnProgram = terminalCmd?.takeIf { it.isNotBlank() }
+            val spawnIntent = Intent(WarpTerminalService.ACTION_SPAWN).apply {
+                setPackage(packageName)
+                putExtra("cmd_id", cmdId)
+                if (spawnProgram != null) {
+                    putExtra("program", spawnProgram)
                 }
-                sendBroadcast(spawnIntent)
-                Log.i(TAG, "terminal_mode auto-spawn cmd_id=$cmdId program=$terminalCmd")
-                if (!initialInput.isNullOrEmpty()) {
-                    // Allow a brief delay so the PTY child has time to start
-                    // before we feed it stdin. 200ms is conservative for
-                    // sh/bash startup on flagship.
-                    warpInputView?.postDelayed({
-                        val writeIntent = Intent(WarpTerminalService.ACTION_WRITE).apply {
-                            setPackage(packageName)
-                            putExtra("cmd_id", cmdId)
-                            putExtra("data", initialInput)
-                        }
-                        sendBroadcast(writeIntent)
-                        Log.i(TAG, "terminal_mode auto-input cmd_id=$cmdId bytes=${initialInput.length}")
-                    }, 200)
-                }
+            }
+            sendBroadcast(spawnIntent)
+            Log.i(
+                TAG,
+                "terminal_mode auto-spawn cmd_id=$cmdId program=${spawnProgram ?: "<service-default>"}"
+            )
+
+            // V1-prep: launcher path wants the IME up by default so the user
+            // can type immediately after tapping the icon. Driver path leaves
+            // ime_mode handling to its own extra (preserved below).
+            if (launcherDefaultTerminal) {
+                warpInputView?.postDelayed({
+                    warpInputView?.requestFocus()
+                    val imm =
+                        getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.showSoftInput(warpInputView, InputMethodManager.SHOW_IMPLICIT)
+                    Log.i(TAG, "launcher path: auto-show IME requested")
+                }, 250)
+            }
+
+            val initialInput = intent.getStringExtra("terminal_initial_input")
+            if (!initialInput.isNullOrEmpty()) {
+                warpInputView?.postDelayed({
+                    val writeIntent = Intent(WarpTerminalService.ACTION_WRITE).apply {
+                        setPackage(packageName)
+                        putExtra("cmd_id", cmdId)
+                        putExtra("data", initialInput)
+                    }
+                    sendBroadcast(writeIntent)
+                    Log.i(TAG, "terminal_mode auto-input cmd_id=$cmdId bytes=${initialInput.length}")
+                }, 200)
             }
         }
 
