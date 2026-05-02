@@ -88,6 +88,20 @@ Verification screenshots: `.omc/v1-prep-screenshots/08-` through `11-`. The mksh
 
 **Why it's gated on user**: irreversible "going public" step — once accepted, we have a publication commitment.
 
+### 3.4 Warp UX layer (M7–M10) — NOT BUILT
+
+**Status**: HARD BLOCKER (added 2026-05-02 in iteration 19 after user push-back on the iteration-18 launcher-path "fix"). M0–M6 built the Warp **engine** (PTY + Vulkan grid + DCS-hook Block model + BYOK AI client + Termux runtime); the Warp **UX layer** (sidebar / agent-first prompt screen / Block-as-card rendering / model picker / tab manager / search overlay) was never scoped. iteration-18's launcher-path-now-renders-not-magenta result is engine-shape, not Warp-shape. Real-Warp users tapping the icon today get a fullscreen Vulkan grid + raw mksh prompt + system Gboard — accurate but mis-marketed if shipped as "Warp on Mobile v1.0".
+
+**Plan**: `.omc/m7-plan-warp-ux-layer.md` — 4-milestone breakdown (M7 Compose chrome scaffold, M8 Block-as-card rendering, M9 prompt-first agent screen, M10 polish + accessibility), Option-A (Compose chrome around the existing Vulkan terminal pane) recommended. Estimated 7–10 weeks solo-dev.
+
+**Why it's gated on user**: pre-M7 architectural decision (Compose vs pure-Vulkan vs Compose-only) is reversible at significant cost; release-cadence decision (ship v0.7-engine NOW + v1.0 after M10 / hold all releases until M10 / release intermediate previews v0.8 / v0.9 / v1.0) is a strategic call.
+
+**Three options for the user**, surfaced in the iteration-19 turn:
+
+1. **Stop the v1.0 tag, rename "Warp Engine for Android v0.7"** — ship the engine library + minimal terminal NOW as an OSS engine release; v1.0 waits until M7-M10 ships the Warp-shape UX.
+2. **Hold v1.0, add M7-M10 to the v1 plan** — no public release until ~Q3 2026 when M10 ships.
+3. **Hybrid** — release v0.7-engine now, open M7 in parallel, ship intermediate previews (v0.8 after M7 / v0.9 after M8 / v1.0 after M10).
+
 ---
 
 ## §4. v1.0 ship enhancements (nice-to-have, not blockers)
