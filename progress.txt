@@ -492,3 +492,124 @@ conditions caught by self-review.
   generation instructions live as comments in the same build.gradle block where the config
   reads from it. This is the "secret-where-it's-used" pattern — anyone touching signing
   reads the docs by being in the right file.
+
+---
+
+## Iteration 17 — v1-prep deep-clean (2026-05-02, /loop dynamic)
+
+**Final state**: same-day continuation of iteration 16 driven by repeated `/loop` invocations.
+~25 additional commits of v1-prep work bringing the repo to genuine release-ready modulo
+user-gated steps (keystore generation + F-Droid recipe submission).
+
+### What landed in iteration 17
+
+#### CI infrastructure (10 commits)
+- `f6f96d0` test.yml — 157 tests gated on every push (66 host + 18 ai + 73 facade) + Android
+  Kotlin compile smoke. paths-ignore for doc-only changes.
+- `76a4b28` warp-src clone path fix (CI checkout sits at repo root; F-Droid recipe runs from
+  `subdir: android` so its `../warp-src` path doesn't translate)
+- `31f6c82` actions-rs/toolchain → dtolnay/rust-toolchain (deprecated → maintained); reordered
+  NDK install before setup-cargo-config.sh
+- `a98c2d5` portable errno (`io::Error::last_os_error()` vs macOS-only `libc::__error()`) —
+  caught by Linux CI; would have always failed there
+- `cb4b756` + `ae7f1c5` Node.js 24 opt-in across all 3 workflows (June 2026 forced switch)
+- `505bf28` v1-release-kickoff §5 — pin-refresh step before tag-push
+- `a441c75` paths-ignore for `**.md` / `.omc/**` / `progress.txt` / `fastlane/**` /
+  `metadata/**` (saves CI minutes on doc-only commits)
+- `4b1b25a` cargo-audit step (advisory check; main repo 276 deps clean)
+- `9bd8f68` taiki-e/install-action for cargo-audit + cargo-deny (5+ min → ~10s install)
+- `bec13f0` cargo-deny step (license + supply-chain). Caught real omission: our own crates
+  didn't declare `license` in Cargo.toml — fixed with `license = "AGPL-3.0-only"`
+
+#### Release pipeline (3 commits)
+- `245f05a` opt-in signing config + version 0.6.0-m6 (was stale at 0.1.0-m1)
+- `9fd3584` tools/scripts/release.sh + .github/workflows/release.yml — composes APK +
+  bootstrap zip + SHA256SUMS + RELEASE_NOTES.md; gh release create on `v*` tag push
+- `d652baa` bootstrap pin refresh (a1a64f56 → a85e7511 — repo now buildable from clean clone)
+
+#### APK shrink (3 commits)
+- `04daa4e` strip = "symbols" — libwarp.so 8.2 → 5.8 MB (removes debug + non-dynamic symtab,
+  keeps JNI-required dynamic symtab)
+- `7e91c50` lto = "fat" + codegen-units = 1 + panic = "abort" — libwarp.so 5.8 → 4.4 MB
+  (cross-crate inlining + DCE + unwind-tables removal)
+- Cumulative: .so packaged 8.6 MB → 4.5 MB (-48%); APK 55 MB → 53.7 MB (-1.3 MB)
+
+#### Functional v1+1 closures (5 commits)
+- `8c3ffa1` M6 carry-over #3 — listener-based offline button grey-out (`AccessoryRow`
+  registers `AiConnectivity.Listener` in `onAttachedToWindow`; toggles button isEnabled+alpha
+  on connectivity changes within ~200ms)
+- `06c86d7` M5-S03 BlockActionsSheet UI scaffold + M6-S04 round-2 real-Block-context
+- `4f010c7` + `dcce36f` + `c1dc07a` + `fa0171a` M6-CO1 IME ghost auto-trigger (4 rounds:
+  initial impl, self-review fixes, self-cancel-cascade hidden bug, backspace tracking)
+- `fea4aed` Block.output capture — M3 mirror Block now records stdout/stderr bytes
+  (capped 64 KB, ANSI escapes excluded by the parser state machine, JSON dump includes
+  `"output"` field). Closes the BlockActionsSheet "(no output captured)" caveat.
+- `1e732c5` M4-S14 emoji raster smoke (carry-forward closure)
+- `452e3c5` Color emoji root-cause: swash 0.1.x has no COLR v1 decoder. 4 fix paths captured.
+- `114e784` SamsungColorEmoji routing — color emoji works on Samsung devices for FREE
+  (CBDT/CBLC bitmap-based, swash 0.1.x supports). Zero APK size cost.
+
+#### Documentation (5 commits)
+- `40954d7` M6 close-out doc
+- `8d24d14` M6 carry-overs marked closed in §5
+- `82602be` CLAUDE.md refresh with v1-prep state
+- `83b8d61` progress.txt iteration 16 (M6 close lessons)
+- `bd06dc6` v1-release-kickoff.md — explicit ship blockers + recommended path
+- `2bbadd0` cleanup dead `Block.output_range_*` fields
+- `4aeea1f` M4-S08 reproducibility re-verified (byte-identical bootstrap zips)
+- `5b263aa` v1-prep regression spot-check (test-block-model PASS, test-ime environmental)
+- `31a814a` CHANGELOG.md at repo root
+- `4800aa5` release-checklist.md tag-day tick-list
+- `f040e2a` dependabot.yml + .github/ISSUE_TEMPLATE/ + pull_request_template.md
+
+### Lessons learned (iteration 17)
+
+- **CI-as-discovery-mechanism**: 4 separate "CI failed" cycles each surfaced a real bug:
+  warp-src clone path (sibling vs in-repo), deprecated actions-rs, NDK install ordering,
+  cross-platform errno (`__error` is macOS-only). Without CI, these would have hit the next
+  contributor's setup or the F-Droid build. CI green is the v1-ship gate, but CI red is the
+  v1-correctness signal.
+
+- **Self-cancel cascades hide behind transport errors**: M6-CO1 round-1 had a CRITICAL
+  defect where `cancelActiveStream()` ended with `debounceJob?.cancel()`, cancelling the
+  very coroutine running fireSuggestion. The CancellationException freed the handle within
+  ~1ms of starting — the stream NEVER reached :DONE: under any condition. Hidden because
+  the test API key always 401'd in ~600ms and the orphan tokio task surfaced that 401 even
+  after Kotlin had freed the handle. Lesson: when validating with intentionally-failing
+  inputs, always also test ONE successful path (or simulate one) to differentiate
+  "transport says fail" from "client logic broken — never reaches :DONE:".
+
+- **Strip vs LTO is two separate doors**: We removed 2.4 MB via strip (debug symbols)
+  and another 1.4 MB via LTO + cgu=1 + panic=abort. They're additive — the strip removes
+  what's there; LTO removes what shouldn't have been there in the first place (dead code
+  + un-inlinable cross-crate calls). For a 1+ year hold of the .so size, both are worth
+  the build-time cost.
+
+- **OEM-specific font naming is opaque**: NotoColorEmoji.ttf is the same name on every
+  Android, but its tables differ (COLR v0 vs COLR v1 vs CBDT). Samsung ships
+  `SamsungColorEmoji.ttf` separately as a CBDT-bitmap fallback. The fix for "color emoji
+  is monochrome" wasn't to upgrade swash — it was to route emoji-classified glyphs to
+  whichever font on the device that swash 0.1.x can decode. Free. Diagnosis (per-glyph
+  swash content logging at log::debug) was 80% of the work; the actual code change was
+  20-40 lines.
+
+- **Snapshot pin = supply-chain integrity gate, not a build-time bomb**: M4-S08's
+  pin-vs-upstream check feels inconvenient when upstream drifts (you have to
+  `UPDATE_SNAPSHOT=1` + commit + push). But it IS the correct behavior — without it,
+  silent upstream change would mean two builds of the same git SHA produce different
+  bytes. The fix is to make the workflow ergonomic (`.omc/v1-release-kickoff.md` §3
+  documents the procedure inline) rather than to relax the gate.
+
+- **Test driver "FAIL" can be environmental**: test-ime.sh reports `overall_pass=False`
+  on Samsung Honeyboard (5 composing-updates per change; test expects Gboard's 1) but
+  produces byte-identical numbers to the original M2-S10-result.json from M2 close.
+  Cross-checking against the original verification artifact is the only way to
+  distinguish v1-prep regression from environmental dependency. Save the original
+  artifact for every milestone close — it's the regression baseline.
+
+- **Pre-built binaries beat cargo install for CI**: `cargo install --locked cargo-audit
+  cargo-deny` adds 5+ minutes to every CI cycle. `taiki-e/install-action@v2 with: tool:
+  cargo-audit,cargo-deny` does the same in ~5-10s. The trade is "build it ourselves" vs
+  "trust the tool author's CI" — for v1-prep where speed matters, the latter is the right
+  call. Re-evaluate if either tool starts shipping malicious binaries (we'll know via
+  the security advisories the tools themselves catch).
