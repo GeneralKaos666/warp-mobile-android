@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion / questions
+    url: https://github.com/ImL1s/warp-mobile-android/discussions
+    about: For open-ended discussion, design questions, or "is this a bug or am I doing it wrong?"
+  - name: Latest release
+    url: https://github.com/ImL1s/warp-mobile-android/releases/latest
+    about: Check the latest changelog before filing — your bug may be already fixed
+  - name: Project status + milestone state
+    url: https://github.com/ImL1s/warp-mobile-android/blob/main/CLAUDE.md
+    about: Honest-beta status, what works on flagship vs deferred items

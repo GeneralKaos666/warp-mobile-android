@@ -1,0 +1,71 @@
+# Dependabot config — auto-PRs for dep updates.
+#
+# Pairs with the cargo audit + cargo deny CI gates (see test.yml):
+#   - dependabot opens PRs for security updates + minor version bumps
+#   - test.yml validates the bump doesn't introduce new vulns / license
+#     conflicts / supply-chain anomalies before the PR can be merged
+#
+# This is the standard v1.0 dep-management story for a solo-dev repo.
+#
+# Refs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # ── Cargo (Rust) — main warp-mobile-android workspace ──────────────────
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "rust"]
+    # Group patch + minor updates of low-risk deps into a single PR to
+    # cut review noise. Keep major bumps as individual PRs (might be
+    # breaking).
+    groups:
+      patch-and-minor:
+        update-types: ["minor", "patch"]
+    # Crates we want to handle manually (security-sensitive,
+    # tightly-pinned, or upstream-fork-tracked):
+    ignore:
+      # cosmic-text is pinned to a warpdotdev fork rev; bumping needs
+      # coordinated upstream sync (see commit 245f05a + COLR diagnosis
+      # 452e3c5). Manual-only.
+      - dependency-name: "cosmic-text"
+      # swash is transitively pinned via cosmic-text; same reason.
+      - dependency-name: "swash"
+
+  # ── GitHub Actions (workflows) ─────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "github-actions"]
+    groups:
+      all-actions:
+        patterns: ["*"]
+
+  # ── Gradle (Android) — handled separately because the Android side has
+  #    less ecosystem churn + dependabot's gradle support is opinionated. ──
+  - package-ecosystem: "gradle"
+    directory: "/android"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "gradle"]
+    # AGP + AndroidX core are tightly version-locked to NDK r29 +
+    # build.gradle's compileSdk/targetSdk = 36. Bumping these typically
+    # requires a coordinated Android SDK update on the dev box. Manual-only.
+    ignore:
+      - dependency-name: "com.android.application"
+      - dependency-name: "com.android.tools.build:gradle"
+      - dependency-name: "androidx.core:core-ktx"

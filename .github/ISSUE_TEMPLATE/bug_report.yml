@@ -1,0 +1,87 @@
+name: Bug report
+description: Something doesn't work — terminal misbehaves, AI flow breaks, app crashes, etc.
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in the fields
+        below — most of them save us a back-and-forth round-trip.
+
+        **Before filing**: please check
+        - Existing issues: [open](https://github.com/ImL1s/warp-mobile-android/issues?q=is%3Aissue) + [closed](https://github.com/ImL1s/warp-mobile-android/issues?q=is%3Aissue+is%3Aclosed)
+        - Latest [release notes](https://github.com/ImL1s/warp-mobile-android/releases) (your bug may be already fixed)
+        - The current [milestone state in CLAUDE.md](https://github.com/ImL1s/warp-mobile-android/blob/main/CLAUDE.md) — some flagged-as-known limitations have explicit carry-over status
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: From `Settings → Warp Mobile` or `adb shell dumpsys package dev.warp.mobile | grep versionName`
+      placeholder: "0.6.0-m6"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device + Android version
+      description: Model + API level + ROM (Samsung One UI / GrapheneOS / etc.)
+      placeholder: "Galaxy S24 Ultra · Android 15 · One UI 7.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: A numbered list. The simpler the repro, the faster we can fix.
+      placeholder: |
+        1. Open the app
+        2. Tap the 🤖 button
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: |
+        Include any error message, screenshot, or short screen recording.
+        For crashes, attach `adb logcat -d` output filtered to the
+        warp-mobile process: `adb logcat -d | grep dev.warp.mobile`
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai_involved
+    attributes:
+      label: Does this involve the AI features (BYOK ghost-text or agent)?
+      options:
+        - "No"
+        - "Yes — ghost-text (💡)"
+        - "Yes — agent task (🤖)"
+        - "Yes — Settings / API key flow (⚙)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else?
+      description: |
+        Other context that might help — e.g., reproducible only on certain
+        keyboards (Gboard / Honeyboard / SwiftKey), only after rotation,
+        only with a specific shell command, etc.
+    validations:
+      required: false
