@@ -117,6 +117,35 @@
     "Re-ran 4 device drivers against iteration-19 commit 6e511ff: test-ime-input-pty.sh (new) PASS, test-block-model.sh PASS (M3-S07 unaffected), test-touch.sh PASS (M2-S11 gestures unaffected), test-fgs-clean-kill.sh PASS (M1-S08 lifecycle unaffected). No regressions.",
     "iteration-19 catch: BaseInputConnection.sendCurrentText() synthesizes a KEYCODE_ENTER ACTION_DOWN after commitText('\\n'), with deviceId == KeyCharacterMap.VIRTUAL_KEYBOARD (-1). Without the synthesized-event guard the Enter wrote twice. The guard skips PTY writes from synthesized events; commitText covers them. Hardware-keyboard Enter (deviceId >= 0) still works."
   ],
+  "iteration_22_notes": [
+    "iteration-22 (commit 7cf0177) added composing-text DIFF forwarding to WarpInputConnection. Real Gboard sends progressive setComposingText('a'), setComposingText('ab'), setComposingText('abc') per keystroke — iteration-19 only wired commitText. Diff strategy emits exactly one byte per actual keystroke, matches three IME shapes uniformly: immediate-commit, progressive composing, autocorrect rewrite (DEL + retype suffix).",
+    "Verified on Galaxy S24 Ultra (R5CX10VFFBA / SM-S9280): IME_SET_COMPOSING_TEXT a/ab/abc + IME_COMMIT_TEXT abc + IME_COMMIT_TEXT '\\n' produced 3 single-byte writes for composing diff + 0 writes on the no-op commit (prev==new) + 1 byte for newline. Shell echoed 'a','ab','c' progressively then 'command not found: abc'. Evidence: /tmp/warp-qa/04-composing-clean-result.png."
+  ],
+  "iteration_23_notes": [
+    "iteration-23 (commit fb686ea) wired KeyboardActions(onSend = { onSubmit() }) on the WarpPromptComposer BasicTextField. Earlier the imeAction was set to Send (so the IME displays '傳送' / 'Send') but no handler — pressing the IME action just dismissed the keyboard.",
+    "Visual paper-airplane Send button continues to work post-iteration-23 (regression check). On Galaxy S24 Ultra at commit fb686ea: tap composer → input text 'echo' → KEYCODE_BACK to dismiss IME → tap Send button (983,2260) produces PTY_WRITE bytes=5 ('echo\\n') and the composer text clears. Screenshot: /tmp/warp-qa/36-iter23-send-success.png.",
+    "IME 傳送 button itself is not adb-tappable on Samsung Honeyboard Bopomofo (uiautomator dump doesn't expose IME bounds for this layout) — wiring is the standard Compose pattern; physical-key Enter still inserts a newline because singleLine = false (intentional, multi-line prompts allowed).",
+    "QA-pass coverage on Galaxy S24 Ultra at iteration-23 (commit fb686ea):",
+    "  • Drawer: hamburger tap (79,90) opens drawer with 'Search tabs', 'New agent conversation' + cwd '~', '+' new-tab. Screenshot 11-post-hamburger.png.",
+    "  • Cold launch: terminal SurfaceView renders 'localhost%' prompt; libzsh.so PID alive (verified via `ps -A | grep zsh`). Screenshot 18-fresh-launch.png.",
+    "  • PTY_WRITE wire (broadcast): am broadcast -p dev.warp.mobile -a dev.warp.mobile.PTY_WRITE --es cmd_id terminal_mode --es data_b64 <b64> works with explicit -p package targeting (dynamic in-Service receiver requires it on Android 14+).",
+    "  • Termux toolchain stress (12 commands, all PASS):",
+    "      pwd → '/'",
+    "      whoami → 'u0_a1190'",
+    "      echo $PATH → '/data/user/0/dev.warp.mobile/files/usr/bin:...:/system/bin:...'",
+    "      echo $PREFIX → '/data/user/0/dev.warp.mobile/files/usr'",
+    "      command -v ls → '/data/user/0/dev.warp.mobile/files/usr/bin/ls' (Termux ls via libfile.so symlink)",
+    "      command -v curl → '/data/user/0/dev.warp.mobile/files/usr/bin/curl'",
+    "      command -v bash → '/data/user/0/dev.warp.mobile/files/usr/bin/bash'",
+    "      type ls → 'ls is /data/user/0/dev.warp.mobile/files/usr/bin/ls'",
+    "      ls -la $PREFIX/bin | head -3 → 'total 964' + '.' + '..' (real coreutils ls -l output)",
+    "      /system/bin/ls /system/bin → 'Permission denied' (Android SELinux denies app read of /system/bin contents — expected; binary itself executes)",
+    "      uname -m → 'aarch64'",
+    "      bash -c 'echo HELLO_FROM_BASH' → 'HELLO_FROM_BASH' (bash subshell exec works)",
+    "      apt --version → 'apt 2.8.1 (aarch64)'",
+    "      grep -o world (echo'd through pipe) → 'world'",
+    "  • Tools that need follow-up: git binary spawn 'permission denied: git' (libgit.so symlink missing for the multi-binary git-core layout) — non-blocking for v1; git is not core terminal."
+  ],
   "notes": [
     "Test drivers run only on connected adb devices. CI on ubuntu-latest can't exercise these — they're for manual + pre-release regression verification.",
     "The full driver suite is in tools/scripts/test-*.sh — 24 scripts spanning M1 PTY through M5 UX. This file documents only the v1-prep re-verification spot-check; original verifications are in .omc/m{1..6}-artifacts/.",
