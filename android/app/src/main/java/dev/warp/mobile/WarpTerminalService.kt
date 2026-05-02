@@ -87,6 +87,18 @@ class WarpTerminalService : Service() {
         // "Unable to determine a suitable packaging system type". Same
         // pattern as writeWarpZshenv: gated on usr/ presence; idempotent.
         writeAptConfig()
+
+        // V1-prep iteration 20 (2026-05-02): replace each $PREFIX/bin/<name>
+        // ELF binary with a symlink to ${nativeLibraryDir}/<lib_name>.so so
+        // PATH lookup finds an exec-allowed file (apk_data_file SELinux
+        // label, vs the app_data_file label of the original $PREFIX/bin/X
+        // which has `neverallow ... execute`). The lib*.so itself is
+        // produced by the extractTermuxBinariesAsLibs Gradle task. Manifest
+        // mapping original→lib_name is bundled at assets/warp/
+        // termux-bin-manifest.json. Idempotent: if the entry is already a
+        // symlink to the right target, no-op.
+        installTermuxBinSymlinks()
+
         val filter = IntentFilter().apply {
             addAction(ACTION_SPAWN)
             addAction(ACTION_WRITE)
@@ -150,6 +162,105 @@ class WarpTerminalService : Service() {
      *   AGPL-3.0 §5: source-form script shipped verbatim in APK satisfies §5
      *     (corresponding source = the script itself; no additional obligation).
      */
+    /**
+     * V1-prep iteration 20: relocate each $PREFIX/bin/<name> ELF binary so it
+     * lives at ${nativeLibraryDir}/lib<name>.so (sanitized name in the
+     * manifest), and install a symlink at $PREFIX/bin/<name> pointing at the
+     * lib variant. The Gradle task `extractTermuxBinariesAsLibs` produces
+     * the lib*.so files at build time + writes the original→lib_name mapping
+     * to assets/warp/termux-bin-manifest.json.
+     *
+     * Why: Android since API 29 enforces SELinux
+     * `neverallow untrusted_app app_data_file:file execute`. Files in
+     * /data/data/<pkg>/files/ are app_data_file-labelled, so $PREFIX/bin/zsh
+     * etc cannot be execve'd. Files in ${nativeLibraryDir} (which is
+     * /data/app/.../lib/<abi>/) are apk_data_file-labelled, which the
+     * untrusted_app domain HAS execute permission on.
+     *
+     * Idempotent: if a symlink at the target path already points at the
+     * correct nativeLibraryDir target, no-op. If it points elsewhere or is
+     * not a symlink, it gets replaced. If the lib*.so for a manifest entry
+     * does not exist on this device (older APK), that entry is skipped.
+     *
+     * Gated on bootstrap presence: if $PREFIX/bin doesn't exist yet (first
+     * launch racing with bootstrap_install), this method runs but creates no
+     * symlinks. WarpTerminalService.handleSpawn calls writeWarpZshenv +
+     * writeAptConfig at every spawn anyway; we'll call this from there too
+     * so the symlinks get installed on the next spawn after extraction.
+     */
+    private fun installTermuxBinSymlinks() {
+        val prefixBinDir = File(applicationInfo.dataDir, "files/usr/bin")
+        if (!prefixBinDir.isDirectory) {
+            Log.i(LOG_TAG, "installTermuxBinSymlinks: $prefixBinDir not present yet (bootstrap not extracted); will retry at next spawn")
+            return
+        }
+        val nativeLibDir = applicationInfo.nativeLibraryDir
+        // Read manifest from APK assets.
+        val manifestJson = try {
+            assets.open("warp/termux-bin-manifest.json").bufferedReader().use { it.readText() }
+        } catch (e: java.io.IOException) {
+            Log.w(LOG_TAG, "installTermuxBinSymlinks: termux-bin-manifest.json missing from APK assets — extractTermuxBinariesAsLibs gradle task may not have run. Skipping.")
+            return
+        }
+        val parsed = try {
+            org.json.JSONObject(manifestJson)
+        } catch (e: org.json.JSONException) {
+            Log.e(LOG_TAG, "installTermuxBinSymlinks: manifest parse error: ${e.message}")
+            return
+        }
+        val bins = parsed.optJSONArray("bins") ?: run {
+            Log.w(LOG_TAG, "installTermuxBinSymlinks: manifest has no 'bins' array")
+            return
+        }
+
+        var installed = 0
+        var skippedAlreadyOk = 0
+        var skippedMissingLib = 0
+        for (i in 0 until bins.length()) {
+            val entry = bins.getJSONObject(i)
+            val original = entry.optString("original")
+            val libName = entry.optString("lib_name")
+            if (original.isEmpty() || libName.isEmpty()) continue
+
+            val libPath = File(nativeLibDir, libName)
+            if (!libPath.exists()) {
+                skippedMissingLib++
+                continue
+            }
+            val target = File(prefixBinDir, original)
+            val targetPath = target.toPath()
+
+            // Check if symlink already points at the right place.
+            try {
+                if (java.nio.file.Files.isSymbolicLink(targetPath)) {
+                    val current = java.nio.file.Files.readSymbolicLink(targetPath).toString()
+                    if (current == libPath.absolutePath) {
+                        skippedAlreadyOk++
+                        continue
+                    }
+                }
+            } catch (e: Exception) {
+                // Fall through to the replace path.
+            }
+
+            // Replace the existing entry (regular file from bootstrap unzip,
+            // or stale symlink) with a fresh symlink to nativeLibraryDir.
+            try {
+                if (target.exists() || java.nio.file.Files.isSymbolicLink(targetPath)) {
+                    java.nio.file.Files.delete(targetPath)
+                }
+                java.nio.file.Files.createSymbolicLink(targetPath, libPath.toPath())
+                installed++
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "installTermuxBinSymlinks: failed to symlink $original -> $libPath: ${e.message}")
+            }
+        }
+        Log.i(
+            LOG_TAG,
+            "installTermuxBinSymlinks: installed=$installed already_ok=$skippedAlreadyOk missing_lib=$skippedMissingLib total_manifest=${bins.length()}"
+        )
+    }
+
     private fun extractWarpAssets() {
         val warpDir = File(filesDir, "warp")
         val target = File(warpDir, "zsh_body.sh")
@@ -444,28 +555,20 @@ class WarpTerminalService : Service() {
         // the inherited PATH per AC text.
         val parentPath = System.getenv("PATH") ?: "/system/bin"
 
-        // V1-prep iteration 20 (2026-05-02): for v1.0, $PREFIX/bin is
-        // exec-blocked by SELinux (`untrusted_app` domain has
-        // `neverallow ... app_data_file:file execute` since API 29). Putting
-        // it FIRST in PATH meant mksh found e.g. $PREFIX/bin/ls before
-        // /system/bin/ls, attempted execve, got EACCES, and gave up — the
-        // user couldn't even run `ls`. For v1.0 we put parentPath
-        // (/system/bin + /apex/.../bin) FIRST so toybox-provided ls / cat /
-        // mkdir / curl / grep / sed / awk / find / head / tail are
-        // immediately reachable. $PREFIX/bin remains in PATH for the day
-        // v1.1's nativeLibraryDir refactor (.omc/v1.1-plan-selinux-
-        // nativelib.md) makes those binaries actually exec-able. Until
-        // then they live in PATH but every lookup falls through to the
-        // system entries.
-        val prefixBin = "$prefix/bin"
-        val pathV1 = if (parentPath.contains(prefixBin)) parentPath else "$parentPath:$prefixBin"
-
+        // V1-prep iteration 20 (2026-05-02): with the nativeLibraryDir
+        // refactor + installTermuxBinSymlinks turning each $PREFIX/bin/<name>
+        // into a symlink → ${nativeLibraryDir}/lib<name>.so, the
+        // `untrusted_app` domain's `neverallow ... app_data_file:file
+        // execute` rule no longer matters (the symlink target is
+        // apk_data_file, exec-allowed). PATH can put $PREFIX/bin FIRST
+        // again so GNU coreutils / zsh / curl / etc shadow toybox.
         return buildMap {
-            // PATH: /system/bin (toybox + Android tools) FIRST in v1.0 so
-            // basic UNIX commands work despite the SELinux block on
-            // $PREFIX/bin. v1.1 reverses this once nativeLibraryDir
-            // refactor lands.
-            put("PATH", pathV1)
+            // PATH: $PREFIX/bin first (Termux convention) so users get the
+            // featureful GNU/Termux flavor of every tool. parentPath
+            // (/system/bin + /apex/.../bin) is appended so Android-specific
+            // tools (am, pm, settings, getprop, dumpsys) plus apex linker
+            // shims remain reachable.
+            put("PATH", "$prefix/bin:$parentPath")
             put("HOME", home)
             put("PREFIX", prefix)
             put("TERMUX_PREFIX", prefix) // termux-tools scripts read this
@@ -538,8 +641,27 @@ class WarpTerminalService : Service() {
         // ensures both are present by the time a real shell launches.
         writeWarpZshenv()
         writeAptConfig()
+        // Iteration 20 retry: same reason — bootstrap may have completed
+        // between onCreate and this spawn. Symlink installation is idempotent
+        // and cheap (~1ms when no-op).
+        installTermuxBinSymlinks()
+        // V1-prep iteration 20 (2026-05-02): the nativeLibraryDir-shipped
+        // libzsh.so PoC proved that binaries packaged as APK lib/<abi>/lib*.so
+        // are execve-able from `untrusted_app` domain (label is
+        // `apk_data_file` which has execute permission, unlike `app_data_file`
+        // which has `neverallow ... execute`). Default-spawn libzsh.so
+        // when present so the launcher path produces a real zsh prompt
+        // instead of the iteration-18 mksh fallback. Falls through to
+        // the legacy $PREFIX/bin/zsh if the lib variant isn't shipped (e.g.
+        // running an older APK against a newer service binary), then to
+        // /system/bin/sh as last resort.
+        val nativeZsh = "${applicationInfo.nativeLibraryDir}/libzsh.so"
         val prefixZsh = "${applicationInfo.dataDir}/files/usr/bin/zsh"
-        val defaultProgram = if (File(prefixZsh).exists()) prefixZsh else "/system/bin/sh"
+        val defaultProgram = when {
+            File(nativeZsh).exists() -> nativeZsh
+            File(prefixZsh).exists() -> prefixZsh
+            else -> "/system/bin/sh"
+        }
         val program = intent.getStringExtra("program") ?: defaultProgram
         val args    = intent.getStringArrayExtra("args") ?: emptyArray()
         val cmd     = intent.getStringExtra("cmd")

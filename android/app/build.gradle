@@ -346,6 +346,115 @@ task generateBootstrapVersion {
     }
 }
 
+// ---------------------------------------------------------------------------
+// V1-prep iteration 20 (2026-05-02): Termux binary relocation into
+// nativeLibraryDir.
+//
+// Background: Android since API 29 enforces SELinux
+// `neverallow untrusted_app app_data_file:file execute`, which means binaries
+// extracted into `/data/data/dev.warp.mobile/files/usr/bin/` cannot be
+// execve'd from the app's own foreground-service process. The PoC iteration
+// 20 confirmed that binaries packaged as APK `lib/<abi>/lib<name>.so`
+// land in `${nativeLibraryDir}` with SELinux label `apk_data_file`, which
+// untrusted_app HAS execute permission on. Modern Termux uses the same trick.
+//
+// This task extracts every ELF binary from `bin/<name>` in the bootstrap zip,
+// renames it to `lib<sanitized>.so` (Android packager only ships files that
+// match `lib*.so`), and dumps it in the per-variant intermediate that
+// `jniLibs.srcDirs += ` picks up. A manifest is also written into APK assets
+// so the device-side first-launch installer can create
+// `$PREFIX/bin/<original> → ${nativeLibraryDir}/<lib_name>` symlinks.
+//
+// `bin/<name>` shell scripts (non-ELF) are intentionally skipped: scripts
+// only need read permission to be sourced by zsh/sh, and the unrenamed
+// $PREFIX/bin/<name> file from the bootstrap zip already has read access.
+// They stay in the original location.
+// ---------------------------------------------------------------------------
+
+def termuxLibsDirDebug      = file("build/intermediates/termux-libs/debug/jniLibs/arm64-v8a")
+def termuxLibsDirRelease    = file("build/intermediates/termux-libs/release/jniLibs/arm64-v8a")
+def termuxManifestAssetPath = file("src/main/assets/warp/termux-bin-manifest.json")
+
+def sanitizeBinName = { String original ->
+    // Android packager filename rules: must match `lib*.so`. Replace any
+    // non-[A-Za-z0-9_] with `_` to keep the round-trip mapping recoverable
+    // via the manifest.
+    "lib" + original.replaceAll(/[^A-Za-z0-9_]/, "_") + ".so"
+}
+
+def extractTermuxBinariesAction = { File outDir ->
+    outDir.mkdirs()
+    termuxManifestAssetPath.parentFile.mkdirs()
+    def manifest = []
+    def zipFile = new java.util.zip.ZipFile(bootstrapZipSrc)
+    try {
+        def entries = zipFile.entries()
+        while (entries.hasMoreElements()) {
+            def e = entries.nextElement()
+            if (e.directory) continue
+            if (!e.name.startsWith("bin/")) continue
+            // Only flat top-level entries — skip nested files (defensive).
+            def baseName = e.name.substring("bin/".length())
+            if (baseName.contains("/")) continue
+            // Read first 4 bytes to detect ELF.
+            def head = new byte[4]
+            zipFile.getInputStream(e).withCloseable { is ->
+                int n = 0
+                while (n < 4) {
+                    def r = is.read(head, n, 4 - n)
+                    if (r < 0) break
+                    n += r
+                }
+            }
+            def isElf = head[0] == (byte) 0x7F && head[1] == (byte) 0x45 &&
+                        head[2] == (byte) 0x4C && head[3] == (byte) 0x46
+            if (!isElf) continue
+            def libName = sanitizeBinName(baseName)
+            def outFile = new File(outDir, libName)
+            zipFile.getInputStream(e).withCloseable { is ->
+                outFile.withOutputStream { os ->
+                    os << is
+                }
+            }
+            outFile.setExecutable(true)
+            manifest << [original: baseName, lib_name: libName, size_bytes: outFile.length()]
+        }
+    } finally {
+        zipFile.close()
+    }
+    manifest = manifest.sort { it.original }
+    def jsonOut = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+        version: 1,
+        purpose: "v1-prep iteration 20: Termux binary relocation. \$PREFIX/bin/<original> should be a symlink to \${nativeLibraryDir}/<lib_name>. Created by WarpTerminalService at first launch (post bootstrap_install).",
+        bin_count: manifest.size(),
+        bins: manifest
+    ]))
+    termuxManifestAssetPath.text = jsonOut + "\n"
+    logger.lifecycle("extractTermuxBinariesAsLibs: ${manifest.size()} ELF binaries → ${outDir.name}/, manifest staged at assets/warp/termux-bin-manifest.json")
+}
+
+task extractTermuxBinariesAsLibsDebug {
+    description = "Iteration-20 v1.1 PoC: extract \$PREFIX/bin/* ELF binaries from the bootstrap zip into the per-variant jniLibs intermediate as lib*.so so they land in \${nativeLibraryDir} on-device (SELinux apk_data_file label, exec-allowed). Generates a manifest in APK assets for device-side first-launch symlink creation."
+    dependsOn verifyBootstrapZip
+    inputs.file(bootstrapZipSrc)
+    outputs.dir(termuxLibsDirDebug)
+    outputs.file(termuxManifestAssetPath)
+    doLast {
+        extractTermuxBinariesAction(termuxLibsDirDebug)
+    }
+}
+
+task extractTermuxBinariesAsLibsRelease {
+    description = "Release variant of extractTermuxBinariesAsLibsDebug — same logic, different output dir to keep Gradle 8 strict task-graph happy."
+    dependsOn verifyBootstrapZip
+    inputs.file(bootstrapZipSrc)
+    outputs.dir(termuxLibsDirRelease)
+    outputs.file(termuxManifestAssetPath)
+    doLast {
+        extractTermuxBinariesAction(termuxLibsDirRelease)
+    }
+}
+
 task verifyBootstrapApkSize {
     description = "Verify single APK (with bundled bootstrap zip) stays under 80 MB ralplan §6 M3 AC#4 single-APK gate (M4-S04). Codex round-1 finding 1: must run AFTER packageRelease so the APK actually exists."
     // Codex round-1 finding 1: this task must execute AFTER the APK is
@@ -605,9 +714,11 @@ android {
     sourceSets {
         debug {
             jniLibs.srcDirs += file("build/intermediates/rust-jnilibs/debug/jniLibs")
+            jniLibs.srcDirs += file("build/intermediates/termux-libs/debug/jniLibs")
         }
         release {
             jniLibs.srcDirs += file("build/intermediates/rust-jnilibs/release/jniLibs")
+            jniLibs.srcDirs += file("build/intermediates/termux-libs/release/jniLibs")
         }
     }
 
@@ -689,15 +800,24 @@ afterEvaluate {
     tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach         { dependsOn copyWarpAssets }
 
     // Merge tasks are the canonical jniLibs consumer when AGP generates them.
-    tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
-    tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease }
+    tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
+    tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
     // Package tasks are universal — they're the safety net that ensures the
     // copy happens even when AGP optimizes mergeJniLibFolders away.
-    tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer }
-    tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease }
+    tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
+    tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
     // Assemble tasks are the user-facing entry points — third layer.
-    tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug, verifyValidationLayer }
-    tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease }
+    tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
+    tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
+
+    // The manifest is staged into src/main/assets/, so AGP's asset-merge tasks
+    // need it as an explicit input (Gradle 8 strict implicit-dep validation).
+    tasks.matching { it.name == "mergeDebugAssets" }.configureEach   { dependsOn extractTermuxBinariesAsLibsDebug }
+    tasks.matching { it.name == "mergeReleaseAssets" }.configureEach { dependsOn extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name.startsWith("generateDebugLint") }.configureEach   { dependsOn extractTermuxBinariesAsLibsDebug }
+    tasks.matching { it.name.startsWith("generateReleaseLint") }.configureEach { dependsOn extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name.startsWith("lintVital") }.configureEach           { dependsOn extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach         { dependsOn extractTermuxBinariesAsLibsDebug }
 }
 
 dependencies {
