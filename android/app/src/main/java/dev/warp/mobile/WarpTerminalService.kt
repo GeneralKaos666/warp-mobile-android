@@ -440,6 +440,18 @@ class WarpTerminalService : Service() {
             |PROMPT=${"$"}'%{\e]133;A\a%}%# %{\e]133;B\a%}'
             |PS2='> '
             |setopt no_prompt_sp 2>/dev/null || true
+            |
+            |# 7. V1-prep iteration 30 (2026-05-03): enable Tab completion.
+            |#    Termux's zsh ships the stock Completion/ tree under
+            |#    ${"$"}PREFIX/share/zsh/${"$"}{ZSH_VERSION}/functions/Completion which is
+            |#    auto-added to ${"$"}fpath. compinit scans it once and caches to
+            |#    ${"$"}ZDOTDIR/.zcompdump. The -u flag tolerates "insecure"
+            |#    ownership (Android sandbox UID owns everything anyway).
+            |#    -C skips the security audit on subsequent loads (cache hit).
+            |if (( ${"$"}+functions[compinit] == 0 )); then
+            |    autoload -Uz compinit
+            |fi
+            |compinit -u -d ${"$"}{ZDOTDIR:-${"$"}HOME}/.zcompdump 2>/dev/null
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.
