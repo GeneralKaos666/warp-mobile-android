@@ -18,14 +18,30 @@ Thanks for considering a contribution. This is a solo-developer project on a 12-
 - **Rust**: `cargo fmt` + `cargo clippy --target aarch64-linux-android` clean.
 - **Kotlin**: Match existing Kotlin style in `android/app/src/main/java/dev/warp/mobile/*.kt`.
 - **No emojis in code** unless explicitly requested (per project convention).
-- **No new dependencies** without discussion. The `warp_terminal` / `warpui` upstream Cargo edges must stay zero-churn (architecture invariant from Plan Amendment 2 / D1.5-hybrid).
+- **No new dependencies** without discussion. The `warp_terminal` / `warpui` upstream Cargo edges must stay zero-churn (D1.5-hybrid invariant — see Plan Amendment 5 §3 cfg-gate→extraction pivot for the architectural rationale).
+- **Vulkan-warpui rendering, not Compose** (Plan Decision A4) — new UI surfaces follow the existing programmatic LinearLayout/Dialog pattern (AccessoryRow, BlockActionsSheet, AgentBlockSheet, SettingsActivity). Compose proposals belong in v3+ scope.
+- **Flagship-first device class** — Adreno 6xx+ / API 31+ baseline (Plan Amendment 3). Sub-flagship-only code paths get deferred.
 
 ## Test requirements
 
 - **New code paths need tests**. Unit tests live under `#[cfg(test)] mod tests` blocks in the relevant source file.
 - **Device-side changes** require driver scripts in `tools/scripts/` and result.json artifacts under `.omc/m{N}-artifacts/`.
 - **Build verification**: `cargo test` (all packages) must pass. `cargo ndk -t arm64-v8a check` must pass for Android targets.
+- **CI gates** (auto-enforced on every PR — see [`.github/workflows/test.yml`](.github/workflows/test.yml)):
+  - 157 host tests (66 host + 18 ai client + 73 facade)
+  - `cargo audit --deny warnings` — no known-vulnerable or unmaintained crates
+  - `cargo deny check` — license allowlist (AGPL-3.0 compatible only) + supply-chain source allowlist (per [`deny.toml`](deny.toml))
+  - Android Kotlin compile smoke
 - **Codex review SOP**: This project uses Codex (OpenAI) as a critic verifier per `.omc/prd.json` `verifierConfig.critic`. Maintainer dispatches Codex review after merge candidate is ready.
+
+## Dependencies
+
+If you're adding a Cargo or Gradle dep:
+
+- **License must be permissive** (MIT / Apache-2.0 / BSD / ISC / Unicode-3.0 / etc.) per `deny.toml` `[licenses] allow`. GPL-only and proprietary licenses are AGPL-incompatible and will fail CI.
+- **Source must be in the allowlist**: crates.io for Cargo deps, or the explicit git allowlist in `deny.toml` `[sources] allow-git` (currently `warpdotdev/cosmic-text` + `ImL1s/warp` forks only).
+- **Run `cargo audit` + `cargo deny check` locally** before opening the PR — the CI gates them anyway, but local pre-check saves a round-trip.
+- **Dependabot auto-PRs** weekly for patch/minor bumps + monthly for Gradle. If your manual add changes a dep that dependabot is tracking, mention it in the PR body so the maintainer can pause dependabot if needed.
 
 ## Reporting bugs
 
