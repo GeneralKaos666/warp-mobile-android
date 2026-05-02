@@ -29,6 +29,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.remember
 
 /**
  * MainActivity hosts a SurfaceView that backs the Vulkan swapchain (M2-S04).
@@ -316,7 +319,70 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             )
         )
 
-        setContentView(frame)
+        // M7 (iteration 20 — Warp UX scaffold): wrap the existing FrameLayout
+        // (SurfaceView + WarpInputView + AccessoryRow) in a Jetpack Compose
+        // ModalNavigationDrawer scaffold that gives us the Warp Desktop
+        // shape — top bar with hamburger / search / new-tab / settings, left
+        // drawer with tab list + search filter, bottom prompt-composer with
+        // model picker. Compose hosts the FrameLayout via AndroidView so
+        // every M0–M6 engine investment (Vulkan renderer, IME, gestures,
+        // AccessoryRow) keeps working unchanged.
+        //
+        // For now there's exactly one tab — the launcher-default
+        // "terminal_mode" cmd_id. M7-S06 will wire multi-tab; M9 will wire
+        // the prompt composer to the BYOK agent client. This commit is the
+        // structural shape only.
+        if (intent.getBooleanExtra("legacy_layout", false)) {
+            // Driver-mode escape hatch: device-test scripts that depend on
+            // the SurfaceView living at the root of the content view (no
+            // Compose top bar pushing it down) can opt out via
+            // `--ez legacy_layout true`. Production users always go through
+            // the new Compose path.
+            setContentView(frame)
+        } else {
+            val composeView = androidx.compose.ui.platform.ComposeView(this).apply {
+                setContent {
+                    dev.warp.mobile.ui.WarpAppTheme {
+                        val tabs = remember {
+                            listOf(
+                                dev.warp.mobile.ui.WarpTab(
+                                    id = "terminal_mode",
+                                    title = "New agent conversation",
+                                    cwd = "~"
+                                )
+                            )
+                        }
+                        dev.warp.mobile.ui.WarpScaffold(
+                            tabs = tabs,
+                            activeTabId = "terminal_mode",
+                            onTabSelected = { _ -> /* M7-S06 multi-tab wiring */ },
+                            onNewTab = { /* M7-S06 multi-tab wiring */ },
+                            onSettings = {
+                                startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                            },
+                            onPromptSubmit = { promptText ->
+                                // M9-S05 will wire this to the BYOK agent.
+                                // For now, treat as a literal command typed
+                                // into the active PTY (a thin shim that
+                                // proves the prompt-box plumbing works).
+                                WarpInputView.writeBytesToActivePty(
+                                    this@MainActivity,
+                                    (promptText + "\n").toByteArray(Charsets.UTF_8)
+                                )
+                            }
+                        ) { innerPadding ->
+                            androidx.compose.ui.viewinterop.AndroidView(
+                                factory = { frame },
+                                modifier = androidx.compose.ui.Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
+                            )
+                        }
+                    }
+                }
+            }
+            setContentView(composeView)
+        }
         warpInputView!!.requestFocus()
         // M2-S10: publish the input view to companion object so the
         // ImeSimulationReceiver can route driver broadcasts through the
