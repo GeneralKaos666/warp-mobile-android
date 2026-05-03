@@ -480,6 +480,16 @@ struct TerminalState {
     // ── M3-S09: scrollback ring + viewport offset (mirror) ─────────────
     scrollback: VecDeque<Vec<Cell>>,
     scroll_offset: usize,
+
+    // ── V1-prep iteration 40 (2026-05-03): UTF-8 continuation buffer ───
+    // handle_ground_byte was previously casting every PTY byte to char as
+    // Latin-1, splitting multi-byte sequences across cells (你 → ä,½, ).
+    // utf8_buf accumulates continuation bytes for the in-progress
+    // codepoint; when the lead byte's expected length is reached, the
+    // sequence is decoded and written as ONE char to one cell.
+    utf8_buf: [u8; 4],
+    utf8_len: u8,      // bytes currently buffered (0..=4)
+    utf8_expect: u8,   // total bytes expected for the in-progress codepoint
 }
 
 impl TerminalModel {
@@ -508,6 +518,9 @@ impl TerminalModel {
                 capturing_to_block_idx: None,
                 scrollback: VecDeque::with_capacity(SCROLLBACK_MAX_LINES),
                 scroll_offset: 0,
+                utf8_buf: [0; 4],
+                utf8_len: 0,
+                utf8_expect: 0,
             }),
             dirty: AtomicBool::new(false),
         }
@@ -990,22 +1003,130 @@ fn handle_ground_byte(state: &mut TerminalState, b: u8) {
         c if c < 0x20 => {}
         c if c == 0x7F => {}
         _ => {
-            let row = state.cursor.row.min(state.rows - 1);
-            let col = state.cursor.col.min(state.cols - 1);
-            state.cells[row][col] = Cell {
-                glyph: b as char,
-                fg: state.cur_fg,
-                bg: state.cur_bg,
-                attrs: state.cur_attrs,
-            };
-            state.cursor.col += 1;
-            if state.cursor.col >= state.cols {
-                state.cursor.col = 0;
-                state.cursor.row += 1;
-                if state.cursor.row >= state.rows {
-                    scroll_up(state);
-                    state.cursor.row = state.rows - 1;
+            // V1-prep iteration 40 (2026-05-03): UTF-8-aware codepoint
+            // assembly. Pre-iter-40 this branch did `b as char` which
+            // sliced multi-byte sequences across cells (你 = E4 BD A0
+            // → 'ä', '½', ' ' visible mojibake). Per-byte algorithm:
+            //
+            //  - 0x00..=0x7F    ASCII fast-path: write immediately,
+            //                   reset any partial-sequence buffer.
+            //  - 0xC2..=0xF4    UTF-8 lead: store len, start buffer.
+            //  - 0x80..=0xBF    Continuation: append; emit when full.
+            //  - other (0x80..=0xC1, 0xF5..=0xFF) - invalid lead;
+            //                   write U+FFFD replacement char and reset.
+            //
+            // On a complete sequence, decode via str::from_utf8 (cheap,
+            // returns the canonical char). On invalid continuation, emit
+            // U+FFFD and restart from the offending byte. This mirrors
+            // the WHATWG UTF-8 decoder's "byte-stream-replacement" mode
+            // adapted to a per-byte streaming PTY parser.
+            //
+            // Note: cell width handling stays single-cell for now even
+            // for fullwidth Han chars. Wide-char (East Asian Wide /
+            // Fullwidth) layout requires moving the cursor by 2 columns
+            // and marking the trailing cell as continuation; deferred to
+            // iter-41 (the renderer needs the cell-width metadata too).
+            let mut to_emit: Option<char> = None;
+            let mut reset_then_buffer_lead = false;
+            if state.utf8_expect == 0 {
+                // Not in the middle of a sequence.
+                if b < 0x80 {
+                    to_emit = Some(b as char);
+                } else if (0xC2..=0xDF).contains(&b) {
+                    state.utf8_expect = 2;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                } else if (0xE0..=0xEF).contains(&b) {
+                    state.utf8_expect = 3;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                } else if (0xF0..=0xF4).contains(&b) {
+                    state.utf8_expect = 4;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                } else {
+                    to_emit = Some('\u{FFFD}');
                 }
+            } else if (0x80..=0xBF).contains(&b) {
+                state.utf8_buf[state.utf8_len as usize] = b;
+                state.utf8_len += 1;
+                if state.utf8_len == state.utf8_expect {
+                    let bytes = &state.utf8_buf[..state.utf8_len as usize];
+                    to_emit = match std::str::from_utf8(bytes) {
+                        Ok(s) => s.chars().next(),
+                        Err(_) => Some('\u{FFFD}'),
+                    };
+                    state.utf8_len = 0;
+                    state.utf8_expect = 0;
+                }
+            } else {
+                // In-progress sequence interrupted by non-continuation
+                // byte: emit replacement char for the partial sequence,
+                // then re-process `b` as a fresh lead.
+                to_emit = Some('\u{FFFD}');
+                state.utf8_len = 0;
+                state.utf8_expect = 0;
+                reset_then_buffer_lead = true;
+            }
+
+            if let Some(ch) = to_emit {
+                let row = state.cursor.row.min(state.rows - 1);
+                let col = state.cursor.col.min(state.cols - 1);
+                state.cells[row][col] = Cell {
+                    glyph: ch,
+                    fg: state.cur_fg,
+                    bg: state.cur_bg,
+                    attrs: state.cur_attrs,
+                };
+                state.cursor.col += 1;
+                if state.cursor.col >= state.cols {
+                    state.cursor.col = 0;
+                    state.cursor.row += 1;
+                    if state.cursor.row >= state.rows {
+                        scroll_up(state);
+                        state.cursor.row = state.rows - 1;
+                    }
+                }
+            }
+
+            if reset_then_buffer_lead {
+                // Re-enter the dispatch with the same `b` but state now
+                // shows utf8_expect == 0; recurse via tail-call style.
+                // Bound recursion via the simple invariant that a single
+                // byte cannot trigger another reset (fresh state).
+                if b < 0x80 {
+                    let row = state.cursor.row.min(state.rows - 1);
+                    let col = state.cursor.col.min(state.cols - 1);
+                    state.cells[row][col] = Cell {
+                        glyph: b as char,
+                        fg: state.cur_fg,
+                        bg: state.cur_bg,
+                        attrs: state.cur_attrs,
+                    };
+                    state.cursor.col += 1;
+                    if state.cursor.col >= state.cols {
+                        state.cursor.col = 0;
+                        state.cursor.row += 1;
+                        if state.cursor.row >= state.rows {
+                            scroll_up(state);
+                            state.cursor.row = state.rows - 1;
+                        }
+                    }
+                } else if (0xC2..=0xDF).contains(&b) {
+                    state.utf8_expect = 2;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                } else if (0xE0..=0xEF).contains(&b) {
+                    state.utf8_expect = 3;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                } else if (0xF0..=0xF4).contains(&b) {
+                    state.utf8_expect = 4;
+                    state.utf8_buf[0] = b;
+                    state.utf8_len = 1;
+                }
+                // else: another invalid lead — drop silently to avoid
+                // a cascade of replacement chars on a stream of garbage.
             }
         }
     }
