@@ -298,5 +298,18 @@
     "First-shape latency: ~50s observed from cold launch + first CJK char to first frame containing the rasterized glyph (cosmic-text's CJK fpath fontdb scan + swash glyph cache warmup). Subsequent CJK frames render at normal cadence (<33ms). Latency mitigation deferred to iter-41+ — pre-warm the CJK swash cache during attachAndStartRender, similar to the ASCII glyph cache pre-warm already in font_render.rs.",
     "Build evidence: cargo test -p warp-mobile-android-host → 68 passed (decoder unit-tested via existing terminal_model harness coverage of multi-byte input through M3 SGR pipeline). cargo ndk -t arm64-v8a build (22.16s); ./gradlew :app:assembleDebug → BUILD SUCCESSFUL.",
     "ASCII / SGR / colored-ls output / OSC 133 Block markers UNAFFECTED — verified `ls -la` still color-renders gittest1/gittest2 directories blue, prompt + AccessoryRow geometry unchanged, Block.output capture intact."
+  ],
+  "iteration_41_notes": [
+    "iter-41 fixes the iter-40 single-cell-width caveat. East Asian Wide / Fullwidth chars now advance the cursor by 2 cells (xterm / iTerm / Warp Desktop standard behaviour). warp-mobile-android commit 93b228b.",
+    "Implementation (crates/android-host/src/terminal_model.rs): factored cell-write + cursor-advance into emit_char_to_grid helper. unicode-width 0.1 added as host crate dep (same crate Warp Desktop uses). UnicodeWidthChar::width(ch) returns 1 or 2; for 2-cell chars the trailing cell at col+1 is filled with a blank space carrying the same fg/bg/attrs so the renderer skips it as whitespace and the wide glyph quad's natural placement.width overflow paints the full 2-cell visual span.",
+    "Right-edge wrap: a wide char with cursor.col + 1 >= cols wraps the line first and writes the pair starting at col 0 of the next row. Mirrors xterm auto_wrap semantics.",
+    "5 new tests: iter40_utf8_three_byte_han_assembles_one_cell, iter40_utf8_invalid_lead_emits_replacement, iter40_utf8_partial_then_ascii_recovers, iter41_wide_char_advances_cursor_by_two, iter41_wide_char_wraps_at_right_edge. All PASS (host total 73/73).",
+    "Verified on R5CX10VFFBA: pre-iter-41 echo 你好 終端機 chars rendered squeezed into single cells; post-iter-41 each CJK char visually occupies 2 cells with proper monospace alignment. Evidence: /tmp/warp-iter36/iter41-cjk.png."
+  ],
+  "iteration_42_notes": [
+    "iter-42 polish pass for the 'complete warp terminal' UX after iter-40+iter-41 CJK rendering. warp-mobile-android commit f6cb8ff. Two cosmetic fixes:",
+    "Composer placeholder (android/app/src/main/java/dev/warp/mobile/ui/WarpScaffold.kt): pre-iter-42 'Warp anything e.g. Deploy my React app to Vercel and set up environment variables' implied AI-prompt semantics, but onSubmit currently writes raw text to PTY (BYOK AI client is M9-S03, not landed). New text 'Type a command (ls, git status, …)' matches what Send actually does. maxLines reduced from 2 → 1 since the new text fits one line.",
+    "Welcome banner (android/app/src/main/java/dev/warp/mobile/WarpTerminalService.kt writeWarpZshenv): pre-iter-42 'Tab completes - Up arrow recalls history - Enter runs' was 49 chars and truncated as '…En' at the Galaxy S24 Ultra 45-col viewport. New text 'Tab=complete  Up=history  Enter=run' is 36 chars and fits cleanly. Same %F{8}…%f color codes preserved.",
+    "Verified end-to-end on R5CX10VFFBA: install + wipe .zshenv cache + force-stop + cold-launch → banner full visible (no truncation); pwd → /data/user/0/dev.warp.mobile/files/home; whoami → u0_a1190; echo 你好 終端機 hello world → real CJK glyphs with proper wide-char spacing (iter-41 cell advance); Up arrow recalls echo命令 with CJK intact. Evidence: /tmp/warp-iter36/iter42-{cold,mixed,up}.png."
   ]
 }
