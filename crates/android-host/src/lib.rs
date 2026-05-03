@@ -1391,29 +1391,45 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFram
     // blank rows, then the actual content rows up to the cursor row.
     let cursor = terminal_model::cursor_position();
     let total_rows = dyn_cells.len();
-    // V1-prep iteration 36: bottom-anchor padding bumped from +3 to +7 to
-    // clear the AccessoryRow (ESC/TAB/CTRL/ALT, ~135px ≈ 3.4 rows at
-    // cell_h_px=40) which Compose overlays on the bottom of the SurfaceView.
-    // Without this, the active prompt row lands at projected row total_rows-3
-    // which falls inside the accessory row's opaque area — the user's
-    // 「終端機看不到 prompt」regression after force-stop+restart. The previous
-    // +3 worked for sessions that had built up scrollback because the cursor
-    // row was higher than total_rows-7 anyway, but cold-start with
-    // cursor.row in the 4-7 range exposed the overlap.
-    let shift = total_rows.saturating_sub(cursor.row + 7);
-    if shift > 0 && total_rows > 0 {
+    // V1-prep iteration 38: unified bottom-anchor. iter-36 left 7 blank rows
+    // ABOVE the cursor for AccessoryRow clearance, but only in the cold-start
+    // case where shift > 0. When the user runs enough commands that content
+    // fills the viewport (cursor.row + 7 >= total_rows), the iter-36 path
+    // returned early with shift = 0 — letting the cursor row + any subsequent
+    // output land inside the AccessoryRow's opaque overlay area (the user's
+    // 「whoami 輸出看不見」symptom).
+    //
+    // iter-38 fix: always reserve ACCESSORY_PAD blank rows at the bottom of
+    // the rendered grid. Cursor lands at row (total_rows - ACCESSORY_PAD - 1)
+    // in the projection. When cursor is high in the model we prepend blanks
+    // (iter-32 / iter-36 case); when cursor is low we drop scrollback rows
+    // from the top (the iter-38 new case).
+    const ACCESSORY_PAD: usize = 7;
+    if total_rows > ACCESSORY_PAD {
+        let target_cursor_row = total_rows - ACCESSORY_PAD - 1;
         let cols_count = dyn_cells.first().map(|r| r.len()).unwrap_or(0);
         let blank_row: Vec<crate::dynamic_grid::Cell> =
             (0..cols_count).map(|_| crate::dynamic_grid::Cell::blank()).collect();
-        let content_rows: Vec<Vec<crate::dynamic_grid::Cell>> =
-            dyn_cells.into_iter().take(cursor.row + 1).collect();
-        let mut bottom_anchored: Vec<Vec<crate::dynamic_grid::Cell>> =
-            Vec::with_capacity(total_rows);
-        for _ in 0..shift {
-            bottom_anchored.push(blank_row.clone());
+        let mut out: Vec<Vec<crate::dynamic_grid::Cell>> = Vec::with_capacity(total_rows);
+        if cursor.row <= target_cursor_row {
+            // Cold-start / sparse case: pad above content so cursor lands at target.
+            let pad_top = target_cursor_row - cursor.row;
+            for _ in 0..pad_top {
+                out.push(blank_row.clone());
+            }
+            out.extend(dyn_cells.into_iter().take(cursor.row + 1));
+        } else {
+            // Filled viewport: drop scrollback rows from the top so the
+            // cursor row lands at target_cursor_row in the projection.
+            let drop = cursor.row - target_cursor_row;
+            out.extend(dyn_cells.into_iter().skip(drop).take(target_cursor_row + 1));
         }
-        bottom_anchored.extend(content_rows);
-        dyn_cells = bottom_anchored;
+        // Append ACCESSORY_PAD blank rows below the cursor row to clear the
+        // AccessoryRow overlay (ESC/TAB/CTRL/ALT) and any composer chrome.
+        for _ in 0..ACCESSORY_PAD {
+            out.push(blank_row.clone());
+        }
+        dyn_cells = out;
     }
 
     let init_ok = vulkan::init_dynamic_grid(
