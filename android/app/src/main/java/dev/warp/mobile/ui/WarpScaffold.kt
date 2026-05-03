@@ -314,13 +314,20 @@ private fun WarpPromptComposer(
                 keyboardActions = KeyboardActions(onSend = { onSubmit() }),
                 decorationBox = { inner ->
                     if (value.isEmpty()) {
+                        // V1-prep iteration 42 (2026-05-03): placeholder
+                        // matches what Send actually does. Pre-iter-42 this
+                        // said "Warp anything e.g. Deploy my React app..."
+                        // implying AI-prompt semantics, but the BYOK AI
+                        // client (M9-S03) is not yet wired so onSubmit
+                        // writes the raw text to the PTY. Calling it a
+                        // "command" matches the shell-first default.
                         Text(
-                            "Warp anything e.g. Deploy my React app to Vercel and set up environment variables",
+                            "Type a command (ls, git status, …)",
                             style = TextStyle(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp
                             ),
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }

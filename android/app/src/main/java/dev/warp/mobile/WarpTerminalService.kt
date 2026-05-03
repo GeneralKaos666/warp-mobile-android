@@ -503,7 +503,11 @@ class WarpTerminalService : Service() {
             |#    fix is to bound fallback or cache codepoint lookup).
             |if [[ -z ${"$"}WARP_BANNER_PRINTED ]]; then
             |    print -P -- "%F{cyan}%BWarp Mobile%b%f - zsh ${"$"}{ZSH_VERSION}"
-            |    print -P -- "%F{8}Tab completes - Up arrow recalls history - Enter runs%f"
+            |    # V1-prep iteration 42 (2026-05-03): banner shortened to
+            |    # fit a typical 36-44 col mobile viewport (was 49 chars,
+            |    # truncated as "...En" with Ellipsis on Galaxy S24 Ultra
+            |    # 45-col grid).
+            |    print -P -- "%F{8}Tab=complete  Up=history  Enter=run%f"
             |    print
             |    export WARP_BANNER_PRINTED=1
             |fi
