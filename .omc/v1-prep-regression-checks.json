@@ -271,5 +271,14 @@
     "BaseInputConnection synthesis dispatches via Handler.post — events arrive within ~few ms of super.commitText return. 50ms window is well past the synthesis tail and well before any human Enter latency (>200ms after typing).",
     "Adb broadcast PTY_WRITE / TERM_BLOCKS_DUMP testing on Galaxy S24 Ultra blocked by Samsung 'Background execution not allowed' policy even though app is foreground. Affects test instrumentation — production user input via real keyboard is unaffected.",
     "Verified iter-35 builds clean (./gradlew :app:assembleDebug; BUILD SUCCESSFUL in 3s)."
+  ],
+  "iteration_36_37_38_notes": [
+    "User-driven 'complete warp terminal' loop (2026-05-03). Three back-to-back render/shell fixes verified end-to-end via human-style adb tests on Galaxy S24 Ultra (R5CX10VFFBA).",
+    "iter-36 (lib.rs): bottom-anchor padding +3→+7. Cold-start cursor.row in 4-7 range was landing prompt INSIDE the AccessoryRow opaque overlay (135px ≈ 3.4 rows at cell_h_px=40 not enough headroom). User saw '終端機看不到 prompt' after force-stop+restart. Fix verified via /tmp/warp-iter36/iter36-cold.png — '~ %' prompt visible above ESC/TAB/CTRL/ALT.",
+    "iter-37 (WarpTerminalService.kt): zsh starts in $HOME instead of inheriting '/' from parent FGS. TERM_BLOCKS_DUMP confirmed pre-fix `pwd` returned '/' and `ls` hit Permission-denied scoped-storage. Added `cd -- $HOME` to .zshenv guarded by WARP_CWD_SET. Post-fix: pwd → /data/user/0/dev.warp.mobile/files/home, ls → gittest1 gittest2 (color-rendered as dirs).",
+    "iter-38 (lib.rs): unified bottom-anchor that handles BOTH cursor-high (cold-start, iter-36 case) AND cursor-low (filled-viewport, iter-38 new case). iter-36 silently returned without padding when shift = 0 — user's `whoami` output was hidden behind AccessoryRow despite Block dump showing exit_code=0 output='u0_a1190\\r\\n'. Fix: always reserve ACCESSORY_PAD=7 blank rows at bottom, drop scrollback rows from top when needed.",
+    "Verified end-to-end human flow: tap composer → keyboard up → type `pwd` via Gboard → press Enter → composer fires onSend → onPromptSubmit writes 'pwd\\n' to PTY → terminal shows new `~ % pwd` row + `/data/user/0/dev.warp.mobile/files/home` output + new prompt. Evidence: /tmp/warp-iter36/iter38-composer-{typed,sent}.png.",
+    "Verified ASCII feature matrix: pwd, ls -la (colored), whoami (u0_a1190), echo with spaces (b64-encoded broadcast), date, env | head -8 (multi-line output), Up arrow history recall, Tab completion (cd<TAB> → 'gittest1/ gittest2/').",
+    "CJK ANR REPRODUCED via adb broadcast `echo 你好 warp mobile 終端機` — same iter-34 latent (cosmic_text cmap-format-12 enumeration). 30s ANR triggered on the first CJK output frame. Status: deferred per iter-34 plan (proper fix is bound fallback fonts or cache codepoint sets). Daily-driver use should avoid CJK output in ls/git/log until the renderer fix lands."
   ]
 }
