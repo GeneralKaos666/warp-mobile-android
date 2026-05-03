@@ -952,6 +952,79 @@ fn advance_state_machine(state: &mut TerminalState, b: u8) {
     };
 }
 
+/// Write `ch` to the cell at the cursor and advance the cursor by 1 or 2
+/// columns based on the char's terminal width. Wraps to the next row at
+/// the right edge and triggers scrollback eviction at the bottom.
+///
+/// V1-prep iteration 41 (2026-05-03): East Asian Wide / Fullwidth chars
+/// (CJK ideographs U+4E00..U+9FFF, hiragana, katakana, hangul syllables,
+/// fullwidth ASCII U+FF01..U+FF5E, etc.) take **2** terminal cells per
+/// the standard wcwidth(3) / unicode-width semantics that real terminals
+/// (xterm, alacritty, iTerm, Warp Desktop) follow. Pre-iter-41 this code
+/// always advanced cursor by 1, so CJK glyphs were squeezed into single
+/// cells overlapping each other visually.
+///
+/// Wide-char layout strategy: the trailing cell at `col + 1` is filled
+/// with a blank space carrying the same attrs as the lead cell. The
+/// renderer (dynamic_grid in warp_mobile_android_link) shapes each cell
+/// independently as one glyph quad; the wide-char glyph naturally extends
+/// horizontally into the trailing cell's pixel region (its
+/// `placement.width` from swash exceeds one cell's width), and the
+/// blank trailing cell renders nothing on top — yielding the correct
+/// visual 2-cell occupation without the renderer needing to know the
+/// concept of cell-spanning glyphs.
+///
+/// At the right edge: a wide char with cursor.col == cols - 1 wraps the
+/// line first (writes nothing in the last single column, then writes the
+/// pair starting at col 0 of the next row). This mirrors xterm's
+/// `auto_wrap` behaviour for wide chars.
+fn emit_char_to_grid(state: &mut TerminalState, ch: char) {
+    use unicode_width::UnicodeWidthChar;
+    let glyph_width = UnicodeWidthChar::width(ch).unwrap_or(1).max(1);
+    let cur_fg = state.cur_fg;
+    let cur_bg = state.cur_bg;
+    let cur_attrs = state.cur_attrs;
+    if glyph_width >= 2 && state.cursor.col + 1 >= state.cols {
+        // No room for a 2-cell char on this line — wrap first.
+        state.cursor.col = 0;
+        state.cursor.row += 1;
+        if state.cursor.row >= state.rows {
+            scroll_up(state);
+            state.cursor.row = state.rows - 1;
+        }
+    }
+    let row = state.cursor.row.min(state.rows - 1);
+    let col = state.cursor.col.min(state.cols - 1);
+    state.cells[row][col] = Cell {
+        glyph: ch,
+        fg: cur_fg,
+        bg: cur_bg,
+        attrs: cur_attrs,
+    };
+    if glyph_width >= 2 && col + 1 < state.cols {
+        // Trailing continuation cell — blank with the same attrs so the
+        // bg color is consistent across the 2-cell span and the renderer
+        // skips it as whitespace (no atlas entry created).
+        state.cells[row][col + 1] = Cell {
+            glyph: ' ',
+            fg: cur_fg,
+            bg: cur_bg,
+            attrs: cur_attrs,
+        };
+        state.cursor.col += 2;
+    } else {
+        state.cursor.col += 1;
+    }
+    if state.cursor.col >= state.cols {
+        state.cursor.col = 0;
+        state.cursor.row += 1;
+        if state.cursor.row >= state.rows {
+            scroll_up(state);
+            state.cursor.row = state.rows - 1;
+        }
+    }
+}
+
 fn handle_ground_byte(state: &mut TerminalState, b: u8) {
     // V1-prep: capture printable + LF/CR bytes into the current block's
     // output buffer if we're between Preexec and CommandFinished. Skip
@@ -1070,23 +1143,7 @@ fn handle_ground_byte(state: &mut TerminalState, b: u8) {
             }
 
             if let Some(ch) = to_emit {
-                let row = state.cursor.row.min(state.rows - 1);
-                let col = state.cursor.col.min(state.cols - 1);
-                state.cells[row][col] = Cell {
-                    glyph: ch,
-                    fg: state.cur_fg,
-                    bg: state.cur_bg,
-                    attrs: state.cur_attrs,
-                };
-                state.cursor.col += 1;
-                if state.cursor.col >= state.cols {
-                    state.cursor.col = 0;
-                    state.cursor.row += 1;
-                    if state.cursor.row >= state.rows {
-                        scroll_up(state);
-                        state.cursor.row = state.rows - 1;
-                    }
-                }
+                emit_char_to_grid(state, ch);
             }
 
             if reset_then_buffer_lead {
@@ -1095,23 +1152,7 @@ fn handle_ground_byte(state: &mut TerminalState, b: u8) {
                 // Bound recursion via the simple invariant that a single
                 // byte cannot trigger another reset (fresh state).
                 if b < 0x80 {
-                    let row = state.cursor.row.min(state.rows - 1);
-                    let col = state.cursor.col.min(state.cols - 1);
-                    state.cells[row][col] = Cell {
-                        glyph: b as char,
-                        fg: state.cur_fg,
-                        bg: state.cur_bg,
-                        attrs: state.cur_attrs,
-                    };
-                    state.cursor.col += 1;
-                    if state.cursor.col >= state.cols {
-                        state.cursor.col = 0;
-                        state.cursor.row += 1;
-                        if state.cursor.row >= state.rows {
-                            scroll_up(state);
-                            state.cursor.row = state.rows - 1;
-                        }
-                    }
+                    emit_char_to_grid(state, b as char);
                 } else if (0xC2..=0xDF).contains(&b) {
                     state.utf8_expect = 2;
                     state.utf8_buf[0] = b;
@@ -1668,6 +1709,70 @@ pub fn scrollback_max_lines() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// V1-prep iteration 40 regression gate: multi-byte UTF-8 sequences must
+    /// decode to a single char in a single cell instead of being sliced into
+    /// per-byte Latin-1 mojibake.
+    #[test]
+    fn iter40_utf8_three_byte_han_assembles_one_cell() {
+        let m = TerminalModel::new(2, 16);
+        // 你 = U+4F60 = 0xE4 0xBD 0xA0 (3-byte UTF-8)
+        // 好 = U+597D = 0xE5 0xA5 0xBD (3-byte UTF-8)
+        m.ingest_pty_bytes("你好".as_bytes());
+        // First cell holds 你, second cell starts the wide-char trailing pad.
+        assert_eq!(m.cell(0, 0).unwrap().glyph, '你');
+        // iter-41 wide-char cell-advance: cell after 你 is the trailing
+        // continuation cell carrying ' '.
+        assert_eq!(m.cell(0, 1).unwrap().glyph, ' ');
+        // Then 好 lands at col 2, with its own trailing continuation at col 3.
+        assert_eq!(m.cell(0, 2).unwrap().glyph, '好');
+        assert_eq!(m.cell(0, 3).unwrap().glyph, ' ');
+    }
+
+    #[test]
+    fn iter40_utf8_invalid_lead_emits_replacement() {
+        let m = TerminalModel::new(1, 8);
+        // 0xC0 is an invalid UTF-8 lead byte (overlong-2-byte form forbidden);
+        // must emit U+FFFD per WHATWG byte-stream-replacement.
+        m.ingest_pty_bytes(&[0xC0]);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, '\u{FFFD}');
+    }
+
+    #[test]
+    fn iter40_utf8_partial_then_ascii_recovers() {
+        let m = TerminalModel::new(1, 8);
+        // 0xE4 starts a 3-byte sequence; immediately following with ASCII 'x'
+        // must emit U+FFFD for the partial sequence, then 'x' as the next char.
+        m.ingest_pty_bytes(&[0xE4, b'x']);
+        assert_eq!(m.cell(0, 0).unwrap().glyph, '\u{FFFD}');
+        assert_eq!(m.cell(0, 1).unwrap().glyph, 'x');
+    }
+
+    /// V1-prep iteration 41 regression gate: East Asian Wide / Fullwidth
+    /// chars take 2 cells. ASCII chars stay 1 cell.
+    #[test]
+    fn iter41_wide_char_advances_cursor_by_two() {
+        let m = TerminalModel::new(1, 8);
+        m.ingest_pty_bytes("a你b".as_bytes());
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
+        assert_eq!(m.cell(0, 1).unwrap().glyph, '你');
+        assert_eq!(m.cell(0, 2).unwrap().glyph, ' ', "trailing continuation cell");
+        assert_eq!(m.cell(0, 3).unwrap().glyph, 'b');
+    }
+
+    /// Wide char at the right edge wraps the line.
+    #[test]
+    fn iter41_wide_char_wraps_at_right_edge() {
+        let m = TerminalModel::new(2, 4);
+        m.ingest_pty_bytes("abc你".as_bytes());
+        // "abc" fills cols 0-2 of row 0, leaving 1 column. 你 needs 2, so
+        // it wraps to row 1 col 0.
+        assert_eq!(m.cell(0, 0).unwrap().glyph, 'a');
+        assert_eq!(m.cell(0, 1).unwrap().glyph, 'b');
+        assert_eq!(m.cell(0, 2).unwrap().glyph, 'c');
+        assert_eq!(m.cell(1, 0).unwrap().glyph, '你');
+        assert_eq!(m.cell(1, 1).unwrap().glyph, ' ');
+    }
 
     #[test]
     fn ingest_then_snapshot_round_trips_plain_text() {

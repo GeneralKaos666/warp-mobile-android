@@ -64,6 +64,12 @@ tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-t
 # warp_ai_mobile crate also depends on this so the token type matches
 # across the FFI boundary.
 tokio-util = "0.7"
+# V1-prep iteration 41 (2026-05-03): East Asian Wide / Fullwidth cell-advance.
+# Used by handle_ground_byte to decide whether a decoded char takes 1 or 2
+# terminal cells, so CJK glyphs occupy the visual space they need rather than
+# rendering squeezed inside one column. Same crate Warp Desktop uses for
+# wide-char layout (warp-src/crates/warp_terminal/Cargo.toml).
+unicode-width = "0.1"
 
 [dev-dependencies]
 # M4-S05: tempdir for bootstrap module unit tests (host-side).
