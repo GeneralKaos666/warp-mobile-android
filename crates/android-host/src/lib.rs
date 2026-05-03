@@ -1391,13 +1391,16 @@ pub extern "C" fn Java_dev_warp_mobile_NativeBridge_terminalTakeDirtyAndPushFram
     // blank rows, then the actual content rows up to the cursor row.
     let cursor = terminal_model::cursor_position();
     let total_rows = dyn_cells.len();
-    // Leave 2 rows of padding at the bottom: 1 for the cursor row itself
-    // (which may render its underline/block past the cell origin), plus 1
-    // to keep visible separation between the active prompt and the
-    // AccessoryRow chrome below the terminal viewport. This avoids the
-    // partial-clipping seen in iter-32a (cursor row rendered just past the
-    // SurfaceView's bottom edge).
-    let shift = total_rows.saturating_sub(cursor.row + 3);
+    // V1-prep iteration 36: bottom-anchor padding bumped from +3 to +7 to
+    // clear the AccessoryRow (ESC/TAB/CTRL/ALT, ~135px ≈ 3.4 rows at
+    // cell_h_px=40) which Compose overlays on the bottom of the SurfaceView.
+    // Without this, the active prompt row lands at projected row total_rows-3
+    // which falls inside the accessory row's opaque area — the user's
+    // 「終端機看不到 prompt」regression after force-stop+restart. The previous
+    // +3 worked for sessions that had built up scrollback because the cursor
+    // row was higher than total_rows-7 anyway, but cold-start with
+    // cursor.row in the 4-7 range exposed the overlap.
+    let shift = total_rows.saturating_sub(cursor.row + 7);
     if shift > 0 && total_rows > 0 {
         let cols_count = dyn_cells.first().map(|r| r.len()).unwrap_or(0);
         let blank_row: Vec<crate::dynamic_grid::Cell> =

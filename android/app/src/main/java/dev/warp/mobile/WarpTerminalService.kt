@@ -507,6 +507,17 @@ class WarpTerminalService : Service() {
             |    print
             |    export WARP_BANNER_PRINTED=1
             |fi
+            |
+            |# 10. V1-prep iteration 37 (2026-05-03): start in HOME instead of
+            |#     whatever cwd the parent FGS inherited from system (observed
+            |#     as "/" via TERM_BLOCKS_DUMP — `pwd` returned "/" so `ls` hit
+            |#     Permission denied scoped-storage on root). Once-per-session
+            |#     guard mirrors WARP_BANNER_PRINTED so manual `cd` survives a
+            |#     re-source of .zshenv (zsh's normal init double-source).
+            |if [[ -z ${"$"}WARP_CWD_SET && -d ${"$"}HOME ]]; then
+            |    cd -- "${"$"}HOME"
+            |    export WARP_CWD_SET=1
+            |fi
         """.trimMargin().trimStart() + "\n"
 
         // Idempotent write: only update if content differs.
