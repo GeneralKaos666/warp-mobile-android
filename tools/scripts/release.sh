@@ -73,7 +73,7 @@ if [[ "${ALLOW_DIRTY_TREE:-0}" != "1" ]]; then
 fi
 
 # Sanity: confirm the version in build.gradle matches the requested version.
-GRADLE_VERSION=$(grep '^[[:space:]]*versionName' "$REPO_ROOT/android/app/build.gradle" | head -1 | sed -E 's/.*"(.+)".*/\1/')
+GRADLE_VERSION=$(awk 'match($0, /^[[:space:]]*versionName[[:space:]]+"([^"]+)"/, m) { print m[1]; exit }' "$REPO_ROOT/android/app/build.gradle")
 if [[ "$GRADLE_VERSION" != "$VERSION" ]]; then
     echo "ERROR: version mismatch." >&2
     echo "  Requested: $VERSION" >&2
@@ -129,7 +129,7 @@ echo "==> [3/4] generating SHA256SUMS + RELEASE_NOTES.md" >&2
 
 # Extract the matching changelog entry (e.g. fastlane/.../changelogs/6.txt
 # for version 0.6.0-m6 — versionCode is the file name).
-GRADLE_VERCODE=$(grep '^[[:space:]]*versionCode' "$REPO_ROOT/android/app/build.gradle" | head -1 | awk '{print $2}')
+GRADLE_VERCODE=$(awk '/^[[:space:]]*versionCode[[:space:]]+/ { print $2; exit }' "$REPO_ROOT/android/app/build.gradle")
 CHANGELOG_FILE="$REPO_ROOT/fastlane/metadata/android/en-US/changelogs/$GRADLE_VERCODE.txt"
 if [[ -f "$CHANGELOG_FILE" ]]; then
     CHANGELOG_BODY=$(cat "$CHANGELOG_FILE")
@@ -139,10 +139,10 @@ fi
 
 LAST_TAG=$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null || echo "")
 if [[ -n "$LAST_TAG" && "$LAST_TAG" != "$TAG" ]]; then
-    GIT_LOG=$(git -C "$REPO_ROOT" log "$LAST_TAG..HEAD" --oneline | head -50)
+    GIT_LOG=$(git -C "$REPO_ROOT" log --max-count=50 "$LAST_TAG..HEAD" --oneline)
     GIT_RANGE_NOTE="Commits since \`$LAST_TAG\`:"
 else
-    GIT_LOG=$(git -C "$REPO_ROOT" log --oneline | head -50)
+    GIT_LOG=$(git -C "$REPO_ROOT" log --max-count=50 --oneline)
     GIT_RANGE_NOTE="Latest 50 commits:"
 fi
 
