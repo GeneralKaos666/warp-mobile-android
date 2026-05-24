@@ -1,13 +1,17 @@
-# M4-S03 bootstrap zip target package list (per ralplan §6 M4 #2).
-# 7 packages requested by ralplan:
+# M4-S03 bootstrap zip target package list.
+# Original ralplan §6 M4 #2 bundle included:
 #   bash, zsh, coreutils, findutils, apt, pkg, git
 #
 # Codex M4-S03 round-1 finding: build-bootstraps.sh has a default set of
 # essential packages (see termux-packages/scripts/build-bootstraps.sh:425-454).
-# Our 7 are mapped at CI build time:
+# Release-size trim (2026-05): drop `git` from the bundled bootstrap so the
+# single APK stays under the enforced 80 MB gate. Users can still install git
+# later via `pkg install git` once the Termux runtime is bootstrapped.
+#
+# Current bundled set is mapped at CI build time:
 #   - DEFAULT (already built-in): apt, bash, coreutils, findutils, pkg
 #     (`pkg` ships via termux-tools)
-#   - --add (not in default): zsh, git
+#   - --add (not in default): zsh
 #
 # ralplan canonical name was "coreutils-gnu"; termux-packages canonical is
 # `coreutils`. The CI workflow strips `-gnu` suffix when filtering.
@@ -20,4 +24,3 @@ coreutils-gnu
 findutils
 apt
 pkg
-git
