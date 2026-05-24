@@ -462,7 +462,8 @@ task extractTermuxBinariesAsLibsDebug {
 }
 
 task extractTermuxBinariesAsLibsRelease {
-    description = "Release variant of extractTermuxBinariesAsLibsDebug — same logic, different output dir to keep Gradle 8 strict task-graph happy."
+    description = "Disabled for release packaging: release APK ships the Termux runtime only via bootstrap-aarch64.zip to avoid duplicating the payload in jniLibs."
+    enabled = false
     dependsOn verifyBootstrapZip
     inputs.file(bootstrapZipSrc)
     outputs.dir(termuxLibsDirRelease)
@@ -735,7 +736,6 @@ android {
         }
         release {
             jniLibs.srcDirs += file("build/intermediates/rust-jnilibs/release/jniLibs")
-            jniLibs.srcDirs += file("build/intermediates/termux-libs/release/jniLibs")
         }
     }
 
@@ -834,22 +834,21 @@ afterEvaluate {
 
     // Merge tasks are the canonical jniLibs consumer when AGP generates them.
     tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
-    tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach   { dependsOn copyRustLibsRelease }
     // Package tasks are universal — they're the safety net that ensures the
     // copy happens even when AGP optimizes mergeJniLibFolders away.
     tasks.matching { it.name == "packageDebug" }.configureEach     { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
-    tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name == "packageRelease" }.configureEach   { dependsOn copyRustLibsRelease }
     // Assemble tasks are the user-facing entry points — third layer.
     tasks.matching { it.name == "assembleDebug" }.configureEach    { dependsOn copyRustLibsDebug, verifyValidationLayer, extractTermuxBinariesAsLibsDebug }
-    tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease, extractTermuxBinariesAsLibsRelease }
+    tasks.matching { it.name == "assembleRelease" }.configureEach  { dependsOn copyRustLibsRelease }
 
     // The manifest is staged into src/main/assets/, so AGP's asset-merge tasks
     // need it as an explicit input (Gradle 8 strict implicit-dep validation).
+    // Release builds intentionally skip the relocation path and deliver Termux
+    // only via bootstrap-aarch64.zip to stay under the single-APK size gate.
     tasks.matching { it.name == "mergeDebugAssets" }.configureEach   { dependsOn extractTermuxBinariesAsLibsDebug }
-    tasks.matching { it.name == "mergeReleaseAssets" }.configureEach { dependsOn extractTermuxBinariesAsLibsRelease }
     tasks.matching { it.name.startsWith("generateDebugLint") }.configureEach   { dependsOn extractTermuxBinariesAsLibsDebug }
-    tasks.matching { it.name.startsWith("generateReleaseLint") }.configureEach { dependsOn extractTermuxBinariesAsLibsRelease }
-    tasks.matching { it.name.startsWith("lintVital") }.configureEach           { dependsOn extractTermuxBinariesAsLibsRelease }
     tasks.matching { it.name.startsWith("lintAnalyze") }.configureEach         { dependsOn extractTermuxBinariesAsLibsDebug }
 }
 
