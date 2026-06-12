@@ -96,9 +96,9 @@ jobs:
         # MUST run AFTER NDK install — setup-cargo-config.sh validates
         # the NDK toolchain path exists.
         run: |
-          git clone https://github.com/ImL1s/warp warp-src \
+          git clone https://github.com/GeneralKaos666/warp warp-src \
             --branch warp-mobile/m0-facade --depth 1
-          git clone https://github.com/ImL1s/termux-packages termux-packages \
+          git clone https://github.com/GeneralKaos666/termux-packages termux-packages \
             --branch warp-mobile/main --depth 1
           bash tools/scripts/setup-cargo-config.sh
 

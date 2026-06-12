@@ -215,7 +215,7 @@ elif $UPLOAD; then
         "$DIST_DIR/warp-mobile-$VERSION.apk" \
         "$DIST_DIR/bootstrap-aarch64-$VERSION.zip" \
         "$DIST_DIR/SHA256SUMS")
-    echo "    -> https://github.com/ImL1s/warp-mobile-android/releases/tag/$TAG" >&2
+    echo "    -> https://github.com/GeneralKaos666/warp-mobile-android/releases/tag/$TAG" >&2
 else
     echo "    Artifacts ready (no upload requested)" >&2
     ls -lh "$DIST_DIR/" >&2
